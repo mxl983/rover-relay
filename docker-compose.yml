@@ -1,0 +1,63 @@
+services:
+  relay:
+    build: .
+    # `always`: comes back after reboot even if the container was stopped before shutdown.
+    # `unless-stopped` does not restart in that case.
+    restart: always
+    ports:
+      - "${RELAY_PUBLIC_HTTPS_PORT:-443}:8787"
+      - "${RELAY_PORT:-8787}:8787"
+      - "${RELAY_HTTP_REDIRECT_PORT:-8080}:8080"
+    environment:
+      NODE_ENV: production
+      PORT: "8787"
+      HOST: "0.0.0.0"
+      SSL_ENABLED: ${SSL_ENABLED:-true}
+      SSL_CERT_PATH: ${SSL_CERT_PATH:-/certs/relay.crt}
+      SSL_KEY_PATH: ${SSL_KEY_PATH:-/certs/relay.key}
+      HTTP_REDIRECT_ENABLED: ${HTTP_REDIRECT_ENABLED:-false}
+      HTTP_REDIRECT_PORT: ${HTTP_REDIRECT_PORT:-8080}
+      MQTT_BOOT_ENABLED: ${MQTT_BOOT_ENABLED:-false}
+      MQTT_BOOT_URL: ${MQTT_BOOT_URL:-wss://84f09906a62e42c78c5d9b0555aa71f1.s1.eu.hivemq.cloud:8884/mqtt}
+      MQTT_BOOT_USER: ${MQTT_BOOT_USER:-}
+      MQTT_BOOT_PASS: ${MQTT_BOOT_PASS:-}
+      MQTT_BOOT_TOPIC: ${MQTT_BOOT_TOPIC:-rover/power/pi}
+      MQTT_BOOT_PAYLOAD_PREFIX: ${MQTT_BOOT_PAYLOAD_PREFIX:-On}
+      TELEMETRY_DB_PATH: /app/data/relay.db
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ROVER_API_TOKEN: ${ROVER_API_TOKEN:-}
+      BACKUP_CAM_STREAM_URL: ${BACKUP_CAM_STREAM_URL:-http://192.168.1.220:81/stream}
+      BACKUP_CAM_STREAM_AUTH: ${BACKUP_CAM_STREAM_AUTH:-false}
+      ROVER_HEARTBEAT_STALE_MS: ${ROVER_HEARTBEAT_STALE_MS:-90000}
+      ROVER_BOOT_TOTAL_MS: ${ROVER_BOOT_TOTAL_MS:-50000}
+      BATTERY_DRAIN_WINDOW_MS: ${BATTERY_DRAIN_WINDOW_MS:-120000}
+      CONTROL_DASHBOARD_PROXY_ENABLED: ${CONTROL_DASHBOARD_PROXY_ENABLED:-true}
+      CONTROL_DASHBOARD_PROXY_BASE_PATH: ${CONTROL_DASHBOARD_PROXY_BASE_PATH:-/mangomate}
+      CONTROL_DASHBOARD_PROXY_TARGET: ${CONTROL_DASHBOARD_PROXY_TARGET:-http://control-dashboard:80}
+    volumes:
+      - relay-data:/app/data
+      - ./certs:/certs:ro
+
+  control-dashboard:
+    build:
+      context: .
+      dockerfile: control-dashboard/Dockerfile
+      args:
+        VITE_BASE_PATH: ${CONTROL_DASHBOARD_BASE_PATH:-/mangomate/}
+        VITE_PI_SERVER_IP: ${CONTROL_DASHBOARD_PI_SERVER_IP:-rover.tail9d0237.ts.net}
+        VITE_MQTT_HOST: ${CONTROL_DASHBOARD_MQTT_HOST:-wss://84f09906a62e42c78c5d9b0555aa71f1.s1.eu.hivemq.cloud:8884/mqtt}
+        VITE_RELAY_BASE_URL: ${CONTROL_DASHBOARD_RELAY_BASE_URL:-https://jjcloud.tail9d0237.ts.net}
+        VITE_WEBRTC_ICE_MODE: ${CONTROL_DASHBOARD_WEBRTC_ICE_MODE:-tailnet}
+        VITE_WEBRTC_SIGNALING_MODE: ${CONTROL_DASHBOARD_WEBRTC_SIGNALING_MODE:-proxy}
+        VITE_VIDEO_STREAM_MODE: ${CONTROL_DASHBOARD_VIDEO_STREAM_MODE:-webrtc}
+        VITE_VOICE_DRIVE_DEBUG: ${CONTROL_DASHBOARD_VOICE_DRIVE_DEBUG:-true}
+        VITE_BACKUP_STREAM_URL: ${CONTROL_DASHBOARD_BACKUP_STREAM_URL:-}
+        VITE_CAMERA_SECRET: ${CONTROL_DASHBOARD_CAMERA_SECRET:-}
+    restart: always
+    depends_on:
+      - relay
+    ports:
+      - "${CONTROL_DASHBOARD_PORT:-5174}:80"
+
+volumes:
+  relay-data:

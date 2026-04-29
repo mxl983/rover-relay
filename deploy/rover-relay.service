@@ -1,0 +1,22 @@
+# Install (once): sudo cp deploy/rover-relay.service /etc/systemd/system/
+#               sudo systemctl daemon-reload
+#               sudo systemctl enable --now rover-relay.service
+#
+# Edit WorkingDirectory below if this repo is not at /home/jjcloud/Documents/rover/relay
+
+[Unit]
+Description=Rover relay (docker compose)
+After=docker.service network-online.target
+Wants=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/jjcloud/Documents/rover/relay
+# Loads .env from WorkingDirectory when compose runs
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

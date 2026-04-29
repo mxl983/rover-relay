@@ -1,0 +1,490 @@
+:root {
+  --spacex-cyan: #00f2ff;
+  --glass: rgba(0, 0, 0, 0.4);
+  --border: rgba(255, 255, 255, 0.15);
+}
+
+body,
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: "Segoe UI", sans-serif;
+  overscroll-behavior: none;
+  height: 100dvh;
+}
+
+.viewport {
+  position: relative;
+  width: 100vw;
+  /* dvh is the modern fix for mobile browser bars */
+  height: 100vh; /* Fallback */
+  height: 100dvh;
+  background: #050505;
+  overflow: hidden;
+}
+
+.status-glow-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.viewport.status-glow-low-battery .status-glow-layer {
+  animation: viewport-glow-low-battery 1.2s ease-in-out infinite;
+}
+
+@keyframes viewport-glow-low-battery {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 16px rgba(239, 68, 68, 0.45),
+      inset 0 0 36px rgba(239, 68, 68, 0.2),
+      0 0 16px rgba(239, 68, 68, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 28px rgba(248, 113, 113, 0.72),
+      inset 0 0 62px rgba(248, 113, 113, 0.34),
+      0 0 28px rgba(248, 113, 113, 0.52);
+  }
+}
+
+/* FPS mouse look: hide system cursor so only crosshair is visible */
+.viewport.viewport-mouse-look {
+  cursor: none;
+}
+
+#videoPlayer {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  pointer-events: none;
+  filter: contrast(1.1) brightness(0.9) saturate(1.2);
+}
+
+/* FPV LENS EFFECTS */
+.lens-effects {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    transparent 40%,
+    rgba(0, 0, 0, 0.4) 80%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+}
+
+.lens-effects::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+.lens-effects::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.02),
+      rgba(0, 255, 0, 0.01),
+      rgba(0, 0, 255, 0.02)
+    );
+  background-size:
+    100% 3px,
+    3px 100%;
+}
+
+/* HUD LAYOUT */
+.hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  /* Replace your 'padding: 30px' with this: */
+  padding: max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+
+  box-sizing: border-box;
+}
+
+/* Mobile FPS-style touch-look area:
+   captures drag in center video region while keeping top controls and bottom joystick free. */
+.mobile-touch-gimbal-layer {
+  position: absolute;
+  top: max(72px, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  bottom: max(170px, env(safe-area-inset-bottom));
+  z-index: 8;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (orientation: landscape) {
+  .mobile-touch-gimbal-layer {
+    top: max(48px, env(safe-area-inset-top));
+    bottom: max(104px, env(safe-area-inset-bottom));
+  }
+}
+
+.hud-overlay button,
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(2px);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--spacex-cyan);
+  padding: 12px 18px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.glass-card-metrics {
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--spacex-cyan);
+  padding: 12px 18px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  width: 190px;
+  border-left: 3px solid var(--spacex-cyan);
+}
+
+.hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.hud-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+/* COMPONENT STATUS STYLING */
+.subsystem-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-label {
+  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.dot.red {
+  background: #e74c3c;
+  box-shadow: 0 0 8px #e74c3c;
+}
+
+.dot.green {
+  background: #2ecc71;
+  box-shadow: 0 0 8px #2ecc71;
+}
+
+.stat span {
+  font-size: 20px;
+  font-weight: bold;
+  display: block;
+  color: #fff;
+  text-shadow: 0 0 10px var(--spacex-cyan);
+}
+
+/* CONTROL CLUSTER */
+.control-cluster {
+  display: flex;
+  gap: 15px;
+}
+
+.wasd-controls,
+.arrow-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 45px);
+  gap: 5px;
+}
+
+button {
+  width: 45px;
+  height: 45px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--spacex-cyan);
+  border: 1px solid var(--spacex-cyan);
+  border-radius: 4px;
+  cursor: pointer;
+  backdrop-filter: blur(5px);
+  font-weight: bold;
+  transition: all 0.1s ease;
+  /* Faster transition for instant feel */
+  outline: none;
+}
+
+/* Lights up when clicked with mouse */
+button:active,
+button.active-glow {
+  background: var(--spacex-cyan);
+  color: #000;
+  box-shadow:
+    0 0 30px var(--spacex-cyan),
+    0 0 10px #fff;
+  transform: scale(0.95);
+}
+
+button:hover {
+  background: var(--spacex-cyan);
+  color: #000;
+}
+
+button:active {
+  transform: scale(0.9);
+}
+
+.rover-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 4px var(--spacex-cyan));
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.card-title {
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+.stat-label {
+  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.stat span {
+  font-size: 20px;
+  font-weight: bold;
+  display: block;
+  color: #fff;
+  text-shadow: 0 0 10px var(--spacex-cyan);
+}
+
+.meter-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.meter-row {
+  display: flex;
+  padding-bottom: 10px;
+  justify-content: space-around;
+  flex-direction: column;
+}
+
+.drive-control-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left: 3px solid var(--spacex-cyan);
+  /* min-width: 280px; */
+}
+
+/* Add this to your CSS file */
+.capture-btn {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.shutter-active {
+  background-color: #ff4444 !important; /* Red for recording/photo */
+  animation: pulse 1.5s infinite;
+  opacity: 0.8;
+}
+
+.capture-btn-circle {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  align-content: center;
+  flex-wrap: nowrap;
+  flex-direction: column;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes flux-glow {
+  from {
+    stroke-dashoffset: 12; /* Multiple of (4 + 2) */
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.energy-line {
+  /* Use 'linear' to keep the speed constant */
+  animation: flux-glow 1s linear infinite;
+}
+
+.stat {
+  padding: 3px;
+}
+
+/* Production: error banner, header layout, footer layout */
+.action-error-banner {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-color: rgba(255, 68, 68, 0.5);
+  color: #ff6b6b;
+  max-width: 90vw;
+}
+.action-error-banner .hud-dismiss {
+  padding: 4px 10px;
+  min-width: auto;
+  font-size: 18px;
+  line-height: 1;
+}
+.action-toast {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 10px 16px;
+  border-color: rgba(0, 242, 255, 0.45);
+  color: #a9f8ff;
+  max-width: 90vw;
+  text-align: center;
+  pointer-events: none;
+}
+.hud-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px;
+  border: none;
+}
+.hud-header-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  border: none;
+  padding: 0;
+  margin-right: 20px;
+}
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--spacex-cyan);
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logout-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: rgba(255, 68, 68, 0.5);
+  color: #ff6b6b;
+}
+.footer-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.footer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+}
+.drive-control-monitor {
+  flex-direction: row;
+  align-items: center;
+  padding-right: 0;
+}

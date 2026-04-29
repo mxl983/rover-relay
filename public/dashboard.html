@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rover Relay Dashboard</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0f19;
+        --panel: #131b2b;
+        --panel-2: #1a2438;
+        --line: #2f3e5e;
+        --text: #d9e2f0;
+        --muted: #90a2be;
+        --ok: #3ecf8e;
+        --warn: #f0b429;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: radial-gradient(1200px 500px at 30% -10%, #1f2f52 0%, var(--bg) 55%);
+        color: var(--text);
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      .subtitle {
+        color: var(--muted);
+        margin-bottom: 18px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .label {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .value {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .online {
+        color: var(--ok);
+      }
+      .offline {
+        color: #ff7b7b;
+      }
+      .charging-yes {
+        color: var(--ok);
+      }
+      .charging-no {
+        color: #ff9b9b;
+      }
+      .charging-unknown {
+        color: var(--warn);
+      }
+      .section {
+        margin-top: 16px;
+      }
+      canvas {
+        width: 100%;
+        height: 180px;
+        background: #0f1523;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .controls button {
+        border: 1px solid var(--line);
+        background: #1d2a44;
+        color: var(--text);
+        padding: 8px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .controls button:hover {
+        filter: brightness(1.1);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+        padding: 8px 4px;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .tableHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .pager {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .pager button {
+        border: 1px solid var(--line);
+        background: #1d2a44;
+        color: var(--text);
+        padding: 4px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .pager button.active {
+        background: #3ecf8e;
+        color: #0b1220;
+        border-color: #3ecf8e;
+      }
+      .pager button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin: 8px 0 14px;
+      }
+      .tab-btn {
+        border: 1px solid var(--line);
+        background: #1d2a44;
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .tab-btn.active {
+        background: #3ecf8e;
+        color: #0b1220;
+        border-color: #3ecf8e;
+      }
+      .hidden {
+        display: none;
+      }
+      .radioRow {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Rover Telemetry Dashboard</h1>
+      <div class="subtitle">Relay-hosted live telemetry and rover state</div>
+      <div class="tabs">
+        <button id="tabTelemetry" class="tab-btn active" type="button">Telemetry</button>
+        <button id="tabExperiments" class="tab-btn" type="button">Experiments</button>
+      </div>
+
+      <div id="telemetryTabPane">
+      <div class="grid">
+        <div class="card">
+          <div class="label">Rover Status</div>
+          <div id="online" class="value">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Battery</div>
+          <div id="batteryNow" class="value">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Estimated Remaining (active video)</div>
+          <div id="batteryEta" class="value">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Boot Progress</div>
+          <div id="bootProgress" class="value">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Last Seen</div>
+          <div id="lastSeen" class="value mono" style="font-size:14px">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Latest Voltage</div>
+          <div id="voltageNow" class="value">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Charging (battery slope)</div>
+          <div id="chargingStatus" class="value charging-unknown">-</div>
+          <div id="chargingDetail" class="hint" style="margin-top: 6px">-</div>
+        </div>
+        <div class="card">
+          <div class="label">ESP Voltage (backup cam)</div>
+          <div id="espVoltageNow" class="value">-</div>
+          <div id="espVoltageRange" class="hint" style="margin-top: 6px">-</div>
+        </div>
+      </div>
+
+      <div class="section card">
+        <div class="controls">
+          <button id="refreshBtn" type="button">Refresh Now</button>
+          <span class="hint">Auto refresh every 2s</span>
+        </div>
+        <canvas id="voltageChart" width="1000" height="180"></canvas>
+      </div>
+
+      <div class="section card">
+        <div class="label">ESP Voltage Trend (session)</div>
+        <canvas id="espVoltageChart" width="1000" height="120"></canvas>
+      </div>
+
+      <div class="section card">
+        <div class="tableHeader">
+          <div class="label">Recent Telemetry</div>
+          <div id="telemetryMeta" class="hint">-</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Event</th>
+              <th>Battery %</th>
+              <th>Voltage</th>
+              <th>CPU Temp</th>
+              <th>CPU Load</th>
+              <th>WiFi</th>
+            </tr>
+          </thead>
+          <tbody id="telemetryBody"></tbody>
+        </table>
+        <div id="pager" class="pager" style="margin-top:10px"></div>
+      </div>
+      </div>
+
+      <div id="experimentsTabPane" class="hidden">
+        <div class="section card">
+          <div class="label">ESP Voltage Labeling Experiment</div>
+          <div class="controls">
+            <button id="recordToggleBtn" type="button">Start Recording</button>
+            <span id="recordStatus" class="hint">Idle</span>
+          </div>
+          <div class="radioRow">
+            <label><input type="radio" name="chargeLabel" value="charging" checked /> Charging</label>
+            <label><input type="radio" name="chargeLabel" value="not_charging" /> Not Charging</label>
+            <span class="hint">Collector records every 1s and labels using your selected class</span>
+          </div>
+          <div id="experimentLastSample" class="hint" style="margin-top:8px">No samples yet.</div>
+        </div>
+        <div class="section card">
+          <div class="controls">
+            <button id="runAnalysisBtn" type="button">Run Analysis</button>
+            <button id="refreshDatasetBtn" type="button">Refresh Dataset Stats</button>
+            <button id="clearDatasetBtn" type="button">Clear Dataset</button>
+          </div>
+          <div id="datasetStats" class="hint">Dataset stats unavailable.</div>
+          <div class="label" style="margin-top:10px">Charging vs not charging by telemetry voltage</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Telemetry Voltage</th>
+                <th>Charging</th>
+                <th>Not Charging</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="telemetryVoltageSummaryBody">
+              <tr><td colspan="4" class="hint">No dataset summary yet.</td></tr>
+            </tbody>
+          </table>
+          <div id="analysisResult" class="hint" style="margin-top:8px">No analysis yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const onlineEl = document.getElementById("online");
+      const batteryNowEl = document.getElementById("batteryNow");
+      const batteryEtaEl = document.getElementById("batteryEta");
+      const bootProgressEl = document.getElementById("bootProgress");
+      const lastSeenEl = document.getElementById("lastSeen");
+      const voltageNowEl = document.getElementById("voltageNow");
+      const chargingStatusEl = document.getElementById("chargingStatus");
+      const chargingDetailEl = document.getElementById("chargingDetail");
+      const espVoltageNowEl = document.getElementById("espVoltageNow");
+      const espVoltageRangeEl = document.getElementById("espVoltageRange");
+      const tabTelemetryEl = document.getElementById("tabTelemetry");
+      const tabExperimentsEl = document.getElementById("tabExperiments");
+      const telemetryTabPaneEl = document.getElementById("telemetryTabPane");
+      const experimentsTabPaneEl = document.getElementById("experimentsTabPane");
+      const recordToggleBtn = document.getElementById("recordToggleBtn");
+      const recordStatusEl = document.getElementById("recordStatus");
+      const experimentLastSampleEl = document.getElementById("experimentLastSample");
+      const runAnalysisBtn = document.getElementById("runAnalysisBtn");
+      const refreshDatasetBtn = document.getElementById("refreshDatasetBtn");
+      const clearDatasetBtn = document.getElementById("clearDatasetBtn");
+      const datasetStatsEl = document.getElementById("datasetStats");
+      const telemetryVoltageSummaryBodyEl = document.getElementById("telemetryVoltageSummaryBody");
+      const analysisResultEl = document.getElementById("analysisResult");
+      const bodyEl = document.getElementById("telemetryBody");
+      const refreshBtn = document.getElementById("refreshBtn");
+      const telemetryMetaEl = document.getElementById("telemetryMeta");
+      const pagerEl = document.getElementById("pager");
+      const canvas = document.getElementById("voltageChart");
+      const ctx = canvas.getContext("2d");
+      const espCanvas = document.getElementById("espVoltageChart");
+      const espCtx = espCanvas.getContext("2d");
+      const MAX_PAGES = 25;
+      const PAGE_SIZE = 50;
+      let telemetryPage = 1;
+      let chartPoints = [];
+      let hoveredPoint = null;
+      let lastTelemetryRows = [];
+      const espVoltageHistory = [];
+      const ESP_MAX_POINTS = 180;
+      let isRecordingExperiment = false;
+      let collectionState = null;
+
+      const fmt = (v, suffix = "") =>
+        v === null || v === undefined || Number.isNaN(Number(v)) ? "-" : `${Number(v).toFixed(1)}${suffix}`;
+
+      function drawVoltageChart(rows) {
+        const series = rows
+          .slice()
+          .reverse()
+          .filter((r) => r.voltage != null)
+          .map((r) => ({
+            voltage: Number(r.voltage),
+            time: r.created_at ? new Date(r.created_at).toLocaleTimeString() : "-",
+          }));
+        const voltage = series.map((p) => p.voltage);
+        const { width, height } = canvas;
+        chartPoints = [];
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "#0f1523";
+        ctx.fillRect(0, 0, width, height);
+        if (voltage.length < 2) {
+          ctx.fillStyle = "#90a2be";
+          ctx.font = "14px sans-serif";
+          ctx.fillText("Waiting for voltage samples...", 20, 30);
+          return;
+        }
+        const min = Math.min(...voltage);
+        const max = Math.max(...voltage);
+        const span = Math.max(0.05, max - min);
+        const left = 30;
+        const right = width - 10;
+        const top = 10;
+        const bottom = height - 20;
+
+        ctx.strokeStyle = "#2f3e5e";
+        ctx.beginPath();
+        ctx.moveTo(left, bottom);
+        ctx.lineTo(right, bottom);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#3ecf8e";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        series.forEach((p, i) => {
+          const v = p.voltage;
+          const x = left + (i / (voltage.length - 1)) * (right - left);
+          const y = bottom - ((v - min) / span) * (bottom - top);
+          chartPoints.push({ x, y, voltage: v, time: p.time });
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.lineWidth = 1;
+
+        ctx.fillStyle = "#90a2be";
+        ctx.font = "11px sans-serif";
+        ctx.fillText(`min ${min.toFixed(2)}V`, left, height - 4);
+        ctx.fillText(`max ${max.toFixed(2)}V`, right - 70, height - 4);
+
+        if (hoveredPoint) {
+          ctx.fillStyle = "#3ecf8e";
+          ctx.beginPath();
+          ctx.arc(hoveredPoint.x, hoveredPoint.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(hoveredPoint.x, hoveredPoint.y, 6, 0, Math.PI * 2);
+          ctx.stroke();
+
+          const tip = `${hoveredPoint.time}  ${hoveredPoint.voltage.toFixed(2)}V`;
+          ctx.font = "12px sans-serif";
+          const padX = 8;
+          const textW = ctx.measureText(tip).width;
+          const boxW = textW + padX * 2;
+          const boxH = 22;
+          let boxX = hoveredPoint.x + 10;
+          let boxY = hoveredPoint.y - boxH - 10;
+          if (boxX + boxW > width - 4) boxX = hoveredPoint.x - boxW - 10;
+          if (boxY < 4) boxY = hoveredPoint.y + 10;
+          ctx.fillStyle = "rgba(16, 24, 40, 0.95)";
+          ctx.fillRect(boxX, boxY, boxW, boxH);
+          ctx.strokeStyle = "#2f3e5e";
+          ctx.strokeRect(boxX, boxY, boxW, boxH);
+          ctx.fillStyle = "#d9e2f0";
+          ctx.fillText(tip, boxX + padX, boxY + 15);
+        }
+      }
+
+      function pushEspVoltageSample(sample) {
+        if (sample == null || Number.isNaN(Number(sample.voltage))) return;
+        espVoltageHistory.push({
+          t: Date.now(),
+          voltage: Number(sample.voltage),
+          voltage1dp:
+            sample.voltage_1dp == null || Number.isNaN(Number(sample.voltage_1dp))
+              ? null
+              : Number(sample.voltage_1dp),
+        });
+        if (espVoltageHistory.length > ESP_MAX_POINTS) espVoltageHistory.shift();
+      }
+
+      function drawEspVoltageChart() {
+        const { width, height } = espCanvas;
+        espCtx.clearRect(0, 0, width, height);
+        espCtx.fillStyle = "#0f1523";
+        espCtx.fillRect(0, 0, width, height);
+        if (espVoltageHistory.length < 2) {
+          espCtx.fillStyle = "#90a2be";
+          espCtx.font = "13px sans-serif";
+          espCtx.fillText("Waiting for ESP voltage samples...", 16, 24);
+          return;
+        }
+        const vals = espVoltageHistory.map((x) => x.voltage);
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        const span = Math.max(0.05, max - min);
+        const left = 30;
+        const right = width - 10;
+        const top = 10;
+        const bottom = height - 20;
+
+        espCtx.strokeStyle = "#2f3e5e";
+        espCtx.beginPath();
+        espCtx.moveTo(left, bottom);
+        espCtx.lineTo(right, bottom);
+        espCtx.stroke();
+
+        espCtx.strokeStyle = "#f0b429";
+        espCtx.lineWidth = 2;
+        espCtx.beginPath();
+        espVoltageHistory.forEach((p, i) => {
+          const x = left + (i / (espVoltageHistory.length - 1)) * (right - left);
+          const y = bottom - ((p.voltage - min) / span) * (bottom - top);
+          if (i === 0) espCtx.moveTo(x, y);
+          else espCtx.lineTo(x, y);
+        });
+        espCtx.stroke();
+        espCtx.lineWidth = 1;
+
+        espCtx.fillStyle = "#90a2be";
+        espCtx.font = "11px sans-serif";
+        espCtx.fillText(`min ${min.toFixed(3)}V`, left, height - 4);
+        espCtx.fillText(`max ${max.toFixed(3)}V`, right - 76, height - 4);
+      }
+
+      function nearestPoint(mouseX, mouseY) {
+        if (!chartPoints.length) return null;
+        let best = null;
+        let bestDistSq = Number.POSITIVE_INFINITY;
+        for (const p of chartPoints) {
+          const dx = p.x - mouseX;
+          const dy = p.y - mouseY;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestDistSq) {
+            bestDistSq = d2;
+            best = p;
+          }
+        }
+        return bestDistSq <= 400 ? best : null;
+      }
+
+      async function fetchEspVoltageSafe(timeoutMs = 1500) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), timeoutMs);
+        try {
+          const res = await fetch("/api/cams/backup/voltage", { signal: ctl.signal });
+          const json = await res.json();
+          if (!res.ok) {
+            return { success: false, error: json?.error || `HTTP ${res.status}` };
+          }
+          return json;
+        } catch (e) {
+          return {
+            success: false,
+            error: e?.name === "AbortError" ? "ESP voltage timeout" : e?.message || "ESP voltage unavailable",
+          };
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function fetchCollectionStatus() {
+        const res = await fetch("/api/telemetry/experiments/collection");
+        const json = await res.json();
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.error || `Collection status HTTP ${res.status}`);
+        }
+        collectionState = json.collection || null;
+        isRecordingExperiment = Boolean(collectionState?.enabled);
+        return collectionState;
+      }
+
+      function getSelectedChargeLabel() {
+        const checked = document.querySelector('input[name="chargeLabel"]:checked');
+        return checked?.value === "charging";
+      }
+
+      function setChargeLabelInputsDisabled(disabled) {
+        const inputs = document.querySelectorAll('input[name="chargeLabel"]');
+        for (const input of inputs) input.disabled = disabled;
+      }
+
+      function renderCollectionStatus(status) {
+        if (!status) {
+          recordStatusEl.textContent = "Collection status unavailable";
+          experimentLastSampleEl.textContent = "No collector status yet.";
+          return;
+        }
+        const mode = status.enabled ? "Recording (server)" : "Idle";
+        const session = status.sessionId ? `session ${status.sessionId}` : "no session";
+        const labelMode =
+          status.labelMode === "manual"
+            ? `manual label ${status.forcedLabelCharging ? "charging" : "not charging"}`
+            : "auto label";
+        recordStatusEl.textContent = `${mode} · ${session} · ${labelMode}`;
+        const pieces = [
+          `saved ${Number(status.savedCount || 0)}`,
+          `dropped ${Number(status.droppedCount || 0)}`,
+        ];
+        if (status.lastSampleAt) pieces.push(`last sample ${new Date(status.lastSampleAt).toLocaleTimeString()}`);
+        if (status.lastError) pieces.push(`last issue: ${status.lastError}`);
+        experimentLastSampleEl.textContent = pieces.join(" · ");
+      }
+
+      function updateRecordingUi() {
+        recordToggleBtn.textContent = isRecordingExperiment ? "Stop Recording" : "Start Recording";
+        setChargeLabelInputsDisabled(isRecordingExperiment);
+      }
+
+      async function startRecordingExperiment() {
+        const res = await fetch("/api/telemetry/experiments/collection/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ labelCharging: getSelectedChargeLabel() }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.error || `Start failed HTTP ${res.status}`);
+        }
+        isRecordingExperiment = true;
+        collectionState = json.collection || null;
+        updateRecordingUi();
+        renderCollectionStatus(collectionState);
+      }
+
+      function stopRecordingExperiment() {
+        return fetch("/api/telemetry/experiments/collection/stop", { method: "POST" })
+          .then((res) => res.json().then((json) => ({ ok: res.ok, json })))
+          .then(({ ok, json }) => {
+            if (!ok || !json?.success) throw new Error(json?.error || "Stop failed");
+            isRecordingExperiment = false;
+            collectionState = json.collection || null;
+            updateRecordingUi();
+            renderCollectionStatus(collectionState);
+          });
+      }
+
+      function autoStopRecordingExperiment(reason) {
+        if (!isRecordingExperiment) return;
+        stopRecordingExperiment().catch(() => {});
+        experimentLastSampleEl.textContent = reason;
+      }
+
+      async function refreshExperimentDatasetStats() {
+        try {
+          const res = await fetch("/api/telemetry/experiments/voltage-summary");
+          const json = await res.json();
+          const summary = json?.summary || {};
+          const charging = Number(summary.charging) || 0;
+          const notCharging = Number(summary.notCharging) || 0;
+          const totalSamples = Number(summary.totalSamples) || charging + notCharging;
+          datasetStatsEl.textContent = `Samples: ${totalSamples} total · charging ${charging} · not charging ${notCharging}`;
+
+          const rows = (summary.byTelemetryVoltage || []).map((row) => {
+            const telemetryVoltage = Number(row.telemetryVoltage).toFixed(2);
+            const c = Number(row.charging) || 0;
+            const n = Number(row.notCharging) || 0;
+            const total = c + n;
+            return `
+              <tr>
+                <td class="mono">${telemetryVoltage}V</td>
+                <td>${c}</td>
+                <td>${n}</td>
+                <td>${total}</td>
+              </tr>
+            `;
+          });
+          telemetryVoltageSummaryBodyEl.innerHTML = rows.length
+            ? rows.join("")
+            : '<tr><td colspan="4" class="hint">No telemetry-voltage-labeled samples yet.</td></tr>';
+        } catch (e) {
+          datasetStatsEl.textContent = `Dataset stats error: ${e.message || "failed"}`;
+          telemetryVoltageSummaryBodyEl.innerHTML =
+            '<tr><td colspan="4" class="hint">Failed to load summary.</td></tr>';
+        }
+      }
+
+      async function runExperimentAnalysis() {
+        analysisResultEl.textContent = "Running analysis...";
+        try {
+          const res = await fetch("/api/telemetry/experiments/analysis");
+          const json = await res.json();
+          const a = json?.analysis;
+          if (!a) {
+            analysisResultEl.textContent = "No analysis payload.";
+            return;
+          }
+          if (!a.ok) {
+            analysisResultEl.textContent = `${a.message || "Analysis unavailable"} (charging=${a?.totals?.charging || 0}, not-charging=${a?.totals?.notCharging || 0})`;
+            return;
+          }
+          if (a.model?.type === "logistic_temporal_v1") {
+            const bundleSize = a.model?.bundling?.selectedBundleSize;
+            const bundleLabel = bundleSize ? ` · best bundle ${bundleSize}` : "";
+            analysisResultEl.textContent =
+              `Model: logistic temporal · val acc ${a.model.validation?.accuracy ?? "-"}% · ` +
+              `precision ${a.model.validation?.precision ?? "-"}% · recall ${a.model.validation?.recall ?? "-"}%${bundleLabel} · ` +
+              `ESP means: charging ${a.stats.meanChargingEspVoltage.toFixed(3)}V, not-charging ${a.stats.meanNotChargingEspVoltage.toFixed(3)}V · ` +
+              `Telemetry means: charging ${a.stats.meanChargingTelemetryVoltage.toFixed(3)}V, not-charging ${a.stats.meanNotChargingTelemetryVoltage.toFixed(3)}V`;
+          } else {
+            analysisResultEl.textContent =
+              `Model: ${a.model.type} · ${a.model.chargingIf.replace("threshold", a.model.threshold.toFixed(3) + "V")} · ` +
+              `estimated accuracy ${a.model.estimatedAccuracy}% · means: charging ${a.stats.meanChargingVoltage.toFixed(3)}V, ` +
+              `not-charging ${a.stats.meanNotChargingVoltage.toFixed(3)}V`;
+          }
+        } catch (e) {
+          analysisResultEl.textContent = `Analysis failed: ${e.message || "unknown error"}`;
+        }
+      }
+
+      async function clearExperimentDataset() {
+        const ok = window.confirm("Delete all experiment training samples?");
+        if (!ok) return;
+        try {
+          const res = await fetch("/api/telemetry/experiments/voltage-samples", { method: "DELETE" });
+          const json = await res.json();
+          if (!json?.success) {
+            analysisResultEl.textContent = `Clear failed: ${json?.error || "unknown error"}`;
+            return;
+          }
+          analysisResultEl.textContent = `Cleared ${json.deleted || 0} samples.`;
+          await refreshExperimentDatasetStats();
+        } catch (e) {
+          analysisResultEl.textContent = `Clear failed: ${e.message || "unknown error"}`;
+        }
+      }
+
+      function setActiveTab(tab) {
+        const telemetry = tab !== "experiments";
+        telemetryTabPaneEl.classList.toggle("hidden", !telemetry);
+        experimentsTabPaneEl.classList.toggle("hidden", telemetry);
+        tabTelemetryEl.classList.toggle("active", telemetry);
+        tabExperimentsEl.classList.toggle("active", !telemetry);
+      }
+
+      function renderTable(rows) {
+        bodyEl.innerHTML = rows
+          .map((r) => {
+            const time = r.created_at ? new Date(r.created_at).toLocaleTimeString() : "-";
+            return `
+              <tr>
+                <td class="mono">${time}</td>
+                <td>${r.event || "-"}</td>
+                <td>${fmt(r.battery_pct, "%")}</td>
+                <td>${fmt(r.voltage, "V")}</td>
+                <td>${r.cpu_temp || "-"}</td>
+                <td>${fmt(r.cpu_load, "%")}</td>
+                <td>${r.wifi_signal ?? "-"}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      function renderPager(pagination) {
+        const totalPages = Math.max(1, Math.min(MAX_PAGES, Number(pagination?.totalPages) || 1));
+        const currentPage = Math.min(totalPages, Math.max(1, Number(pagination?.page) || 1));
+        telemetryPage = currentPage;
+        const totalItems = Number(pagination?.totalItems) || 0;
+        const start = totalItems === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+        const end = Math.min(totalItems, currentPage * PAGE_SIZE);
+        telemetryMetaEl.textContent = `Showing ${start}-${end} of ${totalItems} rows`;
+
+        const buttons = [];
+        buttons.push(
+          `<button type="button" data-page="${Math.max(1, currentPage - 1)}" ${currentPage === 1 ? "disabled" : ""}>Prev</button>`,
+        );
+        for (let p = 1; p <= totalPages; p += 1) {
+          buttons.push(
+            `<button type="button" data-page="${p}" class="${p === currentPage ? "active" : ""}">${p}</button>`,
+          );
+        }
+        buttons.push(
+          `<button type="button" data-page="${Math.min(totalPages, currentPage + 1)}" ${currentPage === totalPages ? "disabled" : ""}>Next</button>`,
+        );
+        pagerEl.innerHTML = buttons.join("");
+      }
+
+      async function loadDashboard() {
+        try {
+          const [stateRes, telRes, collectionRes] = await Promise.all([
+            fetch("/api/rover/state"),
+            fetch(`/api/telemetry?page=${telemetryPage}&pageSize=${PAGE_SIZE}`),
+            fetch("/api/telemetry/experiments/collection"),
+          ]);
+          const stateJson = await stateRes.json();
+          const telJson = await telRes.json();
+          const collectionJson = await collectionRes.json();
+          const espJson = await fetchEspVoltageSafe();
+          const rover = stateJson.rover || {};
+          const telemetry = telJson.telemetry || [];
+          const pagination = telJson.pagination || { page: telemetryPage, totalPages: 1, totalItems: telemetry.length };
+          const latest = telemetry[0] || {};
+          collectionState = collectionJson?.collection || null;
+          isRecordingExperiment = Boolean(collectionState?.enabled);
+          updateRecordingUi();
+          renderCollectionStatus(collectionState);
+
+          onlineEl.textContent = rover.online ? "ONLINE" : "OFFLINE";
+          onlineEl.className = rover.online ? "value online" : "value offline";
+          batteryNowEl.textContent = fmt(rover.battery?.currentPct, "%");
+          batteryEtaEl.textContent =
+            rover.battery?.estimatedMinutesRemainingActiveVideo != null
+              ? `${rover.battery.estimatedMinutesRemainingActiveVideo.toFixed(1)} min`
+              : "-";
+          bootProgressEl.textContent =
+            rover.bootProgressPct != null ? `${rover.bootProgressPct.toFixed(1)}%` : "-";
+          lastSeenEl.textContent = rover.lastSeenAt ? new Date(rover.lastSeenAt).toLocaleString() : "-";
+          voltageNowEl.textContent = fmt(latest.voltage, "V");
+
+          const ch = rover.charging || {};
+          if (ch.isCharging === true) {
+            chargingStatusEl.textContent = "YES";
+            chargingStatusEl.className = "value charging-yes";
+          } else if (ch.isCharging === false) {
+            chargingStatusEl.textContent = "NO";
+            chargingStatusEl.className = "value charging-no";
+          } else {
+            chargingStatusEl.textContent = "UNKNOWN";
+            chargingStatusEl.className = "value charging-unknown";
+          }
+          const detailParts = [];
+          if (ch.confidence) detailParts.push(`confidence: ${ch.confidence}`);
+          if (ch.chargeVoltPerHour != null) detailParts.push(`~${ch.chargeVoltPerHour}V/h`);
+          if (ch.reason) detailParts.push(String(ch.reason).replace(/_/g, " "));
+          chargingDetailEl.textContent = detailParts.length ? detailParts.join(" · ") : "-";
+
+          const esp = espJson?.success ? espJson.espVoltage : null;
+          if (esp && Number.isFinite(Number(esp.voltage))) {
+            pushEspVoltageSample(esp);
+            const vNow = Number(esp.voltage);
+            espVoltageNowEl.textContent = `${vNow.toFixed(3)}V`;
+            const ev = espVoltageHistory.map((x) => x.voltage);
+            const eMin = Math.min(...ev);
+            const eMax = Math.max(...ev);
+            const label = esp.voltage_1dp != null ? `rounded ${Number(esp.voltage_1dp).toFixed(1)}V` : "live";
+            espVoltageRangeEl.textContent = `session range ${eMin.toFixed(3)}V - ${eMax.toFixed(3)}V · ${label}`;
+          } else {
+            espVoltageNowEl.textContent = "-";
+            espVoltageRangeEl.textContent = espJson?.error || "ESP voltage unavailable";
+          }
+
+          lastTelemetryRows = telemetry;
+          renderTable(telemetry);
+          renderPager(pagination);
+          drawVoltageChart(telemetry);
+          drawEspVoltageChart();
+        } catch (e) {
+          onlineEl.textContent = "ERROR";
+          onlineEl.className = "value offline";
+          lastSeenEl.textContent = e.message || "Failed to load data";
+          chargingStatusEl.textContent = "ERROR";
+          chargingStatusEl.className = "value offline";
+          chargingDetailEl.textContent = "-";
+          espVoltageNowEl.textContent = "-";
+          espVoltageRangeEl.textContent = e.message || "ESP voltage fetch failed";
+        }
+      }
+
+      refreshBtn.addEventListener("click", () => loadDashboard());
+      tabTelemetryEl.addEventListener("click", () => setActiveTab("telemetry"));
+      tabExperimentsEl.addEventListener("click", () => setActiveTab("experiments"));
+      recordToggleBtn.addEventListener("click", async () => {
+        try {
+          if (isRecordingExperiment) await stopRecordingExperiment();
+          else await startRecordingExperiment();
+        } catch (e) {
+          experimentLastSampleEl.textContent = e.message || "Failed to toggle collection";
+        }
+      });
+      refreshDatasetBtn.addEventListener("click", () => refreshExperimentDatasetStats());
+      clearDatasetBtn.addEventListener("click", () => clearExperimentDataset());
+      runAnalysisBtn.addEventListener("click", async () => {
+        await refreshExperimentDatasetStats();
+        await runExperimentAnalysis();
+      });
+      canvas.addEventListener("mousemove", (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (event.clientX - rect.left) * scaleX;
+        const y = (event.clientY - rect.top) * scaleY;
+        hoveredPoint = nearestPoint(x, y);
+        drawVoltageChart(lastTelemetryRows);
+      });
+      canvas.addEventListener("mouseleave", () => {
+        hoveredPoint = null;
+        drawVoltageChart(lastTelemetryRows);
+      });
+      pagerEl.addEventListener("click", (event) => {
+        const target = event.target.closest("button[data-page]");
+        if (!target || target.disabled) return;
+        telemetryPage = Math.max(1, Math.min(MAX_PAGES, Number(target.dataset.page) || 1));
+        loadDashboard();
+      });
+      loadDashboard();
+      refreshExperimentDatasetStats();
+      updateRecordingUi();
+      setInterval(loadDashboard, 2000);
+    </script>
+  </body>
+</html>
