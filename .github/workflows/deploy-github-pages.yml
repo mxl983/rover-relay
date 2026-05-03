@@ -1,0 +1,55 @@
+# Publishes control-dashboard to GitHub Pages using the official Actions flow.
+# After merging this, set: Repo → Settings → Pages → Build and deployment → Source: GitHub Actions.
+# (Branch-based “Deploy from gh-pages” often yields 404 even when the branch has commits.)
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "control-dashboard/**"
+      - ".github/workflows/deploy-github-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: control-dashboard/package-lock.json
+
+      - name: Install & build (GitHub Pages base path)
+        working-directory: control-dashboard
+        env:
+          VITE_BASE_PATH: /rover-relay/
+        run: |
+          npm ci
+          npm run build:github-pages
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: control-dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
