@@ -165,12 +165,12 @@ export const SystemControls = ({
             title={
               quietMode
                 ? "Switch to boost: full motor speed"
-                : "Switch to quiet: slow, steady driving (default)"
+                : "Switch to quiet: slow driving (default)"
             }
           >
             {quietMode ? <Footprints size={14} /> : <Zap size={14} />}
             <span>
-              Drive mode is {quietMode ? "Quiet (steady)" : "Boost"}
+              Drive mode is {quietMode ? "Quiet" : "Boost"}
             </span>
           </DropdownMenu.Item>
 
