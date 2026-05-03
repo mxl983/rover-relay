@@ -230,9 +230,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  const batteryPct = Number.isFinite(Number(relayBatteryPct))
-    ? Number(relayBatteryPct)
-    : Number(stats?.battery);
+  // Realtime Pi WebSocket health (voltage → %) takes priority; relay /state poll is fallback only.
+  const batteryPct = Number.isFinite(Number(stats?.battery))
+    ? Number(stats.battery)
+    : Number.isFinite(Number(relayBatteryPct))
+      ? Number(relayBatteryPct)
+      : null;
   const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
   // Relay WebSocket `relay.rover.heartbeat` is the charging source of truth.
   const effectiveIsCharging = relayCharging === true;

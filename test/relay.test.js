@@ -173,3 +173,15 @@ describe("rover environment endpoint", () => {
     fetchSpy.mockRestore();
   });
 });
+
+describe("CORS origins parsing", () => {
+  it("normalizes GitHub Pages site URL to origin (path is not sent by browsers)", async () => {
+    vi.resetModules();
+    process.env.CORS_ORIGINS =
+      "https://mxl983.github.io/rover-relay/,http://localhost:5173";
+    const { default: cfg } = await import("../src/config.js");
+    expect(cfg.cors.origins).toContain("https://mxl983.github.io");
+    expect(cfg.cors.origins).toContain("http://localhost:5173");
+    expect(cfg.cors.origins.length).toBe(2);
+  });
+});

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PI_WEBSOCKET } from "../config";
+import { getBatteryPercentage } from "../utils/batteryFromVoltage.js";
 
 const PING_INTERVAL_MS = 3000;
 const HEARTBEAT_STALE_MS = 5000;
@@ -74,7 +75,14 @@ export function usePiWebSocket() {
               latency: Date.now() - lastPingTime.current,
             }));
           } else {
-            setStats((prev) => ({ ...prev, ...(data?.data ?? {}) }));
+            const raw = data?.data && typeof data.data === "object" ? { ...data.data } : {};
+            if (Number.isFinite(Number(raw.voltage))) {
+              const pct = getBatteryPercentage(Number(raw.voltage));
+              if (pct != null) {
+                raw.battery = pct;
+              }
+            }
+            setStats((prev) => ({ ...prev, ...raw }));
           }
         } catch {
           // ignore parse errors

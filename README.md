@@ -127,7 +127,7 @@ Set `TELEMETRY_ENABLED=false` on the Pi only if you want to **fully** stop local
 
 ## Environment
 
-See `.env.example` and `docker-compose.yml`.
+See `.env.example` and `docker-compose.yml`. For the control dashboard on GitHub Pages at `https://mxl983.github.io/rover-relay/`, keep **`https://mxl983.github.io`** in **`CORS_ORIGINS`** (that is the browser `Origin` for all pages on that host).
 
 Retention controls (to prevent DB growth):
 

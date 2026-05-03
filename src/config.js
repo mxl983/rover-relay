@@ -13,12 +13,24 @@ const parseBoolean = (value, fallback) => {
   return fallback;
 };
 
+/** Browsers send `Origin` as scheme+host+port only (no path). Normalize so `.env` may list a full site URL. */
+const normalizeCorsOrigin = (entry) => {
+  const s = entry.trim();
+  if (!s) return "";
+  try {
+    return new URL(s).origin;
+  } catch {
+    return s;
+  }
+};
+
 const parseOrigins = (value, fallback) => {
   const raw = value && value.length ? value : fallback;
-  return raw
+  const list = raw
     .split(",")
-    .map((o) => o.trim())
+    .map((o) => normalizeCorsOrigin(o))
     .filter(Boolean);
+  return [...new Set(list)];
 };
 
 const config = {
@@ -41,7 +53,7 @@ const config = {
   cors: {
     origins: parseOrigins(
       process.env.CORS_ORIGINS,
-      "http://localhost:5173,http://127.0.0.1:5173",
+      "http://localhost:5173,http://127.0.0.1:5173,https://mxl983.github.io",
     ),
   },
   auth: {

@@ -24,7 +24,7 @@ services:
       MQTT_BOOT_TOPIC: ${MQTT_BOOT_TOPIC:-rover/power/pi}
       MQTT_BOOT_PAYLOAD_PREFIX: ${MQTT_BOOT_PAYLOAD_PREFIX:-On}
       TELEMETRY_DB_PATH: /app/data/relay.db
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://mxl983.github.io}
       ROVER_API_TOKEN: ${ROVER_API_TOKEN:-}
       BACKUP_CAM_STREAM_URL: ${BACKUP_CAM_STREAM_URL:-http://192.168.1.220:81/stream}
       BACKUP_CAM_STREAM_AUTH: ${BACKUP_CAM_STREAM_AUTH:-false}
