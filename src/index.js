@@ -6,13 +6,10 @@ import { createApp } from "./app.js";
 import { initTelemetry, closeTelemetry } from "./services/telemetryService.js";
 import { closeDb } from "./services/db.js";
 import { mqttBootService } from "./services/mqttBootService.js";
-import { runtimeVoltageService } from "./services/runtimeVoltageService.js";
-import { experimentCollectionService } from "./services/experimentCollectionService.js";
+import { attachRoverChargingWss } from "./ws/roverChargingWss.js";
 
 initTelemetry();
 mqttBootService.start();
-runtimeVoltageService.start();
-experimentCollectionService.startFromPersistedState();
 const app = createApp();
 let server = null;
 let redirectServer = null;
@@ -33,10 +30,10 @@ if (config.ssl.enabled) {
   server = http.createServer(app);
 }
 
+attachRoverChargingWss(server);
+
 function shutdown() {
   mqttBootService.stop();
-  runtimeVoltageService.stop();
-  experimentCollectionService.stop();
   closeTelemetry();
   closeDb();
   if (redirectServer) {

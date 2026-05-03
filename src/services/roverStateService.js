@@ -1,7 +1,7 @@
 import config from "../config.js";
 import { getDb } from "./db.js";
 import { getLatestTelemetryEvent } from "./telemetryService.js";
-import { inferChargingFromTelemetry } from "./chargingDetectionService.js";
+import { inferChargingFromLedWebcam } from "./ledWebcamChargingService.js";
 
 function parseTs(row) {
   if (!row?.created_at) return null;
@@ -133,7 +133,7 @@ function estimateBatteryDrainPctPerMinute(samples, staleMs) {
   return { drainPctPerMinute: -median, samples: filtered.length };
 }
 
-export function getRoverState() {
+export async function getRoverState() {
   const now = Date.now();
   const last = latestHeartbeat();
   const lastSeenMs = last ? parseTs(last) : null;
@@ -230,7 +230,7 @@ export function getRoverState() {
     ).toISOString();
   }
 
-  const charging = inferChargingFromTelemetry({ online, booting });
+  const charging = await inferChargingFromLedWebcam();
 
   return {
     online,

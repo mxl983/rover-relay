@@ -9,6 +9,7 @@ import {
   CAMERA_SECRET,
   VOICE_DRIVE_DEBUG,
   ROVER_STATE_ENDPOINT,
+  getRelayRoverHeartbeatWebSocketUrl,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
@@ -111,6 +112,59 @@ export default function App() {
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    let ws = null;
+    let reconnectTimer = null;
+
+    const connect = () => {
+      if (cancelled) return;
+      const url = getRelayRoverHeartbeatWebSocketUrl(showBackupView);
+      try {
+        ws = new WebSocket(url);
+      } catch {
+        reconnectTimer = setTimeout(connect, 2500);
+        return;
+      }
+
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "relay.rover.heartbeat" && msg.success && msg.rover?.charging) {
+            setRelayCharging(msg.rover.charging.isCharging === true);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.onerror = () => {
+        try {
+          ws?.close();
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.onclose = () => {
+        if (cancelled) return;
+        reconnectTimer = setTimeout(connect, 2500);
+      };
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      try {
+        ws?.close();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [showBackupView]);
+
+  useEffect(() => {
     let stopped = false;
     let timer = null;
     const nextPollDelayMs = videoStreamReady ? 10000 : 1000;
@@ -122,7 +176,6 @@ export default function App() {
         const json = await res.json();
         const rover = json?.rover || {};
         if (!stopped) {
-          setRelayCharging(rover?.charging?.isCharging === true);
           const pct = Number(rover?.battery?.currentPct);
           setRelayBatteryPct(Number.isFinite(pct) ? pct : null);
           const minsRemaining = Number(rover?.battery?.estimatedMinutesRemainingActiveVideo);
@@ -131,10 +184,7 @@ export default function App() {
           setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
         }
       } catch {
-        // Relay charging endpoint is the single source of truth.
-        // On poll failure, default to non-charging to avoid stale green alerts.
         if (!stopped) {
-          setRelayCharging(false);
           setRelayBatteryMinutesRemaining(null);
         }
       } finally {
@@ -184,10 +234,13 @@ export default function App() {
     ? Number(relayBatteryPct)
     : Number(stats?.battery);
   const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
-  // Relay charging endpoint is the only source of truth.
+  // Relay WebSocket `relay.rover.heartbeat` is the charging source of truth.
   const effectiveIsCharging = relayCharging === true;
-  const viewportGlowClass =
-    lowBatteryGlowArmed && isLowBattery ? "status-glow-low-battery" : "";
+  const viewportGlowClass = effectiveIsCharging
+    ? "status-glow-charging"
+    : lowBatteryGlowArmed && isLowBattery
+      ? "status-glow-low-battery"
+      : "";
 
   const isMobile = useIsMobile();
   const isFullscreen = useFullscreen();
@@ -459,6 +512,12 @@ export default function App() {
     showActionToast(`Laser ${stats.laserOn ? "disabled" : "enabled"}`);
   };
 
+  const handleFeederTreat = async () => {
+    setActionError(null);
+    await sendControlNow({ command: "feeder_treat" });
+    showActionToast("Treat");
+  };
+
   const handleToggleBackupView = () => {
     setShowBackupView((prev) => !prev);
   };
@@ -662,6 +721,7 @@ export default function App() {
             isCapturing={isCapturing}
             onToggleBackupView={handleToggleBackupView}
             backupViewEnabled={showBackupView}
+            onFeederTreat={handleFeederTreat}
           />
         </div>
       )}
@@ -768,6 +828,7 @@ function HudFooter({
   isCapturing,
   onToggleBackupView,
   backupViewEnabled,
+  onFeederTreat,
 }) {
   const joystickProps = {
     onDrive,
@@ -788,6 +849,7 @@ function HudFooter({
     headlightOn: stats.usbPower === "on",
     onToggleBackupView,
     backupViewEnabled,
+    onTreat: onFeederTreat,
   };
 
   const schematic = (
@@ -836,6 +898,7 @@ function HudFooter({
                 onReset={onResetCamera}
                 onToggleBackupView={onToggleBackupView}
                 backupViewEnabled={backupViewEnabled}
+                onTreat={onFeederTreat}
               />
             )}
             {!isMobile && controlMode === "joystick" && (
@@ -864,6 +927,7 @@ function HudFooter({
                 onReset={onResetCamera}
                 onToggleBackupView={onToggleBackupView}
                 backupViewEnabled={backupViewEnabled}
+                onTreat={onFeederTreat}
               />
             )}
           </>

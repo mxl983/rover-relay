@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 const CONTROL_CONFIG = [
+  { key: "t", label: "🦴", grid: 1, type: "action", hint: "TRT" },
   { key: "w", label: "W", grid: 2 },
   { key: "v", label: "🎤", grid: 3, type: "action", hint: "PTT" },
   { key: "b", label: "📷", grid: 4, type: "action", hint: "BKP" },
@@ -31,6 +32,7 @@ export const ControlCluster = ({
   voiceListening,
   onToggleBackupView,
   backupViewEnabled,
+  onTreat,
   isCapturing: _isCapturing,
 }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
@@ -55,6 +57,7 @@ export const ControlCluster = ({
         if (key === "c") onCapture();
         if (key === "r") onReset();
         if (key === "b") onToggleBackupView?.();
+        if (key === "t") onTreat?.();
         return;
       }
 
@@ -86,6 +89,7 @@ export const ControlCluster = ({
       onReset,
       voiceSupported,
       onToggleBackupView,
+      onTreat,
     ],
   );
 

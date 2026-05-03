@@ -43,6 +43,24 @@ export const ROVER_STATE_ENDPOINT =
   import.meta.env.VITE_ROVER_STATE_URL ||
   "https://jjcloud.tail9d0237.ts.net:8787/api/rover/state";
 
+/** Fast charging-only path (webcam LED); avoids backup-cam latency on `/api/rover/state`. */
+export const ROVER_CHARGING_ENDPOINT =
+  import.meta.env.VITE_ROVER_CHARGING_URL ||
+  ROVER_STATE_ENDPOINT.replace(/\/state\/?$/, "/charging");
+
+/** Relay WebSocket: rover heartbeat incl. charging — 5s default, `?backup=1` for 1s (backup camera UI). */
+export function getRelayRoverHeartbeatWebSocketUrl(backupViewEnabled) {
+  try {
+    const u = new URL(RELAY_BASE_URL);
+    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
+    const q = backupViewEnabled ? "?backup=1" : "";
+    return `${wsProto}//${u.host}/ws/rover${q}`;
+  } catch {
+    const q = backupViewEnabled ? "?backup=1" : "";
+    return `wss://localhost/ws/rover${q}`;
+  }
+}
+
 /** Set VITE_VOICE_DRIVE_DEBUG=true to log assistant actions and control payloads in the browser console. */
 export const VOICE_DRIVE_DEBUG =
   import.meta.env.VITE_VOICE_DRIVE_DEBUG === "true";

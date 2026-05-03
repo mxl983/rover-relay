@@ -107,7 +107,7 @@ Set `TELEMETRY_ENABLED=false` on the Pi only if you want to **fully** stop local
 
 - Telemetry: point your dashboard API base to the relay and use `GET /api/telemetry` (or keep the Pi for control and only query relay for history).
 - Backup view: `<img src="https://<relay-tailscale>:8787/api/cams/backup/stream" />`.
-- Built-in relay dashboard: open `https://<relay-tailscale>:8787/dashboard` for live status cards, battery trend, and recent telemetry rows.
+- Built-in relay dashboard: open `https://<relay-tailscale>:8787/dashboard` for live status cards, battery trend, and recent telemetry rows. Charger LED status also streams on WebSocket `/ws/rover` (`relay.rover.heartbeat` messages with `rover.charging`).
 - Control dashboard service: `docker-compose.yml` includes `control-dashboard` (source mirrored from [mxl983/rover dashboard](https://github.com/mxl983/rover/tree/main/dashboard)).
   - Internal service URL: `http://<relay-host>:5174`
   - Relay-proxied URL (same TLS cert/domain): `https://<relay-host>:8787/mangomate`
@@ -130,9 +130,6 @@ See `.env.example` and `docker-compose.yml`.
 Retention controls (to prevent DB growth):
 
 - `TELEMETRY_RETENTION_DAYS` (default `14`): telemetry, heartbeats, client connections, mqtt boot events
-- `TELEMETRY_RUNTIME_SAMPLE_INTERVAL_MS` (default `500`): runtime ESP+telemetry sampling cadence for live charging model
-- `TELEMETRY_RUNTIME_RETENTION_DAYS` (default `3`): high-volume runtime model samples (1s)
-- `TELEMETRY_EXPERIMENT_RETENTION_DAYS` (default `30`): labeled experiment/training samples
 
 Important MQTT boot env vars:
 

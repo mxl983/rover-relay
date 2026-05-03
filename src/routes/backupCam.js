@@ -153,28 +153,4 @@ router.post("/stop", optionalStreamAuth, (req, res) => {
   return res.json({ success: true });
 });
 
-router.get("/voltage", optionalStreamAuth, async (req, res) => {
-  const urlString = config.backupCam.voltageUrl || config.backupCam.streamUrl;
-  let upstream;
-  try {
-    upstream = new URL(urlString);
-  } catch {
-    return res.status(502).json({ success: false, error: "Invalid BACKUP_CAM_VOLTAGE_URL" });
-  }
-
-  try {
-    const r = await fetch(upstream, {
-      method: "GET",
-      headers: { "user-agent": "rover-relay/1.0", accept: "application/json" },
-    });
-    if (!r.ok) {
-      return res.status(502).json({ success: false, error: `upstream HTTP ${r.status}` });
-    }
-    const data = await r.json();
-    return res.json({ success: true, espVoltage: data });
-  } catch (e) {
-    return res.status(502).json({ success: false, error: e.message || "upstream failed" });
-  }
-});
-
 export default router;

@@ -67,7 +67,7 @@ router.post("/heartbeat", requireToken, (req, res) => {
 });
 
 router.get("/state", async (req, res) => {
-  const rover = getRoverState();
+  const rover = await getRoverState();
   const { environment, error: environmentError } = await readEnvironmentFromBackupCam();
   success(res, {
     rover: {
@@ -79,8 +79,8 @@ router.get("/state", async (req, res) => {
 });
 
 /** Battery-derived charging detection (same object as `rover.charging` on `/state`). */
-router.get("/charging", (req, res) => {
-  const rover = getRoverState();
+router.get("/charging", async (req, res) => {
+  const rover = await getRoverState();
   success(res, { charging: rover.charging });
 });
 

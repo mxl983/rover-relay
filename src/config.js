@@ -70,12 +70,6 @@ const config = {
     enabled: parseBoolean(process.env.TELEMETRY_ENABLED, true),
     dbPath: process.env.TELEMETRY_DB_PATH || "/app/data/relay.db",
     retentionDays: parseNumber(process.env.TELEMETRY_RETENTION_DAYS, 14),
-    /** Runtime sampling interval for live model inference. */
-    runtimeSampleIntervalMs: parseNumber(process.env.TELEMETRY_RUNTIME_SAMPLE_INTERVAL_MS, 500),
-    /** Optional override for high-volume runtime model samples (default 3 days). */
-    runtimeRetentionDays: parseNumber(process.env.TELEMETRY_RUNTIME_RETENTION_DAYS, 3),
-    /** Optional override for experiment/training samples (default 30 days). */
-    experimentRetentionDays: parseNumber(process.env.TELEMETRY_EXPERIMENT_RETENTION_DAYS, 30),
   },
   rover: {
     /** Consider rover offline if no heartbeat within this window (ms). */
@@ -84,43 +78,64 @@ const config = {
     bootTotalMs: parseNumber(process.env.ROVER_BOOT_TOTAL_MS, 50_000),
     /** Window for battery drain slope (ms). */
     batteryDrainWindowMs: parseNumber(process.env.BATTERY_DRAIN_WINDOW_MS, 120_000),
-    /** Telemetry lookback for charge inference (ms). */
-    chargingWindowMs: parseNumber(process.env.CHARGING_WINDOW_MS, 45 * 60 * 1000),
-    /** Ignore adjacent samples farther apart than this when computing slopes (ms). */
-    chargingMaxGapMs: parseNumber(process.env.CHARGING_MAX_GAP_MS, 120_000),
-    /** Ignore likely startup/invalid low-voltage samples (e.g. transient 0V). */
-    chargingMinTrustedVoltage: parseNumber(process.env.CHARGING_MIN_TRUSTED_VOLTAGE, 6.0),
     /**
-     * Adjacent rates with a larger absolute V/min magnitude are discarded as slope outliers.
-     * Fast plug/unplug transients are handled separately via transition delta rules.
+     * Charger LED via USB webcam (`ffmpeg` + hue classification). Red ≈ charging, green ≈ idle.
      */
-    chargingSpikeAbsVoltPerMin: parseNumber(process.env.CHARGING_SPIKE_ABS_VOLT_PER_MIN, 0.6),
-    /** Minimum median "slow rise" V/min to count as charging. */
-    chargingMinPositiveVoltPerMin: parseNumber(process.env.CHARGING_MIN_POSITIVE_VOLT_PER_MIN, 0.0015),
-    /** Above this V/min, treat as non-charging / anomaly even if positive. */
-    chargingMaxPositiveVoltPerMin: parseNumber(process.env.CHARGING_MAX_POSITIVE_VOLT_PER_MIN, 0.08),
-    /** One segment at or below this V/min counts as a strong "not charging" tick. */
-    chargingDischargeClearVoltPerMin: parseNumber(process.env.CHARGING_DISCHARGE_CLEAR_VOLT_PER_MIN, -0.02),
-    /** Two ticks at or below this softer threshold clear "charging" (unplug detection). */
-    chargingSoftDischargeVoltPerMin: parseNumber(process.env.CHARGING_SOFT_DISCHARGE_VOLT_PER_MIN, -0.008),
-    /** Time window for immediate post plug/unplug transition detection (ms). */
-    chargingTransitionMaxGapMs: parseNumber(process.env.CHARGING_TRANSITION_MAX_GAP_MS, 45_000),
-    /** Immediate transition threshold in volts (about +/-0.2V). */
-    chargingTransitionDeltaV: parseNumber(process.env.CHARGING_TRANSITION_DELTA_V, 0.18),
-    /** How many recent trustworthy segment slopes participate in voting. */
-    chargingRecentRatesTail: parseNumber(process.env.CHARGING_RECENT_RATES_TAIL, 8),
-    /** Minimum trustworthy slopes required before asserting charging or sustained not-charging. */
-    chargingMinGoodRates: parseNumber(process.env.CHARGING_MIN_GOOD_RATES, 2),
+    ledWebcam: {
+      /** Linux V4L2 device path */
+      device: process.env.CHARGING_LED_WEBCAM_DEVICE || "/dev/video0",
+      /** Hard cap on ffmpeg capture; keep low for fast API responses. */
+      captureTimeoutMs: parseNumber(process.env.CHARGING_LED_WEBCAM_TIMEOUT_MS, 2500),
+      /** Small frames = less USB bandwidth and faster decode (LED fills frame when close). */
+      frameWidth: parseNumber(process.env.CHARGING_LED_WEBCAM_WIDTH, 320),
+      frameHeight: parseNumber(process.env.CHARGING_LED_WEBCAM_HEIGHT, 240),
+      /** Optional direct capture size at device open (matches supported modes, e.g. 320x240). Overrides width/height for -video_size before -i. */
+      captureVideoSize:
+        process.env.CHARGING_LED_WEBCAM_CAPTURE_SIZE &&
+        String(process.env.CHARGING_LED_WEBCAM_CAPTURE_SIZE).trim().length
+          ? String(process.env.CHARGING_LED_WEBCAM_CAPTURE_SIZE).trim()
+          : null,
+      /**
+       * Reuse last detection for this many ms (concurrent / rapid dashboard polls).
+       * Set 0 to disable (always grab a fresh frame).
+       */
+      cacheTtlMs: parseNumber(process.env.CHARGING_LED_WEBCAM_CACHE_TTL_MS, 200),
+      /** Empty string = let ffmpeg negotiate; common values: mjpeg, yuyv422 */
+      inputFormat: process.env.CHARGING_LED_WEBCAM_INPUT_FORMAT || "mjpeg",
+      /**
+       * “Charging” LED hue band (HSV 0–360). Default: red through orange (~0–72°), touching but not
+       * overlapping green idle at 73°+. Values between this max and greenMin still classify as
+       * charging via bloom gap-fill in classifyHueForLed.
+       * If min > max, the band wraps across 0° (e.g. 350–12).
+       * Legacy: CHARGING_LED_YELLOW_* still accepted as aliases for these values.
+       */
+      chargingHueMin: parseNumber(
+        process.env.CHARGING_LED_CHARGING_HUE_MIN ?? process.env.CHARGING_LED_YELLOW_HUE_MIN,
+        0,
+      ),
+      chargingHueMax: parseNumber(
+        process.env.CHARGING_LED_CHARGING_HUE_MAX ?? process.env.CHARGING_LED_YELLOW_HUE_MAX,
+        72,
+      ),
+      greenHueMin: parseNumber(process.env.CHARGING_LED_GREEN_HUE_MIN, 73),
+      greenHueMax: parseNumber(process.env.CHARGING_LED_GREEN_HUE_MAX, 165),
+      /**
+       * Ignore pixels with max(R,G,B) below this (0–255). Drops pure black frame background
+       * before hue stats so the LED blob dominates.
+       */
+      ignoreBelowRgbMax: parseNumber(process.env.CHARGING_LED_IGNORE_BELOW_RGB_MAX, 14),
+      /**
+       * Until the camera is mounted: `charging` | `idle` | `error` to fake detector output,
+       * or leave unset for real ffmpeg capture (will fail gracefully if no device).
+       */
+      stubMode: process.env.CHARGING_LED_WEBCAM_STUB || "",
+    },
   },
   backupCam: {
     /** Upstream MJPEG or raw stream URL reachable from this relay host. */
     streamUrl:
       process.env.BACKUP_CAM_STREAM_URL ||
       "http://192.168.1.220:81/stream",
-    /** Optional ESP voltage endpoint; defaults to stream host with /voltage path. */
-    voltageUrl:
-      process.env.BACKUP_CAM_VOLTAGE_URL ||
-      "http://192.168.1.220:82/voltage",
     /** Optional ESP realtime environment endpoint; defaults to stream host with /realtime path. */
     realtimeUrl:
       process.env.BACKUP_CAM_REALTIME_URL ||

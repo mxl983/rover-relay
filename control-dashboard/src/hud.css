@@ -38,6 +38,26 @@ html {
   animation: viewport-glow-low-battery 1.2s ease-in-out infinite;
 }
 
+.viewport.status-glow-charging .status-glow-layer {
+  animation: viewport-glow-charging 2s ease-in-out infinite;
+}
+
+@keyframes viewport-glow-charging {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 14px rgba(34, 197, 94, 0.42),
+      inset 0 0 40px rgba(34, 197, 94, 0.18),
+      0 0 14px rgba(34, 197, 94, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 26px rgba(74, 222, 128, 0.55),
+      inset 0 0 56px rgba(74, 222, 128, 0.26),
+      0 0 22px rgba(74, 222, 128, 0.48);
+  }
+}
+
 @keyframes viewport-glow-low-battery {
   0%,
   100% {

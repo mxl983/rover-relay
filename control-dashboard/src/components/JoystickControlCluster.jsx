@@ -142,6 +142,7 @@ export const DualJoystickControls = ({
   voiceListening: _voiceListening,
   onToggleBackupView,
   backupViewEnabled,
+  onTreat,
   children,
 }) => {
   const leftZoneRef = useRef(null);
@@ -173,13 +174,15 @@ export const DualJoystickControls = ({
   const onLaserToggleRef = useRef(onLaserToggle);
   const onHeadlightToggleRef = useRef(onHeadlightToggle);
   const onToggleBackupViewRef = useRef(onToggleBackupView);
+  const onTreatRef = useRef(onTreat);
   useEffect(() => {
     onResetRef.current = onReset;
     onLookDownRef.current = onLookDown;
     onLaserToggleRef.current = onLaserToggle;
     onHeadlightToggleRef.current = onHeadlightToggle;
     onToggleBackupViewRef.current = onToggleBackupView;
-  }, [onReset, onLookDown, onLaserToggle, onHeadlightToggle, onToggleBackupView]);
+    onTreatRef.current = onTreat;
+  }, [onReset, onLookDown, onLaserToggle, onHeadlightToggle, onToggleBackupView, onTreat]);
 
   const gamepadButtonsPrevRef = useRef({
     lt: false,
@@ -187,6 +190,8 @@ export const DualJoystickControls = ({
     lb: false,
     rb: false,
     l3: false,
+    /** Xbox Y / north face (index 3) — treat shortcut */
+    faceY: false,
   });
 
   const driveStateChanged = (a, b) =>
@@ -397,6 +402,7 @@ export const DualJoystickControls = ({
           lb: false,
           rb: false,
           l3: false,
+          faceY: false,
         };
       } else {
         const lt = triggerHeld(gp.buttons?.[6]);
@@ -405,6 +411,7 @@ export const DualJoystickControls = ({
         const rb = bumperHeld(gp.buttons?.[5]);
         // Xbox L3 / left stick click (standard mapping button index 10).
         const l3 = bumperHeld(gp.buttons?.[10]);
+        const faceY = bumperHeld(gp.buttons?.[3]);
         const allowActions = !ignoreGamepadRef.current;
         if (allowActions) {
           if (lt && !prev.lt) onResetRef.current?.();
@@ -412,8 +419,9 @@ export const DualJoystickControls = ({
           if (lb && !prev.lb) onLaserToggleRef.current?.();
           if (rb && !prev.rb) onHeadlightToggleRef.current?.();
           if (l3 && !prev.l3) onToggleBackupViewRef.current?.();
+          if (faceY && !prev.faceY) onTreatRef.current?.();
         }
-        gamepadButtonsPrevRef.current = { lt, rt, lb, rb, l3 };
+        gamepadButtonsPrevRef.current = { lt, rt, lb, rb, l3, faceY };
       }
 
       const pads = navigator.getGamepads();
@@ -583,6 +591,16 @@ export const DualJoystickControls = ({
           transform: translateX(-50%) scale(0.9);
         }
 
+        .drive-top-center {
+          top: -8px;
+          bottom: auto;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        .drive-top-center:active {
+          transform: translateX(-50%) scale(0.9);
+        }
+
         .gimbal-bottom-left {
           top: auto;
           bottom: -8px;
@@ -684,6 +702,24 @@ export const DualJoystickControls = ({
         >
           L
         </button>
+
+        {onTreat && (
+          <button
+            type="button"
+            className="reset-btn-sibling drive-top-center"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onTreat();
+            }}
+            style={{ borderRadius: "20px" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label="Dispense treat"
+            title="Treat (keyboard T · gamepad Y)"
+          >
+            TRT
+          </button>
+        )}
 
         <button
           type="button"
@@ -816,5 +852,6 @@ DualJoystickControls.propTypes = {
   voiceListening: PropTypes.bool,
   onToggleBackupView: PropTypes.func,
   backupViewEnabled: PropTypes.bool,
+  onTreat: PropTypes.func,
   children: PropTypes.node,
 };
