@@ -5,3 +5,9 @@ data/
 .env.local
 coverage/
 .DS_Store
+
+# TLS material — generate on the host (see README); never commit keys
+certs/
+
+# Vite build output — published via gh-pages branch only
+control-dashboard/dist/

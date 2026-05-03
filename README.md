@@ -35,6 +35,8 @@ sudo tailscale cert \
 sudo chown -R $USER:$USER certs
 ```
 
+Keep **`certs/`** out of Git (it is in `.gitignore`). Never commit TLS private keys. If a key was ever pushed to a remote, **reissue** certificates on the host and rotate anything that depended on that key.
+
 Then run relay (compose already mounts `./certs` to `/certs` in the container).
 
 If you want an HTTP listener that only redirects to HTTPS, set:
