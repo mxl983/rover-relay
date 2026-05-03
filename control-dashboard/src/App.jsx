@@ -8,7 +8,6 @@ import {
   BACKUP_STREAM_ENDPOINT,
   CAMERA_SECRET,
   VOICE_DRIVE_DEBUG,
-  ROVER_STATE_ENDPOINT,
   getRelayRoverHeartbeatWebSocketUrl,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
@@ -108,6 +107,8 @@ export default function App() {
   const [relayBatteryPct, setRelayBatteryPct] = useState(null);
   const [relayTemperatureC, setRelayTemperatureC] = useState(null);
   const [relayBatteryMinutesRemaining, setRelayBatteryMinutesRemaining] = useState(null);
+  /** Same shape as GET /api/rover/state `data` for VideoStream boot loader (from relay WS). */
+  const [relayRoverPayload, setRelayRoverPayload] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
 
@@ -129,9 +130,16 @@ export default function App() {
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
-          if (msg.type === "relay.rover.heartbeat" && msg.success && msg.rover?.charging) {
-            setRelayCharging(msg.rover.charging.isCharging === true);
-          }
+          if (msg.type !== "relay.rover.heartbeat" || !msg.success || !msg.rover) return;
+          const rover = msg.rover;
+          setRelayCharging(rover.charging?.isCharging === true);
+          const pct = Number(rover?.battery?.currentPct);
+          setRelayBatteryPct(Number.isFinite(pct) ? pct : null);
+          const minsRemaining = Number(rover?.battery?.estimatedMinutesRemainingActiveVideo);
+          setRelayBatteryMinutesRemaining(Number.isFinite(minsRemaining) ? minsRemaining : null);
+          const tempC = Number(rover?.environment?.temperatureC);
+          setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
+          setRelayRoverPayload({ rover });
         } catch {
           /* ignore */
         }
@@ -147,6 +155,7 @@ export default function App() {
 
       ws.onclose = () => {
         if (cancelled) return;
+        setRelayRoverPayload(null);
         reconnectTimer = setTimeout(connect, 2500);
       };
     };
@@ -163,41 +172,6 @@ export default function App() {
       }
     };
   }, [showBackupView]);
-
-  useEffect(() => {
-    let stopped = false;
-    let timer = null;
-    const nextPollDelayMs = videoStreamReady ? 10000 : 1000;
-
-    const pollRoverState = async () => {
-      try {
-        const res = await apiFetch(ROVER_STATE_ENDPOINT, { timeout: 2500, retries: 0 });
-        if (!res.ok) return;
-        const json = await res.json();
-        const rover = json?.rover || {};
-        if (!stopped) {
-          const pct = Number(rover?.battery?.currentPct);
-          setRelayBatteryPct(Number.isFinite(pct) ? pct : null);
-          const minsRemaining = Number(rover?.battery?.estimatedMinutesRemainingActiveVideo);
-          setRelayBatteryMinutesRemaining(Number.isFinite(minsRemaining) ? minsRemaining : null);
-          const tempC = Number(rover?.environment?.temperatureC);
-          setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
-        }
-      } catch {
-        if (!stopped) {
-          setRelayBatteryMinutesRemaining(null);
-        }
-      } finally {
-        if (!stopped) timer = setTimeout(pollRoverState, nextPollDelayMs);
-      }
-    };
-
-    pollRoverState();
-    return () => {
-      stopped = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [videoStreamReady]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -658,6 +632,7 @@ export default function App() {
         controlChannelReady={piOnline}
         backupStreamUrl={BACKUP_STREAM_ENDPOINT}
         showBackupView={showBackupView}
+        relayRoverPayload={relayRoverPayload}
       />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 

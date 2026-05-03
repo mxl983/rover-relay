@@ -1,5 +1,6 @@
 import { WebSocketServer } from "ws";
 import { getRoverState } from "../services/roverStateService.js";
+import { readEnvironmentFromBackupCam } from "../services/roverEnvironmentService.js";
 
 const PATH = "/ws/rover";
 
@@ -53,12 +54,15 @@ export function attachRoverChargingWss(httpServer) {
       if (stopped || ws.readyState !== 1) return;
       try {
         const rover = await getRoverState();
+        const { environment, error: environmentError } = await readEnvironmentFromBackupCam();
         ws.send(
           JSON.stringify({
             type: "relay.rover.heartbeat",
             success: true,
             rover: {
-              charging: rover.charging,
+              ...rover,
+              environment,
+              environmentError,
             },
             ts: Date.now(),
           }),

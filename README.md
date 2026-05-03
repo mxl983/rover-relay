@@ -109,7 +109,7 @@ Set `TELEMETRY_ENABLED=false` on the Pi only if you want to **fully** stop local
 
 - Telemetry: point your dashboard API base to the relay and use `GET /api/telemetry` (or keep the Pi for control and only query relay for history).
 - Backup view: `<img src="https://<relay-tailscale>:8787/api/cams/backup/stream" />`.
-- Built-in relay dashboard: open `https://<relay-tailscale>:8787/dashboard` for live status cards, battery trend, and recent telemetry rows. Charger LED status also streams on WebSocket `/ws/rover` (`relay.rover.heartbeat` messages with `rover.charging`).
+- Built-in relay dashboard: open `https://<relay-tailscale>:8787/dashboard` for live status cards, battery trend, and recent telemetry rows. WebSocket `/ws/rover` pushes `relay.rover.heartbeat` with the same **`rover`** object as `GET /api/rover/state` (battery, boot, environment, charging, etc.); the React control dashboard uses this stream instead of polling `/api/rover/state` when connected.
 - Control dashboard service: `docker-compose.yml` includes `control-dashboard` (source mirrored from [mxl983/rover dashboard](https://github.com/mxl983/rover/tree/main/dashboard)).
   - Internal service URL: `http://<relay-host>:5174`
   - Relay-proxied URL (same TLS cert/domain): `https://<relay-host>:8787/mangomate`

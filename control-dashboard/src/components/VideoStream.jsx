@@ -14,6 +14,8 @@ export const VideoStream = ({
   controlChannelReady = false,
   backupStreamUrl = "",
   showBackupView = false,
+  /** Same shape as GET /api/rover/state response body when from relay `wss://.../ws/rover` (optional). */
+  relayRoverPayload = null,
 }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -133,29 +135,40 @@ export const VideoStream = ({
       );
     };
 
+    const applyBootPercentFromData = (data) => {
+      const pct = parsePercent(data);
+      if (pct != null && !cancelled) {
+        const now = Date.now();
+        const current = Number.isFinite(loadingPercentRef.current) ? loadingPercentRef.current : pct;
+        loadingInterpFromRef.current = current;
+        loadingPercentTargetRef.current = pct;
+        loadingInterpStartMsRef.current = now;
+        loadingInterpDurationMsRef.current = 900;
+        if (!Number.isFinite(loadingPercentRef.current)) setLoadingPercent(pct);
+      }
+    };
+
+    if (relayRoverPayload?.rover) {
+      applyBootPercentFromData(relayRoverPayload);
+      return undefined;
+    }
+
     const poll = async () => {
       if (cancelled || inFlight) return;
       inFlight = true;
       try {
+        // Relay GET /api/rover/state can exceed 1s cold (getRoverState + backup-cam env fetch, each with its own timeouts).
+        // apiFetch aborts on timeout → DevTools shows "canceled"; keep this comfortably above worst-case.
         const res = await apiFetch(ROVER_STATE_ENDPOINT, {
           method: "GET",
-          timeout: 1200,
+          timeout: 8000,
           retries: 0,
         });
         if (!res.ok) return;
         const text = await res.text();
         if (!text) return;
         const data = JSON.parse(text);
-        const pct = parsePercent(data);
-        if (pct != null && !cancelled) {
-          const now = Date.now();
-          const current = Number.isFinite(loadingPercentRef.current) ? loadingPercentRef.current : pct;
-          loadingInterpFromRef.current = current;
-          loadingPercentTargetRef.current = pct;
-          loadingInterpStartMsRef.current = now;
-          loadingInterpDurationMsRef.current = 900;
-          if (!Number.isFinite(loadingPercentRef.current)) setLoadingPercent(pct);
-        }
+        applyBootPercentFromData(data);
       } catch {
         // Relay unavailable: keep loader functional without percentage.
         if (!cancelled) {
@@ -177,7 +190,7 @@ export const VideoStream = ({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [isLoading]);
+  }, [isLoading, relayRoverPayload]);
 
   useEffect(() => {
     if (!isLoading) return undefined;
@@ -445,7 +458,7 @@ export const VideoStream = ({
         <div style={loaderWrapper}>
           <VideoLoadingPhysics />
           <div style={loaderForeground}>
-            <div className="glitch-text polygon-label" style={loaderTextStyle}>
+            <div style={loaderTextStyle}>
               COSMIC PIT STOP IN PROGRESS
               {isLoading && loadingPercent != null ? ` — ${loadingPercent}% READY` : ""}
             </div>
@@ -499,12 +512,6 @@ export const VideoStream = ({
         </div>
       )}
 
-      <style>{`
-        .polygon-label.glitch-text {
-          animation: glitch 1s linear infinite;
-          text-shadow: 2px 0 #ff0055, -2px 0 #00f2ff;
-        }
-      `}</style>
     </div>
   );
 };
