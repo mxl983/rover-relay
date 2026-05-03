@@ -63,7 +63,7 @@ All client-exposed config uses the `VITE_` prefix (Vite requirement).
 
 Live URL: **[https://mxl983.github.io/rover-relay/](https://mxl983.github.io/rover-relay/)**
 
-Same repo as source: **[mxl983/rover-relay](https://github.com/mxl983/rover-relay)**. Deploy pushes **`dist/`** to the **`gh-pages`** branch on **`rover-relay`** (`gh-pages -r` in `package.json`).
+Same repo as source: **[mxl983/rover-relay](https://github.com/mxl983/rover-relay)**. Deploy pushes **`dist/`** to the **`gh-pages`** branch using your repo’s **`origin`** remote (run **`git remote get-url origin`** from the relay repo — it must point at **`mxl983/rover-relay`**). A **`.nojekyll`** file is added so GitHub Pages does not run Jekyll on the static assets.
 
 1. **Relay CORS** — In relay `.env`, include **`https://mxl983.github.io`** in `CORS_ORIGINS` so the hosted dashboard can call your relay.
 2. **Git auth** — You must be able to **`git push`** to **`mxl983/rover-relay`** (HTTPS + PAT or SSH). Fix Cursor credential-helper issues first if `npm run deploy` fails (see troubleshooting below).
@@ -72,12 +72,14 @@ Same repo as source: **[mxl983/rover-relay](https://github.com/mxl983/rover-rela
    cd control-dashboard
    npm run deploy
    ```
-   This builds with **`VITE_BASE_PATH=/rover-relay/`**, then [gh-pages](https://github.com/tschaub/gh-pages) pushes **`dist/`** to **`https://github.com/mxl983/rover-relay.git`**.
+   This builds with **`VITE_BASE_PATH=/rover-relay/`**, then [gh-pages](https://github.com/tschaub/gh-pages) pushes **`dist/`** to **`origin`** (your GitHub remote).
 4. **Enable Pages** — Repo **[rover-relay](https://github.com/mxl983/rover-relay)** → **Settings → Pages** → branch **`gh-pages`**, folder **`/ (root)`**.
 
 Preview locally: `npm run preview:github-pages`.
 
-To deploy into a **different** repo (e.g. a separate `mangomate` site), change the **`-r`** URL in `package.json` → **`deploy:github-pages`** and set **`VITE_BASE_PATH`** to match that repo’s Pages path (`/<repo-name>/`).
+If the **`gh-pages`** branch on GitHub still shows **extra** folders (for example `control-dashboard/`, `vendor-rover/`) from an old publish, run **`npm run deploy`** again after pulling latest **`package.json`** — deploy uses **`--remove "**/*"`** so each publish replaces the whole branch with **`dist/`** only (plus `.nojekyll`).
+
+To deploy into a **different** repo, set **`git remote origin`** to that repo (or edit **`deploy:github-pages`** to pass **`gh-pages -r <repo-url>`**) and set **`VITE_BASE_PATH`** to `/<that-repo-name>/`.
 
 ### Troubleshooting: “I don’t see a deployment on GitHub”
 
@@ -85,8 +87,8 @@ To deploy into a **different** repo (e.g. a separate `mangomate` site), change t
    The [gh-pages](https://github.com/tschaub/gh-pages) CLI **pushes a new branch** called `gh-pages`. It does **not** create an entry on the **Actions → Deployments** / Environments view (that is mostly for **GitHub Actions**).  
    **Check:** on the repo **Code** tab, open the **branch dropdown** and look for **`gh-pages`**. If that branch does not exist, the push did not happen.
 
-2. **Push goes to `mxl983/rover-relay`**  
-   Deploy uses **`gh-pages -r https://github.com/mxl983/rover-relay.git`**. You need **push** access to that repo.
+2. **Push target = `git remote get-url origin`**  
+   You need **push** access to whatever repo **`origin`** points to (expected: **`mxl983/rover-relay`**). If you changed remotes or see **“Remote url mismatch”** from `gh-pages`, run **`npx gh-pages-clean`** (or delete **`node_modules/.cache/gh-pages`**) and deploy again.
 
 3. **Turn on GitHub Pages** — open repo **`rover-relay`**  
    **Settings → Pages** → branch **`gh-pages`**, folder **`/ (root)`**. Site: **`https://mxl983.github.io/rover-relay/`**.

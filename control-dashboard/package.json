@@ -9,7 +9,7 @@
     "build:github-pages": "VITE_BASE_PATH=/rover-relay/ vite build",
     "preview": "vite preview",
     "preview:github-pages": "VITE_BASE_PATH=/rover-relay/ vite build && vite preview --base /rover-relay/",
-    "deploy:github-pages": "npm run build:github-pages && gh-pages -d dist -r https://github.com/mxl983/rover-relay.git -m \"chore: deploy mission control to GitHub Pages\"",
+    "deploy:github-pages": "npm run build:github-pages && gh-pages -d dist --nojekyll --remove \"**/*\" -m \"chore: deploy mission control to GitHub Pages\"",
     "deploy": "npm run deploy:github-pages",
     "test": "vitest run",
     "test:watch": "vitest",
