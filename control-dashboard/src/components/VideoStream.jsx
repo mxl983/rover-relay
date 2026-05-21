@@ -16,6 +16,7 @@ export const VideoStream = ({
   showBackupView = false,
   /** Same shape as GET /api/rover/state response body when from relay `wss://.../ws/rover` (optional). */
   relayRoverPayload = null,
+  onHardPowerOff,
 }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -440,18 +441,35 @@ export const VideoStream = ({
 
       {/* HUD OVERLAY */}
       <div style={hudWrapper}>
-        <button
-          onClick={toggleRoverMic}
-          style={btnStyle(roverMicEnabled, "#00f2ff")}
-        >
-          <SpeakerIcon active={roverMicEnabled} />
-        </button>
-        <button
-          onClick={toggleDashMic}
-          style={btnStyle(dashMicEnabled, "#ff0055")}
-        >
-          <MicIcon active={dashMicEnabled} />
-        </button>
+        {loaderOverlayVisible ? (
+          <button
+            type="button"
+            className="video-hud-hard-reset"
+            onClick={() => onHardPowerOff?.()}
+            title="MQTT Off — force cut power to Pi and aux"
+          >
+            Hard reset
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={toggleRoverMic}
+              style={btnStyle(roverMicEnabled, "#00f2ff")}
+              aria-label={roverMicEnabled ? "Mute rover audio" : "Unmute rover audio"}
+            >
+              <SpeakerIcon active={roverMicEnabled} />
+            </button>
+            <button
+              type="button"
+              onClick={toggleDashMic}
+              style={btnStyle(dashMicEnabled, "#ff0055")}
+              aria-label={dashMicEnabled ? "Mute dashboard mic" : "Unmute dashboard mic"}
+            >
+              <MicIcon active={dashMicEnabled} />
+            </button>
+          </>
+        )}
       </div>
 
       {loaderOverlayVisible && (

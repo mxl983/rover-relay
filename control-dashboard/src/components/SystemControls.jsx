@@ -16,6 +16,7 @@ import {
   Keyboard,
   Gamepad2,
   PawPrint,
+  BarChart3,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -231,6 +232,15 @@ export const SystemControls = ({
             onSelect={() => onAction("meow")}
           >
             <PawPrint size={14} /> <span>Meow</span>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Separator style={styles.separator} />
+
+          <DropdownMenu.Item
+            style={styles.menuItem}
+            onSelect={() => onAction("telemetry")}
+          >
+            <BarChart3 size={14} /> <span>View telemetry</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator style={styles.separator} />

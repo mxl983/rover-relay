@@ -82,6 +82,8 @@ const config = {
     enabled: parseBoolean(process.env.TELEMETRY_ENABLED, true),
     dbPath: process.env.TELEMETRY_DB_PATH || "/app/data/relay.db",
     retentionDays: parseNumber(process.env.TELEMETRY_RETENTION_DAYS, 14),
+    /** USB charger LED poll interval for charging_start / charging_end telemetry events. */
+    chargingPollMs: parseNumber(process.env.CHARGING_TELEMETRY_POLL_MS, 25_000),
   },
   rover: {
     /** Consider rover offline if no heartbeat within this window (ms). */
@@ -90,6 +92,16 @@ const config = {
     bootTotalMs: parseNumber(process.env.ROVER_BOOT_TOTAL_MS, 50_000),
     /** Window for battery drain slope (ms). */
     batteryDrainWindowMs: parseNumber(process.env.BATTERY_DRAIN_WINDOW_MS, 120_000),
+    /**
+     * Minimum elapsed time between two heartbeat samples when inferring %/minute drain.
+     * Very short gaps (e.g. 5s heartbeat cadence) amplify SOC quantization/noise into unrealistic rates.
+     */
+    batteryDrainMinPairGapMs: parseNumber(process.env.BATTERY_DRAIN_MIN_PAIR_GAP_MS, 45_000),
+    /** Fixed WGS84 rover site for client distance — set ROVER_LATITUDE / ROVER_LONGITUDE in .env only (never commit). */
+    location: {
+      latitude: parseNumber(process.env.ROVER_LATITUDE, Number.NaN),
+      longitude: parseNumber(process.env.ROVER_LONGITUDE, Number.NaN),
+    },
     /**
      * Charger LED via USB webcam (`ffmpeg` + hue classification). Red ≈ charging, green ≈ idle.
      */

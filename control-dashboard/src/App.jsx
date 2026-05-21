@@ -9,6 +9,7 @@ import {
   CAMERA_SECRET,
   VOICE_DRIVE_DEBUG,
   getRelayRoverHeartbeatWebSocketUrl,
+  ROVER_CLIENT_DISTANCE_ENDPOINT,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
@@ -28,6 +29,7 @@ import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
+import { formatRoverDistance } from "./utils/formatRoverDistance.js";
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -109,6 +111,7 @@ export default function App() {
   const [relayBatteryMinutesRemaining, setRelayBatteryMinutesRemaining] = useState(null);
   /** Same shape as GET /api/rover/state `data` for VideoStream boot loader (from relay WS). */
   const [relayRoverPayload, setRelayRoverPayload] = useState(null);
+  const [relayDistanceMeters, setRelayDistanceMeters] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
 
@@ -139,6 +142,8 @@ export default function App() {
           setRelayBatteryMinutesRemaining(Number.isFinite(minsRemaining) ? minsRemaining : null);
           const tempC = Number(rover?.environment?.temperatureC);
           setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
+          const dist = Number(rover?.clientLocation?.distanceMeters);
+          setRelayDistanceMeters(Number.isFinite(dist) ? dist : null);
           setRelayRoverPayload({ rover });
         } catch {
           /* ignore */
@@ -156,6 +161,7 @@ export default function App() {
       ws.onclose = () => {
         if (cancelled) return;
         setRelayRoverPayload(null);
+        setRelayDistanceMeters(null);
         reconnectTimer = setTimeout(connect, 2500);
       };
     };
@@ -172,6 +178,31 @@ export default function App() {
       }
     };
   }, [showBackupView]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !navigator.geolocation?.watchPosition) return;
+    let watchId = null;
+
+    const reportLocation = (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      void apiPostJson(ROVER_CLIENT_DISTANCE_ENDPOINT, { latitude, longitude, accuracy }, {
+        timeout: 8000,
+        retries: 0,
+      }).catch(() => {
+        /* ignore — distance optional */
+      });
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      reportLocation,
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
+    );
+
+    return () => {
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -204,12 +235,18 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  const displayStats =
+    relayDistanceMeters != null
+      ? { ...stats, distance: relayDistanceMeters }
+      : stats;
+
   // Realtime Pi WebSocket health (voltage → %) takes priority; relay /state poll is fallback only.
-  const batteryPct = Number.isFinite(Number(stats?.battery))
-    ? Number(stats.battery)
-    : Number.isFinite(Number(relayBatteryPct))
-      ? Number(relayBatteryPct)
-      : null;
+  const batteryPct =
+    Number.isFinite(Number(stats?.battery))
+      ? Number(stats.battery)
+      : relayBatteryPct != null
+        ? relayBatteryPct
+        : null;
   const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
   // Relay WebSocket `relay.rover.heartbeat` is the charging source of truth.
   const effectiveIsCharging = relayCharging === true;
@@ -314,6 +351,20 @@ export default function App() {
     login(creds);
   };
 
+  const handleHardPowerOff = () => {
+    if (
+      !window.confirm(
+        "Hard reset: send MQTT Off to cut rover power now?",
+      )
+    ) {
+      return;
+    }
+    mqttClientRef.current?.publish("rover/power/pi", "Off", { qos: 1 });
+    mqttClientRef.current?.publish("rover/power/aux", "Off", { qos: 1 });
+    setIsPowered(false);
+    showActionToast("Hard reset sent (power Off)");
+  };
+
   const handleSystemAction = async (type) => {
     // 1. Intercept Boot
     if (type === "boot") {
@@ -335,7 +386,17 @@ export default function App() {
       return;
     }
 
-    // 4. Handle generic system commands (Reboot/Shutdown)
+    // 4. Open relay telemetry dashboard.
+    if (type === "telemetry") {
+      window.open(
+        "https://jjcloud.tail9d0237.ts.net:8787/dashboard",
+        "_blank",
+        "noopener,noreferrer",
+      );
+      return;
+    }
+
+    // 5. Handle generic system commands (Reboot/Shutdown)
     if (!window.confirm(`Confirm ${type}?`)) return;
 
     setSystemLoading(true);
@@ -633,6 +694,7 @@ export default function App() {
         backupStreamUrl={BACKUP_STREAM_ENDPOINT}
         showBackupView={showBackupView}
         relayRoverPayload={relayRoverPayload}
+        onHardPowerOff={handleHardPowerOff}
       />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 
@@ -657,6 +719,7 @@ export default function App() {
         <div className="hud-overlay">
           <HudHeader
             wifiSignal={stats?.wifiSignal}
+            distanceMeters={relayDistanceMeters}
             isPowered={isPowered}
             nvActive={nvActive}
             resMode={resMode}
@@ -677,7 +740,7 @@ export default function App() {
           <HudFooter
             isMobile={isMobile}
             controlMode={controlMode}
-            stats={stats}
+            stats={displayStats}
             batteryPct={batteryPct}
             isCharging={effectiveIsCharging}
             ambientTemperatureC={relayTemperatureC}
@@ -735,6 +798,7 @@ function ActionToast({ message }) {
 
 function HudHeader({
   wifiSignal,
+  distanceMeters,
   isPowered,
   nvActive,
   resMode,
@@ -751,10 +815,22 @@ function HudHeader({
   controlMode,
   onControlModeChange,
 }) {
+  const distanceLabel = formatRoverDistance(distanceMeters);
+
   return (
     <div className="hud-header">
       <div className="glass-card hud-header-brand">
-        <div>Mango Mate</div>
+        <div className="hud-brand-stack">
+          <div className="hud-brand-title">芒果探测器</div>
+          {distanceLabel ? (
+            <div
+              className="hud-brand-distance"
+              title="Your distance from the rover (when location is shared)"
+            >
+              {distanceLabel}
+            </div>
+          ) : null}
+        </div>
         {wifiSignal && <WifiSignal dbm={wifiSignal} />}
       </div>
       <div className="glass-card hud-header-actions">

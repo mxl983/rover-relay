@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { recordHeartbeat, getRoverState } from "../services/roverStateService.js";
 import { readEnvironmentFromBackupCam } from "../services/roverEnvironmentService.js";
+import {
+  recordClientLocation,
+  computeClientDistance,
+} from "../services/clientRoverDistanceService.js";
 import { requireToken } from "../middleware/auth.js";
 import { success, error } from "../utils/apiResponse.js";
 
@@ -13,6 +17,28 @@ router.post("/heartbeat", requireToken, (req, res) => {
   }
   recordHeartbeat(body);
   success(res, { ok: true });
+});
+
+/**
+ * Client shares WGS84 coords (browser geolocation); relay returns distance to fixed rover site (meters).
+ * POST updates the cached location included in /state and WebSocket heartbeats.
+ */
+router.post("/client-distance", (req, res) => {
+  const { latitude, longitude, accuracy } = req.body || {};
+  const result = recordClientLocation({ latitude, longitude, accuracy });
+  if (!result) {
+    return error(res, "latitude and longitude required (valid WGS84 degrees)", 400);
+  }
+  success(res, result);
+});
+
+router.get("/client-distance", (req, res) => {
+  const { latitude, longitude } = req.query || {};
+  const result = computeClientDistance({ latitude, longitude });
+  if (!result) {
+    return error(res, "latitude and longitude query params required (valid WGS84 degrees)", 400);
+  }
+  success(res, result);
 });
 
 router.get("/state", async (req, res) => {

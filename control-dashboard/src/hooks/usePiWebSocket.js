@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PI_WEBSOCKET } from "../config";
 import { getBatteryPercentage } from "../utils/batteryFromVoltage.js";
+import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
 
 const PING_INTERVAL_MS = 3000;
 const HEARTBEAT_STALE_MS = 5000;
@@ -81,6 +82,9 @@ export function usePiWebSocket() {
               if (pct != null) {
                 raw.battery = pct;
               }
+            } else if (raw.battery != null && raw.battery !== "") {
+              const mapped = remapReportedBatteryPctRounded(raw.battery);
+              if (mapped != null) raw.battery = mapped;
             }
             setStats((prev) => ({ ...prev, ...raw }));
           }

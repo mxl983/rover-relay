@@ -43,6 +43,11 @@ export const ROVER_STATE_ENDPOINT =
   import.meta.env.VITE_ROVER_STATE_URL ||
   "https://jjcloud.tail9d0237.ts.net:8787/api/rover/state";
 
+/** POST client geolocation; distance to fixed rover site (meters). */
+export const ROVER_CLIENT_DISTANCE_ENDPOINT =
+  import.meta.env.VITE_ROVER_CLIENT_DISTANCE_URL ||
+  `${RELAY_BASE_URL.replace(/\/$/, "")}/api/rover/client-distance`;
+
 /** Fast charging-only path (webcam LED); avoids backup-cam latency on `/api/rover/state`. */
 export const ROVER_CHARGING_ENDPOINT =
   import.meta.env.VITE_ROVER_CHARGING_URL ||

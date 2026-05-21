@@ -52,7 +52,7 @@ describe("SystemControls", () => {
     expect(trigger).toBeTruthy();
     await user.click(trigger);
     expect(document.body.textContent).toMatch(
-      /Stream|Night|720|Focus|Drive input|Keyboard|Joystick|Quiet|Boost|Meow|Reboot|Shutdown/i,
+      /Stream|Night|720|Focus|Drive input|Keyboard|Joystick|Quiet|Boost|Meow|View telemetry|Reboot|Shutdown/i,
     );
   });
 });

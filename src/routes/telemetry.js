@@ -5,6 +5,9 @@ import {
   getTelemetryPage,
   recordClientConnection,
 } from "../services/telemetryService.js";
+import { getTelemetrySessionSnapshot } from "../services/telemetrySessionStamp.js";
+import { getDashboardCharts } from "../services/telemetryChartsService.js";
+import { getLatestSessionBatteryCharts } from "../services/telemetrySessionsService.js";
 import { requireToken } from "../middleware/auth.js";
 import { success, error } from "../utils/apiResponse.js";
 
@@ -22,6 +25,32 @@ router.post("/ingest", requireToken, (req, res) => {
 router.post("/client-connection", requireToken, (req, res) => {
   recordClientConnection(req.body || {});
   success(res, { recorded: true });
+});
+
+router.get("/session", (req, res) => {
+  const snap = getTelemetrySessionSnapshot();
+  success(res, snap);
+});
+
+router.get("/sessions/latest", (req, res) => {
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 5), 10);
+  const data = getLatestSessionBatteryCharts({ limit });
+  success(res, data);
+});
+
+router.get("/charts", (req, res) => {
+  let startMs;
+  let endMs;
+  if (req.query.from) {
+    const t = Date.parse(String(req.query.from));
+    if (Number.isFinite(t)) startMs = t;
+  }
+  if (req.query.to) {
+    const t = Date.parse(String(req.query.to));
+    if (Number.isFinite(t)) endMs = t;
+  }
+  const charts = getDashboardCharts({ startMs, endMs });
+  success(res, charts);
 });
 
 router.get("/", (req, res) => {

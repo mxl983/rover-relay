@@ -2,12 +2,19 @@ node_modules/
 data/
 *.db
 .env
-.env.local
+.env.*
+!.env.example
+control-dashboard/.env
+control-dashboard/.env.*
+!control-dashboard/.env.example
 coverage/
 .DS_Store
 
 # TLS material — generate on the host (see README); never commit keys
 certs/
+*.pem
+*.key
+*.crt
 
 # Vite build output — published via gh-pages branch only
 control-dashboard/dist/

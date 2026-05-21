@@ -23,7 +23,7 @@
         color: var(--text);
       }
       .container {
-        max-width: 1100px;
+        max-width: 1220px;
         margin: 0 auto;
         padding: 24px;
       }
@@ -73,12 +73,127 @@
       .section {
         margin-top: 16px;
       }
-      canvas {
+      .since-charging-card {
+        background: linear-gradient(135deg, rgba(20, 36, 68, 0.95) 0%, rgba(22, 56, 92, 0.95) 45%, rgba(26, 76, 86, 0.95) 100%);
+        border: 1px solid rgba(94, 207, 255, 0.45);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      }
+      .since-charging-card .label {
+        color: #bfe8ff;
+      }
+      .since-charging-card .tableHeader {
+        margin-bottom: 14px;
+      }
+      .since-charging-card .value {
+        color: #f1fbff;
+      }
+      .since-charging-metrics .card {
+        background: linear-gradient(160deg, rgba(37, 58, 102, 0.92) 0%, rgba(25, 42, 84, 0.92) 100%);
+        border-color: rgba(109, 174, 255, 0.45);
+      }
+      canvas.chart-canvas {
         width: 100%;
-        height: 180px;
+        height: 220px;
         background: #0f1523;
         border: 1px solid var(--line);
         border-radius: 8px;
+        display: block;
+      }
+      .chart-wrap {
+        margin-bottom: 20px;
+      }
+      .charts-grid .chart-wrap {
+        margin-bottom: 0;
+      }
+      .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        align-items: stretch;
+      }
+      .session-charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+        margin-top: 12px;
+      }
+      .session-chart-card {
+        background: #0f1523;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        min-height: 280px;
+      }
+      .session-chart-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .session-chart-meta {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+      .session-chart-card canvas {
+        flex: 1;
+        min-height: 200px;
+        max-height: 220px;
+      }
+      .chart-wrap {
+        display: flex;
+        flex-direction: column;
+        height: 340px;
+      }
+      .chart-head {
+        height: 88px;
+        overflow: hidden;
+      }
+      canvas.chart-canvas {
+        display: block;
+        width: 100%;
+        height: 252px;
+        max-height: 252px;
+      }
+      @media (max-width: 960px) {
+        .charts-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .range-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        align-items: flex-end;
+        margin-bottom: 16px;
+      }
+      .range-controls label {
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .range-controls input[type="datetime-local"] {
+        background: #1d2a44;
+        border: 1px solid var(--line);
+        color: var(--text);
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .chart-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+      .chart-hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 10px;
       }
       .controls {
         display: flex;
@@ -96,6 +211,35 @@
       }
       .controls button:hover {
         filter: brightness(1.1);
+      }
+      .range-controls button {
+        border: 1px solid var(--line);
+        background: #1d2a44;
+        color: var(--text);
+        padding: 8px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .range-controls button:hover {
+        filter: brightness(1.1);
+      }
+      .chart-tooltip {
+        position: fixed;
+        z-index: 10000;
+        pointer-events: none;
+        display: none;
+        max-width: 280px;
+        padding: 8px 10px;
+        background: rgba(16, 24, 40, 0.96);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--text);
+        line-height: 1.45;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      }
+      .chart-tooltip.visible {
+        display: block;
       }
       table {
         width: 100%;
@@ -184,18 +328,31 @@
       <h1>Rover Telemetry Dashboard</h1>
       <div class="subtitle">Relay-hosted live telemetry and rover state</div>
 
+      <div class="section card since-charging-card" style="margin-top: 0; margin-bottom: 15px;">
+        <div class="tableHeader">
+          <div class="label">Since Last Charging</div>
+          <div id="sinceChargeMeta" class="hint">-</div>
+        </div>
+        <div class="grid since-charging-metrics">
+          <div class="card">
+            <div class="label">Total Active Time</div>
+            <div id="sinceChargeActive" class="value">-</div>
+          </div>
+          <div class="card">
+            <div class="label">Total Idle Time</div>
+            <div id="sinceChargeIdle" class="value">-</div>
+          </div>
+        </div>
+      </div>
+
       <div class="grid">
         <div class="card">
-          <div class="label">Rover Status</div>
-          <div id="online" class="value">-</div>
+          <div class="label">Rover Status - Charging</div>
+          <div id="onlineCharging" class="value">-</div>
         </div>
         <div class="card">
-          <div class="label">Battery</div>
+          <div class="label">Battery (usable)</div>
           <div id="batteryNow" class="value">-</div>
-        </div>
-        <div class="card">
-          <div class="label">Estimated Remaining (active video)</div>
-          <div id="batteryEta" class="value">-</div>
         </div>
         <div class="card">
           <div class="label">Boot Progress</div>
@@ -209,19 +366,78 @@
           <div class="label">Latest Voltage</div>
           <div id="voltageNow" class="value">-</div>
         </div>
-        <div class="card">
-          <div class="label">Charging (charger LED)</div>
-          <div id="chargingStatus" class="value charging-unknown">-</div>
-          <div id="chargingDetail" class="hint" style="margin-top: 6px">-</div>
-        </div>
       </div>
 
       <div class="section card">
         <div class="controls">
           <button id="refreshBtn" type="button">Refresh Now</button>
-          <span id="refreshHint" class="hint">Telemetry &amp; state every 2s · charging LED via WebSocket <code>/ws/rover</code></span>
+          <span id="refreshHint" class="hint">Top metrics every 1m · telemetry table every 1m · charts every 1m · charging via WebSocket <code>/ws/rover</code></span>
         </div>
-        <canvas id="voltageChart" width="1000" height="180"></canvas>
+
+        <div class="range-controls">
+          <label>
+            From
+            <input id="chartFrom" type="datetime-local" autocomplete="off" />
+          </label>
+          <label>
+            To
+            <input id="chartTo" type="datetime-local" autocomplete="off" />
+          </label>
+          <button id="chartApply" type="button">Apply range</button>
+          <button id="preset24h" type="button">24h</button>
+          <button id="preset3d" type="button">3d</button>
+          <button id="preset7d" type="button">7d</button>
+          <button id="preset14d" type="button">14d</button>
+          <span id="chartRangeMeta" class="hint"></span>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-wrap">
+            <div class="chart-head">
+              <div class="chart-title">Video time inside MQTT sessions</div>
+              <div class="chart-hint">
+                Per local day: <strong>active period</strong> (<code>power_on</code> to next <code>mqtt_power_off</code>) vs <strong>idle period</strong> (<code>mqtt_power_off</code> to next <code>power_on</code>) in seconds.
+              </div>
+            </div>
+            <canvas id="chartActiveSessions" class="chart-canvas" width="1000" height="220"></canvas>
+          </div>
+
+          <div class="chart-wrap">
+            <div class="chart-head">
+              <div class="chart-title">Battery · avg minutes per 1% (by SOC band)</div>
+              <div class="chart-hint">
+                Mean time to lose 1% SOC while discharging (video on, MQTT session). Only heartbeat pairs ≥ ~45s apart are used (same rule as active drain rate) so rapid samples do not distort minutes-per-1%. Intervals while charging are excluded. Shorter bar = faster drain in that region — useful for spotting weak capacity bands.
+              </div>
+            </div>
+            <canvas id="chartBatteryBands" class="chart-canvas" width="1000" height="220"></canvas>
+          </div>
+
+          <div class="chart-wrap">
+            <div class="chart-head">
+              <div class="chart-title">Average CPU load over time</div>
+              <div class="chart-hint">Hourly mean of telemetry <code>cpu_load</code> in selected range</div>
+            </div>
+            <canvas id="chartCpu" class="chart-canvas" width="1000" height="220"></canvas>
+          </div>
+
+          <div class="chart-wrap">
+            <div class="chart-head">
+              <div class="chart-title">Battery drain rate — active vs idle</div>
+              <div class="chart-hint">
+                Per local day: <strong>active (ended sessions)</strong> = Σ drop ÷ Σ minutes per calendar-day slice. <strong>Active (current MQTT session still open)</strong> = one running average from session start to the latest heartbeat, counted on <strong>today</strong> only — as time passes the denominator grows so the point falls if SOC levels off. Slices need ≥ ~45s. <strong>Idle</strong> = Σ drop ÷ Σ idle minutes (SOC before <code>mqtt_power_off</code> vs after <code>power_on</code>). Charging excluded.
+              </div>
+            </div>
+            <canvas id="chartConsumption" class="chart-canvas" width="1000" height="220"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="section card">
+        <div class="tableHeader">
+          <div class="label">Latest sessions · usable battery % vs time since charge</div>
+          <div id="sessionChartsMeta" class="hint">-</div>
+        </div>
+        <div id="sessionChartsGrid" class="session-charts-grid"></div>
       </div>
 
       <div class="section card">
@@ -239,6 +455,9 @@
               <th>CPU Temp</th>
               <th>CPU Load</th>
               <th>WiFi</th>
+              <th>Charging</th>
+              <th>Session</th>
+              <th>MQTT link</th>
             </tr>
           </thead>
           <tbody id="telemetryBody"></tbody>
@@ -247,128 +466,561 @@
       </div>
     </div>
 
+    <div id="chartTooltip" class="chart-tooltip" role="tooltip"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script>
-      const onlineEl = document.getElementById("online");
+      const onlineChargingEl = document.getElementById("onlineCharging");
       const batteryNowEl = document.getElementById("batteryNow");
-      const batteryEtaEl = document.getElementById("batteryEta");
       const bootProgressEl = document.getElementById("bootProgress");
       const lastSeenEl = document.getElementById("lastSeen");
       const voltageNowEl = document.getElementById("voltageNow");
-      const chargingStatusEl = document.getElementById("chargingStatus");
-      const chargingDetailEl = document.getElementById("chargingDetail");
+      const sinceChargeMetaEl = document.getElementById("sinceChargeMeta");
+      const sinceChargeActiveEl = document.getElementById("sinceChargeActive");
+      const sinceChargeIdleEl = document.getElementById("sinceChargeIdle");
       const bodyEl = document.getElementById("telemetryBody");
       const refreshBtn = document.getElementById("refreshBtn");
       const telemetryMetaEl = document.getElementById("telemetryMeta");
       const pagerEl = document.getElementById("pager");
-      const canvas = document.getElementById("voltageChart");
-      const ctx = canvas.getContext("2d");
+      const canvasActive = document.getElementById("chartActiveSessions");
+      const canvasBattery = document.getElementById("chartBatteryBands");
+      const canvasCpu = document.getElementById("chartCpu");
+      const canvasConsumption = document.getElementById("chartConsumption");
+      const chartFromEl = document.getElementById("chartFrom");
+      const chartToEl = document.getElementById("chartTo");
+      const chartApplyBtn = document.getElementById("chartApply");
+      const chartRangeMetaEl = document.getElementById("chartRangeMeta");
+      const chartTooltipEl = document.getElementById("chartTooltip");
+      const sessionChartsGridEl = document.getElementById("sessionChartsGrid");
+      const sessionChartsMetaEl = document.getElementById("sessionChartsMeta");
+      const chartInstances = {};
+      const SESSION_CHART_LIMIT = 5;
       const MAX_PAGES = 25;
       const PAGE_SIZE = 50;
+      const TOP_METRICS_REFRESH_MS = 60000;
+      const HEAVY_REFRESH_MS = 60000;
       let telemetryPage = 1;
-      let chartPoints = [];
-      let hoveredPoint = null;
-      let lastTelemetryRows = [];
+      let sinceChargeFetch = { atMs: 0, forIso: null };
+      let lastKnownOnline = true;
       const fmt = (v, suffix = "") =>
         v === null || v === undefined || Number.isNaN(Number(v)) ? "-" : `${Number(v).toFixed(1)}${suffix}`;
 
-      function drawVoltageChart(rows) {
-        const series = rows
-          .slice()
-          .reverse()
-          .filter((r) => r.voltage != null)
-          .map((r) => ({
-            voltage: Number(r.voltage),
-            time: r.created_at ? new Date(r.created_at).toLocaleTimeString() : "-",
-          }));
-        const voltage = series.map((p) => p.voltage);
-        const { width, height } = canvas;
-        chartPoints = [];
-        ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = "#0f1523";
-        ctx.fillRect(0, 0, width, height);
-        if (voltage.length < 2) {
-          ctx.fillStyle = "#90a2be";
-          ctx.font = "14px sans-serif";
-          ctx.fillText("Waiting for voltage samples...", 20, 30);
+      function formatDurationTotal(sec) {
+        if (!Number.isFinite(sec) || sec <= 0) return "0m";
+        const totalMin = Math.round(sec / 60);
+        const d = Math.floor(totalMin / (24 * 60));
+        const h = Math.floor((totalMin % (24 * 60)) / 60);
+        const m = totalMin % 60;
+        if (d > 0) return `${d}d ${h}h ${m}m`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+      }
+
+      function formatMinutesAgo(mins) {
+        if (!Number.isFinite(mins) || mins < 0) return "-";
+        if (mins < 60) return `${Math.round(mins)}m ago`;
+        const h = Math.floor(mins / 60);
+        const remM = Math.round(mins % 60);
+        if (h < 24) return remM > 0 ? `${h}h ${remM}m ago` : `${h}h ago`;
+        const d = Math.floor(h / 24);
+        const remH = h % 24;
+        return remH > 0 ? `${d}d ${remH}h ago` : `${d}d ago`;
+      }
+
+      function localDatetimeInputValue(d) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+
+      function initChartRangeInputs() {
+        const to = new Date();
+        const from = new Date(to.getTime() - 3 * 86400000);
+        chartToEl.value = localDatetimeInputValue(to);
+        chartFromEl.value = localDatetimeInputValue(from);
+      }
+
+      function chartsQueryString() {
+        const from = new Date(chartFromEl.value);
+        const to = new Date(chartToEl.value);
+        if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return "";
+        const params = new URLSearchParams();
+        params.set("from", from.toISOString());
+        params.set("to", to.toISOString());
+        return params.toString();
+      }
+
+      function applyPreset(msBack) {
+        const to = new Date();
+        const from = new Date(to.getTime() - msBack);
+        chartToEl.value = localDatetimeInputValue(to);
+        chartFromEl.value = localDatetimeInputValue(from);
+        loadCharts();
+      }
+
+      function hideChartTooltip() {
+        chartTooltipEl.classList.remove("visible");
+      }
+
+      const chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: "#d9e2f0", boxWidth: 12, boxHeight: 12 },
+          },
+          tooltip: {
+            backgroundColor: "rgba(16,24,40,0.96)",
+            borderColor: "#2f3e5e",
+            borderWidth: 1,
+            titleColor: "#d9e2f0",
+            bodyColor: "#d9e2f0",
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: "#90a2be", maxRotation: 0, autoSkip: true },
+            grid: { color: "#1f2d48" },
+          },
+          y: {
+            ticks: { color: "#90a2be" },
+            grid: { color: "#1f2d48" },
+            beginAtZero: true,
+          },
+        },
+      };
+
+      function upsertChart(key, canvas, config) {
+        if (chartInstances[key]) {
+          chartInstances[key].data = config.data;
+          chartInstances[key].options = config.options;
+          chartInstances[key].update();
           return;
         }
-        const min = Math.min(...voltage);
-        const max = Math.max(...voltage);
-        const span = Math.max(0.05, max - min);
-        const left = 30;
-        const right = width - 10;
-        const top = 10;
-        const bottom = height - 20;
+        chartInstances[key] = new Chart(canvas.getContext("2d"), config);
+      }
 
-        ctx.strokeStyle = "#2f3e5e";
-        ctx.beginPath();
-        ctx.moveTo(left, bottom);
-        ctx.lineTo(right, bottom);
-        ctx.stroke();
+      function formatDurationSec(sec) {
+        if (sec <= 0) return "0";
+        if (sec < 90) return `${Math.round(sec)}s`;
+        if (sec < 7200) return `${(sec / 60).toFixed(1)}m`;
+        return `${(sec / 3600).toFixed(2)}h`;
+      }
 
-        ctx.strokeStyle = "#3ecf8e";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        series.forEach((p, i) => {
-          const v = p.voltage;
-          const x = left + (i / (voltage.length - 1)) * (right - left);
-          const y = bottom - ((v - min) / span) * (bottom - top);
-          chartPoints.push({ x, y, voltage: v, time: p.time });
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+      function drawBarChart(canvas, labels, values, options = {}) {
+        upsertChart("batteryBands", canvas, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: options.label || "Minutes per 1% drop",
+                data: values,
+                backgroundColor: options.barColor || "#7c9cff",
+                borderRadius: 4,
+                barPercentage: 0.82,
+                categoryPercentage: 0.78,
+              },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            scales: {
+              ...chartDefaults.scales,
+              x: {
+                ...chartDefaults.scales.x,
+                ticks: { ...chartDefaults.scales.x.ticks, maxRotation: options.rotateLabels ? 45 : 0, minRotation: 0 },
+              },
+              y: {
+                ...chartDefaults.scales.y,
+                ticks: {
+                  color: "#90a2be",
+                  callback: (v) => (options.yFormat ? options.yFormat(v) : String(v)),
+                },
+              },
+            },
+          },
         });
-        ctx.stroke();
-        ctx.lineWidth = 1;
+      }
 
-        ctx.fillStyle = "#90a2be";
-        ctx.font = "11px sans-serif";
-        ctx.fillText(`min ${min.toFixed(2)}V`, left, height - 4);
-        ctx.fillText(`max ${max.toFixed(2)}V`, right - 70, height - 4);
+      function drawGroupedBarChart(canvas, labels, seriesA, seriesB, options = {}) {
+        upsertChart("activeSessions", canvas, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: options.legendA || "A",
+                data: seriesA,
+                backgroundColor: "#5ecfff",
+                borderRadius: 4,
+                barPercentage: 0.8,
+                categoryPercentage: 0.7,
+              },
+              {
+                label: options.legendB || "B",
+                data: seriesB,
+                backgroundColor: "#90a2be",
+                borderRadius: 4,
+                barPercentage: 0.8,
+                categoryPercentage: 0.7,
+              },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            scales: {
+              ...chartDefaults.scales,
+              y: {
+                ...chartDefaults.scales.y,
+                ticks: {
+                  color: "#90a2be",
+                  callback: (v) => (options.yFormat ? options.yFormat(v) : String(v)),
+                },
+              },
+            },
+          },
+        });
+      }
 
-        if (hoveredPoint) {
-          ctx.fillStyle = "#3ecf8e";
-          ctx.beginPath();
-          ctx.arc(hoveredPoint.x, hoveredPoint.y, 4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.arc(hoveredPoint.x, hoveredPoint.y, 6, 0, Math.PI * 2);
-          ctx.stroke();
+      function drawDualLineChart(canvas, labels, seriesA, seriesB, options = {}) {
+        upsertChart("consumption", canvas, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: options.legendA || "Active",
+                data: seriesA,
+                borderColor: "#5ecfff",
+                backgroundColor: "#5ecfff",
+                pointRadius: 3,
+                spanGaps: true,
+                tension: 0.2,
+              },
+              {
+                label: options.legendB || "Idle",
+                data: seriesB,
+                borderColor: "#f0b429",
+                backgroundColor: "#f0b429",
+                pointRadius: 3,
+                spanGaps: true,
+                tension: 0.2,
+              },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            scales: {
+              ...chartDefaults.scales,
+              y: {
+                ...chartDefaults.scales.y,
+                beginAtZero: options.minYZero !== false,
+                ticks: {
+                  color: "#90a2be",
+                  callback: (v) => `${Number(v).toFixed(2)} %/m`,
+                },
+              },
+            },
+          },
+        });
+      }
 
-          const tip = `${hoveredPoint.time}  ${hoveredPoint.voltage.toFixed(2)}V`;
-          ctx.font = "12px sans-serif";
-          const padX = 8;
-          const textW = ctx.measureText(tip).width;
-          const boxW = textW + padX * 2;
-          const boxH = 22;
-          let boxX = hoveredPoint.x + 10;
-          let boxY = hoveredPoint.y - boxH - 10;
-          if (boxX + boxW > width - 4) boxX = hoveredPoint.x - boxW - 10;
-          if (boxY < 4) boxY = hoveredPoint.y + 10;
-          ctx.fillStyle = "rgba(16, 24, 40, 0.95)";
-          ctx.fillRect(boxX, boxY, boxW, boxH);
-          ctx.strokeStyle = "#2f3e5e";
-          ctx.strokeRect(boxX, boxY, boxW, boxH);
-          ctx.fillStyle = "#d9e2f0";
-          ctx.fillText(tip, boxX + padX, boxY + 15);
+      function drawLineChart(canvas, labels, values) {
+        upsertChart("cpu", canvas, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "CPU load",
+                data: values,
+                borderColor: "#7aa8ff",
+                backgroundColor: "#7aa8ff",
+                pointRadius: 2,
+                spanGaps: true,
+                tension: 0.2,
+              },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            scales: {
+              ...chartDefaults.scales,
+              y: {
+                ...chartDefaults.scales.y,
+                max: 100,
+                ticks: {
+                  color: "#90a2be",
+                  callback: (v) => `${Math.round(v)}%`,
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function renderCharts(payload) {
+        if (!payload || !payload.success) return;
+        const meta = payload.meta || {};
+        if (meta.rangeStartIso && meta.rangeEndIso) {
+          const a = new Date(meta.rangeStartIso).toLocaleString();
+          const b = new Date(meta.rangeEndIso).toLocaleString();
+          chartRangeMetaEl.textContent = `Showing ${a} → ${b}${meta.mqttSessionCount != null ? ` · ${meta.mqttSessionCount} MQTT session(s)` : ""}`;
+        } else {
+          chartRangeMetaEl.textContent = "";
+        }
+        const a = payload.activeSessionsPerDay;
+        if (a?.labels?.length && a.valuesActiveSec && a.valuesIdleSec) {
+          drawGroupedBarChart(canvasActive, a.labels, a.valuesActiveSec, a.valuesIdleSec, {
+            yFormat: (v) => formatDurationSec(v),
+            legendA: "Active period",
+            legendB: "Idle period",
+            tooltipSeriesA: (i, lab, raw) =>
+              `<strong>Active period · ${lab}</strong><br/>${formatDurationSec(Number(a.valuesActiveSec[i]) || 0)}`,
+            tooltipSeriesB: (i, lab, raw) =>
+              `<strong>Idle period · ${lab}</strong><br/>${formatDurationSec(Number(a.valuesIdleSec[i]) || 0)}`,
+          });
+        }
+        const b = payload.batteryTimePerBand;
+        const battVals = (b?.avgMinutesPerPercent || []).map((v) =>
+          v == null || !Number.isFinite(v) ? 0 : v,
+        );
+        if (b?.labels?.length) {
+          drawBarChart(canvasBattery, b.labels, battVals, {
+            rotateLabels: true,
+            barColor: "#7c9cff",
+            yFormat: (v) => `${Number(v).toFixed(2)}m/%`,
+            tooltipHtml: (i, lab) => {
+              const raw = b.avgMinutesPerPercent[i];
+              const n = b.segmentCounts?.[i] ?? 0;
+              if (raw == null || !Number.isFinite(raw)) {
+                return `<strong>${lab}% SOC</strong><br/>No samples`;
+              }
+              return `<strong>${lab}% SOC</strong><br/>avg ${raw.toFixed(2)} min per 1% drop<br/><span style="opacity:.75">${n} segment(s)</span>`;
+            },
+          });
+        }
+        const c = payload.cpuLoadOverTime;
+        if (c?.labels?.length) {
+          drawLineChart(canvasCpu, c.labels, c.avgLoadPct);
+        } else {
+          drawLineChart(canvasCpu, [], []);
+        }
+        const z = payload.consumptionPctPerMin;
+        if (z?.labels?.length && (z.activeAvg?.some((x) => x != null) || z.idleAvg?.some((x) => x != null))) {
+          drawDualLineChart(canvasConsumption, z.labels, z.activeAvg, z.idleAvg, {
+            legendA: "Active %/min",
+            legendB: "Idle %/min",
+            minYZero: true,
+          });
+        } else {
+          drawDualLineChart(canvasConsumption, [], [], [], {
+            legendA: "Active %/min",
+            legendB: "Idle %/min",
+            minYZero: true,
+          });
         }
       }
 
-      function nearestPoint(mouseX, mouseY) {
-        if (!chartPoints.length) return null;
-        let best = null;
-        let bestDistSq = Number.POSITIVE_INFINITY;
-        for (const p of chartPoints) {
-          const dx = p.x - mouseX;
-          const dy = p.y - mouseY;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < bestDistSq) {
-            bestDistSq = d2;
-            best = p;
-          }
+      async function loadCharts() {
+        try {
+          const qs = chartsQueryString();
+          const url = qs ? `/api/telemetry/charts?${qs}` : "/api/telemetry/charts";
+          const res = await fetch(url);
+          const json = await res.json();
+          renderCharts(json);
+        } catch {
+          /* ignore */
         }
-        return bestDistSq <= 400 ? best : null;
+      }
+
+      function shortSessionId(id) {
+        if (!id) return "—";
+        const s = String(id);
+        return s.length > 12 ? `${s.slice(0, 8)}…` : s;
+      }
+
+      function destroySessionChartsExcept(keepKeys) {
+        const keep = new Set(keepKeys);
+        for (const key of Object.keys(chartInstances)) {
+          if (!key.startsWith("session-") || keep.has(key)) continue;
+          chartInstances[key].destroy();
+          delete chartInstances[key];
+        }
+      }
+
+      function drawSessionBatteryChart(canvas, session) {
+        const key = `session-${session.sessionId}`;
+        const elapsedMin = session.series?.elapsedMin || [];
+        const batteryPct = session.series?.batteryPct || [];
+        const points = elapsedMin.map((x, i) => ({ x, y: batteryPct[i] }));
+        const config = {
+          type: "line",
+          data: {
+            datasets: [
+              {
+                label: "Battery %",
+                data: points,
+                borderColor: session.sessionActive === 1 ? "#5ecfff" : "#f0b429",
+                backgroundColor: session.sessionActive === 1 ? "#5ecfff" : "#f0b429",
+                pointRadius: 2,
+                spanGaps: true,
+                tension: 0.15,
+              },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            plugins: {
+              ...chartDefaults.plugins,
+              legend: { display: false },
+            },
+            scales: {
+              x: {
+                type: "linear",
+                ticks: {
+                  color: "#90a2be",
+                  callback: (v) => formatDurationTotal(Number(v) * 60),
+                },
+                grid: { color: "#1f2d48" },
+                title: {
+                  display: true,
+                  text: "Time since last charge",
+                  color: "#90a2be",
+                  font: { size: 11 },
+                },
+              },
+              y: {
+                ...chartDefaults.scales.y,
+                min: 0,
+                max: 100,
+                ticks: {
+                  color: "#90a2be",
+                  callback: (v) => `${Math.round(v)}%`,
+                },
+              },
+            },
+          },
+        };
+        if (chartInstances[key]) {
+          chartInstances[key].data = config.data;
+          chartInstances[key].options = config.options;
+          chartInstances[key].update();
+          return;
+        }
+        chartInstances[key] = new Chart(canvas.getContext("2d"), config);
+      }
+
+      function renderSessionCharts(payload) {
+        const sessions = payload?.sessions || [];
+        const lastCharging = payload?.lastCharging;
+        if (!sessionChartsGridEl) return;
+
+        if (!sessions.length) {
+          const noAnchor = !lastCharging?.at;
+          sessionChartsMetaEl.textContent = noAnchor
+            ? "No sessions with battery samples since last charge (no charging event on record)"
+            : "No sessions with battery samples since last charge";
+          sessionChartsGridEl.innerHTML = "";
+          destroySessionChartsExcept([]);
+          return;
+        }
+
+        const anchorText = lastCharging?.at
+          ? `0 = ${new Date(lastCharging.at).toLocaleString()} (${lastCharging.event || "charge"})`
+          : "0 = session start (no charging event on record)";
+        sessionChartsMetaEl.textContent = `${sessions.length} recent segment(s) · x-axis: time since last charge · ${anchorText}`;
+
+        const keepKeys = [];
+        sessionChartsGridEl.innerHTML = sessions
+          .map((s) => {
+            const key = `session-${s.sessionId}`;
+            keepKeys.push(key);
+            const start = s.startIso ? new Date(s.startIso).toLocaleString() : "—";
+            const end = s.endIso ? new Date(s.endIso).toLocaleString() : "—";
+            const drop =
+              s.batteryDropPct != null && Number.isFinite(s.batteryDropPct)
+                ? `${s.batteryDropPct.toFixed(1)}% drop`
+                : "—";
+            const range =
+              s.minBatteryPct != null && s.maxBatteryPct != null
+                ? `${Number(s.minBatteryPct).toFixed(1)}% → ${Number(s.maxBatteryPct).toFixed(1)}%`
+                : "—";
+            const dur =
+              s.durationSec != null && Number.isFinite(s.durationSec)
+                ? formatDurationTotal(s.durationSec)
+                : "—";
+            const canvasId = `sessionChart-${s.sessionId}`;
+            return `
+              <div class="session-chart-card" data-session-id="${s.sessionId}">
+                <div class="session-chart-title">${shortSessionId(s.sessionId)} · ${s.sessionActive === 1 ? "active" : "idle"}</div>
+                <div class="session-chart-meta">${start} → ${end}<br/>${range} · ${drop} · ${dur}</div>
+                <canvas id="${canvasId}" class="chart-canvas" width="600" height="200"></canvas>
+              </div>
+            `;
+          })
+          .join("");
+
+        destroySessionChartsExcept(keepKeys);
+        for (const s of sessions) {
+          const canvas = document.getElementById(`sessionChart-${s.sessionId}`);
+          if (canvas) drawSessionBatteryChart(canvas, s);
+        }
+      }
+
+      async function loadSessionCharts() {
+        try {
+          const res = await fetch(`/api/telemetry/sessions/latest?limit=${SESSION_CHART_LIMIT}`);
+          const json = await res.json();
+          if (!json?.success) {
+            sessionChartsMetaEl.textContent = "Failed to load session charts";
+            return;
+          }
+          renderSessionCharts(json);
+        } catch {
+          sessionChartsMetaEl.textContent = "Failed to load session charts";
+        }
+      }
+
+      async function loadSinceLastChargingTotals(lastChargingIso) {
+        if (!lastChargingIso) {
+          sinceChargeMetaEl.textContent = "No charging event found";
+          sinceChargeActiveEl.textContent = "-";
+          sinceChargeIdleEl.textContent = "-";
+          return;
+        }
+        const now = Date.now();
+        const shouldRefetch =
+          sinceChargeFetch.forIso !== lastChargingIso || now - sinceChargeFetch.atMs > 30_000;
+        if (!shouldRefetch) return;
+        sinceChargeFetch = { atMs: now, forIso: lastChargingIso };
+        try {
+          const params = new URLSearchParams();
+          params.set("from", new Date(lastChargingIso).toISOString());
+          params.set("to", new Date().toISOString());
+          const res = await fetch(`/api/telemetry/charts?${params.toString()}`);
+          const payload = await res.json();
+          const a = payload?.activeSessionsPerDay;
+          const activeSec = Array.isArray(a?.valuesActiveSec)
+            ? a.valuesActiveSec.reduce((sum, x) => sum + (Number.isFinite(Number(x)) ? Number(x) : 0), 0)
+            : 0;
+          const idleSec = Array.isArray(a?.valuesIdleSec)
+            ? a.valuesIdleSec.reduce((sum, x) => sum + (Number.isFinite(Number(x)) ? Number(x) : 0), 0)
+            : 0;
+          sinceChargeActiveEl.textContent = formatDurationTotal(activeSec);
+          sinceChargeIdleEl.textContent = formatDurationTotal(idleSec);
+          sinceChargeMetaEl.textContent = `From ${new Date(lastChargingIso).toLocaleString()} to now`;
+        } catch {
+          sinceChargeMetaEl.textContent = "Failed to load totals";
+          sinceChargeActiveEl.textContent = "-";
+          sinceChargeIdleEl.textContent = "-";
+        }
+      }
+
+      function chargingCell(ch) {
+        if (ch === 1 || ch === "1") return "Yes";
+        if (ch === 0 || ch === "0") return "No";
+        return "—";
       }
 
       function renderTable(rows) {
@@ -384,33 +1036,28 @@
                 <td>${r.cpu_temp || "-"}</td>
                 <td>${fmt(r.cpu_load, "%")}</td>
                 <td>${r.wifi_signal ?? "-"}</td>
+                <td>${chargingCell(r.charging)}</td>
+                <td class="mono">${r.session_id != null ? r.session_id : "—"}</td>
+                <td>${r.session_active === 1 ? "active" : r.session_active === 0 ? "idle" : "—"}</td>
               </tr>
             `;
           })
           .join("");
       }
 
-      function applyChargingPayload(ch) {
-        if (!ch || typeof ch !== "object") return;
+      function getChargingText(ch) {
+        if (!ch || typeof ch !== "object") return "Unknown";
         if (ch.isCharging === true) {
-          chargingStatusEl.textContent = "YES";
-          chargingStatusEl.className = "value charging-yes";
-        } else if (ch.isCharging === false) {
-          chargingStatusEl.textContent = "NO";
-          chargingStatusEl.className = "value charging-no";
-        } else {
-          chargingStatusEl.textContent = "UNKNOWN";
-          chargingStatusEl.className = "value charging-unknown";
+          return "Charging";
         }
-        const detailParts = [];
-        if (ch.detectionSource) detailParts.push(String(ch.detectionSource));
-        if (ch.confidence) detailParts.push(`confidence: ${ch.confidence}`);
-        if (ch.medianHue != null) detailParts.push(`hue ${ch.medianHue}°`);
-        if (ch.webcamCaptureMs != null) detailParts.push(`grab ${ch.webcamCaptureMs}ms`);
-        if (ch.webcamCached === true) detailParts.push("cached");
-        if (ch.webcamError) detailParts.push(`camera: ${String(ch.webcamError).slice(0, 80)}`);
-        if (ch.reason) detailParts.push(String(ch.reason).replace(/_/g, " "));
-        chargingDetailEl.textContent = detailParts.length ? detailParts.join(" · ") : "-";
+        if (ch.isCharging === false) return "Not Charging";
+        return "Unknown";
+      }
+
+      function setOnlineChargingStatus(online, chargingText) {
+        const stateText = online ? "Online" : "Offline";
+        onlineChargingEl.textContent = `${stateText} - ${chargingText}`;
+        onlineChargingEl.className = online ? "value online" : "value offline";
       }
 
       function connectChargingWebSocket() {
@@ -420,8 +1067,12 @@
         ws.onmessage = (ev) => {
           try {
             const msg = JSON.parse(ev.data);
-            if (msg.type === "relay.rover.heartbeat" && msg.success && msg.rover?.charging) {
-              applyChargingPayload(msg.rover.charging);
+            if (msg.type === "relay.rover.heartbeat" && msg.success && msg.rover) {
+              if (typeof msg.rover.online === "boolean") {
+                lastKnownOnline = msg.rover.online;
+              }
+              const chargingText = getChargingText(msg.rover.charging || {});
+              setOnlineChargingStatus(lastKnownOnline, chargingText);
             }
           } catch {
             /* ignore */
@@ -456,71 +1107,78 @@
         pagerEl.innerHTML = buttons.join("");
       }
 
-      async function loadDashboard() {
+      async function loadTopMetrics() {
         try {
-          const [stateRes, telRes] = await Promise.all([
+          const [stateRes, latestTelRes] = await Promise.all([
             fetch("/api/rover/state"),
-            fetch(`/api/telemetry?page=${telemetryPage}&pageSize=${PAGE_SIZE}`),
+            fetch("/api/telemetry?page=1&pageSize=1"),
           ]);
           const stateJson = await stateRes.json();
-          const telJson = await telRes.json();
+          const latestTelJson = await latestTelRes.json();
           const rover = stateJson.rover || {};
-          const telemetry = telJson.telemetry || [];
-          const pagination = telJson.pagination || { page: telemetryPage, totalPages: 1, totalItems: telemetry.length };
-          const latest = telemetry[0] || {};
+          const latest = (latestTelJson.telemetry || [])[0] || {};
 
-          onlineEl.textContent = rover.online ? "ONLINE" : "OFFLINE";
-          onlineEl.className = rover.online ? "value online" : "value offline";
+          lastKnownOnline = rover.online === true;
+          setOnlineChargingStatus(lastKnownOnline, getChargingText(rover.charging || {}));
           batteryNowEl.textContent = fmt(rover.battery?.currentPct, "%");
-          batteryEtaEl.textContent =
-            rover.battery?.estimatedMinutesRemainingActiveVideo != null
-              ? `${rover.battery.estimatedMinutesRemainingActiveVideo.toFixed(1)} min`
-              : "-";
           bootProgressEl.textContent =
             rover.bootProgressPct != null ? `${rover.bootProgressPct.toFixed(1)}%` : "-";
           lastSeenEl.textContent = rover.lastSeenAt ? new Date(rover.lastSeenAt).toLocaleString() : "-";
           voltageNowEl.textContent = fmt(latest.voltage, "V");
 
-          applyChargingPayload(rover.charging || {});
+          loadSinceLastChargingTotals(rover.lastCharging?.at || null);
+        } catch (e) {
+          onlineChargingEl.textContent = "ERROR";
+          onlineChargingEl.className = "value offline";
+          lastSeenEl.textContent = e.message || "Failed to load data";
+          sinceChargeMetaEl.textContent = "-";
+          sinceChargeActiveEl.textContent = "-";
+          sinceChargeIdleEl.textContent = "-";
+        }
+      }
 
-          lastTelemetryRows = telemetry;
+      async function loadTelemetryTable() {
+        try {
+          const telRes = await fetch(`/api/telemetry?page=${telemetryPage}&pageSize=${PAGE_SIZE}`);
+          const telJson = await telRes.json();
+          const telemetry = telJson.telemetry || [];
+          const pagination = telJson.pagination || { page: telemetryPage, totalPages: 1, totalItems: telemetry.length };
           renderTable(telemetry);
           renderPager(pagination);
-          drawVoltageChart(telemetry);
-        } catch (e) {
-          onlineEl.textContent = "ERROR";
-          onlineEl.className = "value offline";
-          lastSeenEl.textContent = e.message || "Failed to load data";
-          chargingStatusEl.textContent = "ERROR";
-          chargingStatusEl.className = "value offline";
-          chargingDetailEl.textContent = "-";
+        } catch {
+          renderTable([]);
+          telemetryMetaEl.textContent = "Failed to load telemetry";
         }
       }
 
       refreshBtn.addEventListener("click", () => {
-        loadDashboard();
+        loadTopMetrics();
+        loadTelemetryTable();
+        loadCharts();
+        loadSessionCharts();
       });
-      canvas.addEventListener("mousemove", (event) => {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const x = (event.clientX - rect.left) * scaleX;
-        const y = (event.clientY - rect.top) * scaleY;
-        hoveredPoint = nearestPoint(x, y);
-        drawVoltageChart(lastTelemetryRows);
-      });
-      canvas.addEventListener("mouseleave", () => {
-        hoveredPoint = null;
-        drawVoltageChart(lastTelemetryRows);
-      });
+      chartApplyBtn.addEventListener("click", () => loadCharts());
+      document.getElementById("preset24h").addEventListener("click", () => applyPreset(86400000));
+      document.getElementById("preset3d").addEventListener("click", () => applyPreset(3 * 86400000));
+      document.getElementById("preset7d").addEventListener("click", () => applyPreset(7 * 86400000));
+      document.getElementById("preset14d").addEventListener("click", () => applyPreset(14 * 86400000));
       pagerEl.addEventListener("click", (event) => {
         const target = event.target.closest("button[data-page]");
         if (!target || target.disabled) return;
         telemetryPage = Math.max(1, Math.min(MAX_PAGES, Number(target.dataset.page) || 1));
-        loadDashboard();
+        loadTelemetryTable();
       });
-      loadDashboard();
-      setInterval(loadDashboard, 2000);
+      initChartRangeInputs();
+      loadTopMetrics();
+      loadTelemetryTable();
+      setInterval(loadTopMetrics, TOP_METRICS_REFRESH_MS);
+      requestAnimationFrame(() => {
+        loadCharts();
+        loadSessionCharts();
+      });
+      setInterval(loadTelemetryTable, HEAVY_REFRESH_MS);
+      setInterval(loadCharts, HEAVY_REFRESH_MS);
+      setInterval(loadSessionCharts, HEAVY_REFRESH_MS);
       connectChargingWebSocket();
     </script>
   </body>

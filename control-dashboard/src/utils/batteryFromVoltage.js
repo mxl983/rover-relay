@@ -1,3 +1,5 @@
+import { remapReportedBatteryPctRounded } from "./batteryPctScale.js";
+
 const V_MAX = 12.3;
 const V_MIN = 9.0;
 
@@ -12,5 +14,6 @@ export function getBatteryPercentage(voltage) {
   let percentage = ((v - V_MIN) / (V_MAX - V_MIN)) * 100;
   if (percentage > 100) percentage = 100;
   if (percentage < 0) percentage = 0;
-  return Math.round(percentage * 10) / 10;
+  const reported = Math.round(percentage * 10) / 10;
+  return remapReportedBatteryPctRounded(reported);
 }

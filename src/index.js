@@ -6,9 +6,14 @@ import { createApp } from "./app.js";
 import { initTelemetry, closeTelemetry } from "./services/telemetryService.js";
 import { closeDb } from "./services/db.js";
 import { mqttBootService } from "./services/mqttBootService.js";
+import {
+  startChargingTelemetryLogger,
+  stopChargingTelemetryLogger,
+} from "./services/chargingTelemetryLogger.js";
 import { attachRoverChargingWss } from "./ws/roverChargingWss.js";
 
 initTelemetry();
+startChargingTelemetryLogger();
 mqttBootService.start();
 const app = createApp();
 let server = null;
@@ -33,6 +38,7 @@ if (config.ssl.enabled) {
 attachRoverChargingWss(server);
 
 function shutdown() {
+  stopChargingTelemetryLogger();
   mqttBootService.stop();
   closeTelemetry();
   closeDb();

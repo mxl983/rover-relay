@@ -1,5 +1,19 @@
 import config from "../config.js";
 import { getDb } from "./db.js";
+import { getChargingLedSnapshot } from "./chargingSnapshot.js";
+import { stampTelemetrySession, warmTelemetrySessionStamp } from "./telemetrySessionStamp.js";
+import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
+
+function withUsableBatteryPct(row) {
+  if (!row || row.battery_pct == null || row.battery_pct === "") return row;
+  const mapped = remapReportedBatteryPctRounded(row.battery_pct);
+  if (mapped == null) return row;
+  return { ...row, battery_pct: mapped };
+}
+
+function mapTelemetryRows(rows) {
+  return rows.map(withUsableBatteryPct);
+}
 
 function cleanup() {
   const days = config.telemetry.retentionDays;
@@ -27,6 +41,7 @@ export function initTelemetry() {
   if (!config.telemetry.enabled) return;
   try {
     getDb();
+    warmTelemetrySessionStamp();
     cleanup();
     cleanupInterval = setInterval(cleanup, 60 * 60 * 1000);
   } catch (e) {
@@ -49,12 +64,16 @@ export function recordTelemetry(health, event = "health_report") {
   if (!config.telemetry.enabled || !health) return;
   const db = getDb();
   try {
+    const charging = getChargingLedSnapshot();
+    const ev = event || "health_report";
+    const { sessionId, sessionActive } = stampTelemetrySession(ev);
+
     const stmt = db.prepare(`
-      INSERT INTO telemetry (event, voltage, battery_pct, distance, pan, tilt, cpu_temp, cpu_load, wifi_signal, usb_power)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO telemetry (event, voltage, battery_pct, distance, pan, tilt, cpu_temp, cpu_load, wifi_signal, usb_power, charging, session_id, session_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
-      event || "health_report",
+      ev,
       health.voltage ?? null,
       health.battery != null ? parseFloat(health.battery) : null,
       health.distance ?? null,
@@ -64,18 +83,24 @@ export function recordTelemetry(health, event = "health_report") {
       health.cpuLoad ?? null,
       health.wifiSignal ?? null,
       health.usbPower === "on" ? 1 : 0,
+      charging,
+      sessionId,
+      sessionActive,
     );
   } catch (e) {
     console.warn("Relay telemetry record failed:", e.message);
   }
 }
 
-/** Write event-only row into telemetry (all metric fields null). */
-export function recordTelemetryEvent(event) {
+/** Write event-only row into telemetry (metrics null). Optional charging stamps LED-derived rows. */
+export function recordTelemetryEvent(event, charging = null) {
   if (!config.telemetry.enabled || !event) return;
   const db = getDb();
   try {
-    db.prepare("INSERT INTO telemetry (event) VALUES (?)").run(event);
+    const { sessionId, sessionActive } = stampTelemetrySession(event);
+    db.prepare(
+      "INSERT INTO telemetry (event, charging, session_id, session_active) VALUES (?, ?, ?, ?)",
+    ).run(event, charging, sessionId, sessionActive);
   } catch (e) {
     console.warn("Relay telemetry event record failed:", e.message);
   }
@@ -117,11 +142,15 @@ export function getTelemetry(options = {}) {
   const db = getDb();
   try {
     if (since) {
-      return db
-        .prepare("SELECT * FROM telemetry WHERE created_at >= ? ORDER BY created_at DESC LIMIT ?")
-        .all(since, limit);
+      return mapTelemetryRows(
+        db
+          .prepare("SELECT * FROM telemetry WHERE created_at >= ? ORDER BY created_at DESC LIMIT ?")
+          .all(since, limit),
+      );
     }
-    return db.prepare("SELECT * FROM telemetry ORDER BY created_at DESC LIMIT ?").all(limit);
+    return mapTelemetryRows(
+      db.prepare("SELECT * FROM telemetry ORDER BY created_at DESC LIMIT ?").all(limit),
+    );
   } catch (e) {
     console.warn("Relay telemetry query failed:", e.message);
     return [];
@@ -147,13 +176,23 @@ export function getTelemetryPage(options = {}) {
           "SELECT * FROM telemetry WHERE created_at >= ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
         )
         .all(since, safePageSize, offset);
-      return { telemetry: rows, total: totalRow?.count ?? 0, page: safePage, pageSize: safePageSize };
+      return {
+        telemetry: mapTelemetryRows(rows),
+        total: totalRow?.count ?? 0,
+        page: safePage,
+        pageSize: safePageSize,
+      };
     }
     const totalRow = db.prepare("SELECT COUNT(*) AS count FROM telemetry").get();
     const rows = db
       .prepare("SELECT * FROM telemetry ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?")
       .all(safePageSize, offset);
-    return { telemetry: rows, total: totalRow?.count ?? 0, page: safePage, pageSize: safePageSize };
+    return {
+      telemetry: mapTelemetryRows(rows),
+      total: totalRow?.count ?? 0,
+      page: safePage,
+      pageSize: safePageSize,
+    };
   } catch (e) {
     console.warn("Relay telemetry paged query failed:", e.message);
     return { telemetry: [], total: 0, page: safePage, pageSize: safePageSize };

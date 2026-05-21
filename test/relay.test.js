@@ -18,6 +18,8 @@ beforeEach(async () => {
   process.env.CORS_ORIGINS = "http://localhost:5173";
   process.env.ROVER_HEARTBEAT_STALE_MS = "60000";
   process.env.ROVER_BOOT_TOTAL_MS = "50000";
+  process.env.ROVER_LATITUDE = "49.0";
+  process.env.ROVER_LONGITUDE = "-123.0";
   process.env.CHARGING_LED_WEBCAM_STUB = "idle";
   /** Fail backup-cam environment fetch immediately (tests don’t hit real LAN hardware). */
   process.env.BACKUP_CAM_REALTIME_URL = "http://127.0.0.1:1/realtime";
@@ -34,9 +36,17 @@ beforeEach(async () => {
   app = createApp();
 });
 
-afterEach(() => {
+afterEach(async () => {
   Reflect.deleteProperty(process.env, "CHARGING_LED_WEBCAM_STUB");
   Reflect.deleteProperty(process.env, "BACKUP_CAM_REALTIME_URL");
+  Reflect.deleteProperty(process.env, "ROVER_LATITUDE");
+  Reflect.deleteProperty(process.env, "ROVER_LONGITUDE");
+  try {
+    const { resetClientLocationForTests } = await import("../src/services/clientRoverDistanceService.js");
+    resetClientLocationForTests();
+  } catch {
+    /* ignore */
+  }
   closeTelemetry?.();
   closeDb?.();
   try {
@@ -51,11 +61,63 @@ describe("telemetry ingest", () => {
     const res = await request(app).get("/dashboard");
     expect(res.status).toBe(200);
     expect(res.text).toContain("Rover Telemetry Dashboard");
+    expect(res.text).toContain("Latest sessions · usable battery % vs time since charge");
   });
 
   it("rejects missing token when configured", async () => {
     const res = await request(app).post("/api/telemetry/ingest").send({ health: { battery: 50 } });
     expect(res.status).toBe(401);
+  });
+
+  it("returns dashboard charts json", async () => {
+    const res = await request(app).get("/api/telemetry/charts");
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.activeSessionsPerDay?.valuesActiveSec).toBeTruthy();
+    expect(res.body.activeSessionsPerDay?.valuesIdleSec).toBeTruthy();
+    expect(res.body.batteryTimePerBand?.labels?.length).toBe(10);
+  });
+
+  it("returns latest session battery series with elapsed time since last charge", async () => {
+    const sessionId = "f7bc89c8-3313-4c73-859c-c695fb79cb52";
+    const health = { battery: 95, voltage: 12.4, cpuLoad: 10, wifiSignal: -50, usbPower: "on" };
+    const { getDb } = await import("../src/services/db.js");
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO telemetry (event, charging, created_at) VALUES ('charging_end', 0, datetime('now', '-2 hours'))`,
+    ).run();
+    await request(app)
+      .post("/api/telemetry/ingest")
+      .set("Authorization", "Bearer testsecret")
+      .send({ health, event: "mqtt_power_on" });
+    db.prepare(
+      "UPDATE telemetry SET session_id = ?, battery_pct = ? WHERE id = (SELECT MAX(id) FROM telemetry)",
+    ).run(sessionId, 95);
+    await request(app)
+      .post("/api/telemetry/ingest")
+      .set("Authorization", "Bearer testsecret")
+      .send({ health: { ...health, battery: 88 }, event: "health_report" });
+    db.prepare(
+      "UPDATE telemetry SET session_id = ? WHERE id = (SELECT MAX(id) FROM telemetry)",
+    ).run(sessionId);
+    await request(app)
+      .post("/api/telemetry/ingest")
+      .set("Authorization", "Bearer testsecret")
+      .send({ health: { ...health, battery: 80 }, event: "health_report" });
+    db.prepare(
+      "UPDATE telemetry SET session_id = ? WHERE id = (SELECT MAX(id) FROM telemetry)",
+    ).run(sessionId);
+
+    const res = await request(app).get("/api/telemetry/sessions/latest?limit=3");
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const match = (res.body.sessions || []).find((s) => s.sessionId === sessionId);
+    expect(match).toBeTruthy();
+    expect(match.series.batteryPct.length).toBeGreaterThanOrEqual(2);
+    expect(match.series.batteryPct[0]).toBeGreaterThan(match.series.batteryPct.at(-1));
+    expect(match.series.elapsedMin?.length).toBe(match.series.batteryPct.length);
+    expect(match.series.elapsedMin.every((m) => m >= 0)).toBe(true);
+    expect(res.body.lastCharging?.event).toBe("charging_end");
   });
 
   it("records and lists telemetry", async () => {
@@ -80,8 +142,26 @@ describe("telemetry ingest", () => {
     expect(get.status).toBe(200);
     expect(get.body.success).toBe(true);
     expect(get.body.telemetry.length).toBe(1);
-    expect(get.body.telemetry[0].battery_pct).toBe(88);
+    expect(get.body.telemetry[0].battery_pct).toBe(76);
     expect(get.body.telemetry[0].event).toBe("relay_test");
+    expect(typeof get.body.telemetry[0].session_id).toBe("string");
+    expect(get.body.telemetry[0].session_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(get.body.telemetry[0].session_active).toBe(1);
+
+    const afterOff = await request(app)
+      .post("/api/telemetry/ingest")
+      .set("Authorization", "Bearer testsecret")
+      .send({ health, event: "mqtt_power_off" });
+    expect(afterOff.status).toBe(200);
+    const get2 = await request(app).get("/api/telemetry?limit=5");
+    const offRow = get2.body.telemetry.find((r) => r.event === "mqtt_power_off");
+    expect(offRow?.session_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(offRow?.session_id).not.toBe(get.body.telemetry[0].session_id);
+    expect(offRow?.session_active).toBe(0);
   });
 });
 
@@ -100,6 +180,33 @@ describe("rover pulse", () => {
     expect(tel.body.telemetry[0].event).toBe("pulse_test");
     const st = await request(app).get("/api/rover/state");
     expect(st.body.rover.online).toBe(true);
+  });
+});
+
+describe("client distance", () => {
+  it("computes distance from client coords to rover", async () => {
+    const res = await request(app).get(
+      "/api/rover/client-distance?latitude=49.19&longitude=-123.12",
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.distanceMeters).toBeGreaterThan(0);
+    expect(res.body.rover).toBeUndefined();
+    expect(res.body.latitude).toBeUndefined();
+  });
+
+  it("stores client location on POST and exposes distance via state", async () => {
+    const post = await request(app)
+      .post("/api/rover/client-distance")
+      .send({ latitude: 49.19, longitude: -123.12, accuracy: 12 });
+    expect(post.status).toBe(200);
+    expect(post.body.distanceMeters).toBeGreaterThan(0);
+    expect(post.body.rover).toBeUndefined();
+
+    const st = await request(app).get("/api/rover/state");
+    expect(st.body.rover.clientLocation?.distanceMeters).toBe(post.body.distanceMeters);
+    expect(st.body.rover.clientLocation?.latitude).toBeUndefined();
+    expect(st.body.rover.clientLocation?.rover).toBeUndefined();
   });
 });
 

@@ -1,7 +1,10 @@
 import config from "../config.js";
+import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
 import { getDb } from "./db.js";
 import { getLatestTelemetryEvent } from "./telemetryService.js";
 import { inferChargingFromLedWebcam } from "./ledWebcamChargingService.js";
+import { getChargingLedSnapshot } from "./chargingSnapshot.js";
+import { getClientLocationSnapshot } from "./clientRoverDistanceService.js";
 
 function parseTs(row) {
   if (!row?.created_at) return null;
@@ -50,9 +53,11 @@ export function recordHeartbeat(body = {}) {
       : null;
   const voltage = health.voltage != null ? parseFloat(health.voltage) : null;
 
+  const charging = getChargingLedSnapshot();
+
   db.prepare(
-    `INSERT INTO rover_heartbeat (phase, boot_started_at, battery_pct, video_on, voltage, raw_health)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO rover_heartbeat (phase, boot_started_at, battery_pct, video_on, voltage, raw_health, charging)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     phase,
     bootStartedAt,
@@ -60,6 +65,7 @@ export function recordHeartbeat(body = {}) {
     videoOn,
     Number.isFinite(voltage) ? voltage : null,
     JSON.stringify(health),
+    charging,
   );
 }
 
@@ -106,23 +112,50 @@ function filterIqrOutliers(values) {
  */
 function estimateBatteryDrainPctPerMinute(samples, staleMs) {
   const points = samples
-    .map((r) => ({ t: parseTs(r), b: Number(r.battery_pct), videoOn: r.video_on }))
-    .filter((p) => p.t != null && Number.isFinite(p.b));
+    .map((r) => {
+      const b = remapReportedBatteryPctRounded(r.battery_pct);
+      return { t: parseTs(r), b, videoOn: r.video_on };
+    })
+    .filter((p) => p.t != null && p.b != null && Number.isFinite(p.b));
 
   if (points.length < 2) return null;
-  const maxActiveGapMs = Math.max(30_000, staleMs);
+  const minGapMs = Math.min(
+    Math.max(15_000, config.rover.batteryDrainMinPairGapMs || 45_000),
+    config.rover.batteryDrainWindowMs - 1,
+  );
+  const maxActiveGapMs = Math.min(
+    config.rover.batteryDrainWindowMs,
+    Math.max(30_000, staleMs),
+  );
   const rates = [];
-  for (let i = 1; i < points.length; i += 1) {
-    const prev = points[i - 1];
-    const cur = points[i];
+  let i = 0;
+  while (i < points.length - 1) {
+    let j = i + 1;
+    while (j < points.length && points[j].t - points[i].t < minGapMs) j += 1;
+    if (j >= points.length) break;
+    const prev = points[i];
+    const cur = points[j];
     const gapMs = cur.t - prev.t;
-    if (gapMs <= 0 || gapMs > maxActiveGapMs) continue;
-    if (prev.videoOn !== 1 || cur.videoOn !== 1) continue;
+    if (gapMs > maxActiveGapMs) {
+      i += 1;
+      continue;
+    }
+    if (prev.videoOn !== 1 || cur.videoOn !== 1) {
+      i += 1;
+      continue;
+    }
     const drop = prev.b - cur.b;
-    if (drop <= 0) continue;
+    if (drop <= 0) {
+      i += 1;
+      continue;
+    }
     const pctPerMinute = drop / (gapMs / 60_000);
-    if (!Number.isFinite(pctPerMinute) || pctPerMinute <= 0 || pctPerMinute > 20) continue;
+    if (!Number.isFinite(pctPerMinute) || pctPerMinute <= 0 || pctPerMinute > 20) {
+      i += 1;
+      continue;
+    }
     rates.push(pctPerMinute);
+    i = j;
   }
   if (!rates.length) return null;
 
@@ -198,7 +231,7 @@ export async function getRoverState() {
 
   const history = recentHeartbeats(5000);
   const slopeInfo = estimateBatteryDrainPctPerMinute(history, staleMs);
-  const currentBattery = last?.battery_pct;
+  const currentBattery = remapReportedBatteryPctRounded(last?.battery_pct);
 
   let estimatedMinutesRemaining = null;
   let drainPctPerMinute = null;
@@ -231,6 +264,18 @@ export async function getRoverState() {
   }
 
   const charging = await inferChargingFromLedWebcam();
+  const lastChargingEvent = getDb()
+    .prepare(
+      `SELECT created_at, event
+       FROM telemetry
+       WHERE event IN ('charging_start', 'charging_end')
+       ORDER BY datetime(created_at) DESC, id DESC
+       LIMIT 1`,
+    )
+    .get();
+  const lastChargingMs = parseTs(lastChargingEvent);
+  const minutesSinceLastCharging =
+    lastChargingMs != null ? Math.max(0, (now - lastChargingMs) / 60000) : null;
 
   return {
     online,
@@ -256,5 +301,17 @@ export async function getRoverState() {
       drainWindowMs: config.rover.batteryDrainWindowMs,
     },
     charging,
+    lastCharging: {
+      at:
+        lastChargingMs != null
+          ? new Date(lastChargingMs).toISOString()
+          : null,
+      event: lastChargingEvent?.event || null,
+      minutesSince:
+        minutesSinceLastCharging != null
+          ? Math.round(minutesSinceLastCharging * 10) / 10
+          : null,
+    },
+    clientLocation: getClientLocationSnapshot(),
   };
 }
