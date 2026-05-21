@@ -1,6 +1,6 @@
 {
-  "name": "Mango Mate Dashboard",
-  "short_name": "Mango Mate",
+  "name": "芒果探测器 Dashboard",
+  "short_name": "芒果探测器",
   "description": "Mission control dashboard for Mango Rover.",
   "start_url": ".",
   "scope": ".",
