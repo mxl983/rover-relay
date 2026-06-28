@@ -167,6 +167,14 @@ const config = {
     /** If true, require same ROVER_API_TOKEN to read the stream. */
     streamAuth: parseBoolean(process.env.BACKUP_CAM_STREAM_AUTH, false),
   },
+  lidar: {
+    /** Shared JSON snapshot written by ros2-lidar (preferred for Docker relay). */
+    scanFilePath: process.env.LIDAR_SCAN_FILE_PATH || "/app/lidar/scan.json",
+    /** Optional HTTP fallback (ros2-lidar viewer on the Docker host). */
+    scanUrl: process.env.LIDAR_SCAN_UPSTREAM_URL || "",
+    /** LiDAR WebSocket push interval for dashboard clients (ms). */
+    wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 500),
+  },
   controlDashboard: {
     /** If true, relay proxies the UI under basePath (e.g. /mangomate). */
     proxyEnabled: parseBoolean(process.env.CONTROL_DASHBOARD_PROXY_ENABLED, true),

@@ -225,6 +225,128 @@ html {
   align-items: flex-end;
 }
 
+.lidar-minimap {
+  position: absolute;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(120px, calc(env(safe-area-inset-bottom) + 100px));
+  width: 200px;
+  padding: 8px 10px 10px;
+  pointer-events: auto;
+  z-index: 12;
+}
+
+.lidar-minimap-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.lidar-minimap-title {
+  color: var(--spacex-cyan);
+  font-weight: 700;
+}
+
+.lidar-minimap-status {
+  margin-left: auto;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.lidar-minimap-status.live {
+  color: #5dffa8;
+}
+
+.lidar-minimap-status.stale {
+  color: #ffb35d;
+}
+
+.lidar-minimap-close {
+  background: transparent;
+  border: none;
+  color: var(--spacex-cyan);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.lidar-minimap-close:hover {
+  opacity: 1;
+}
+
+.lidar-minimap-canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  display: block;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 242, 255, 0.15);
+  background: radial-gradient(circle at center, rgba(15, 26, 51, 0.9) 0%, rgba(7, 11, 22, 0.95) 70%);
+  image-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+.lidar-minimap-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 8px;
+  color: #9eb5e8;
+  letter-spacing: 0.5px;
+}
+
+.lidar-minimap-debug {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 7px;
+  color: #6f86b8;
+  letter-spacing: 0.3px;
+  line-height: 1.3;
+}
+
+
+.lidar-minimap-color-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 7px;
+  color: #8aa4d8;
+}
+
+.lidar-legend-gradient {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff3b30 0%, #ffd60a 50%, #30d158 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.lidar-legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.lidar-legend-dot.near { background: #ff3b30; }
+.lidar-legend-dot.far { background: #30d158; }
+
+@media (max-width: 768px) {
+  .lidar-minimap {
+    width: 156px;
+    bottom: max(150px, calc(env(safe-area-inset-bottom) + 120px));
+  }
+}
+
 /* COMPONENT STATUS STYLING */
 .subsystem-item {
   display: flex;

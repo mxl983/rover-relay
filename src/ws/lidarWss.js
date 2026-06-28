@@ -1,15 +1,20 @@
+import fs from "fs/promises";
 import { WebSocketServer } from "ws";
-import { getRoverState } from "../services/roverStateService.js";
-import { readEnvironmentFromBackupCam } from "../services/roverEnvironmentService.js";
+import config from "../config.js";
 
-const PATH = "/ws/rover";
+const PATH = "/ws/lidar";
+
+async function readLatestScan() {
+  const raw = await fs.readFile(config.lidar.scanFilePath, "utf8");
+  return JSON.parse(raw);
+}
 
 /**
- * Browser clients subscribe here for relay rover snapshots including webcam charging state.
- * Query: ?backup=1 → push every 1s (backup camera UI); otherwise every 5s.
+ * Browser clients subscribe for decimated LiDAR scans from the shared snapshot file.
  */
-export function attachRoverChargingWss(httpServer) {
+export function attachLidarWss(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
+  const pushMs = config.lidar.wsPushMs;
 
   httpServer.on("upgrade", (request, socket, head) => {
     let pathname;
@@ -21,6 +26,7 @@ export function attachRoverChargingWss(httpServer) {
       return;
     }
     if (pathname !== PATH) {
+      socket.destroy();
       return;
     }
 
@@ -43,26 +49,22 @@ export function attachRoverChargingWss(httpServer) {
       return;
     }
 
-    const backup = u.searchParams.get("backup") === "1";
-    const intervalMs = backup ? 1000 : 5000;
-
     let timer = null;
     let stopped = false;
+    let lastStamp = null;
 
     const tick = async () => {
       if (stopped || ws.readyState !== 1) return;
       try {
-        const rover = await getRoverState();
-        const { environment, error: environmentError } = await readEnvironmentFromBackupCam();
+        const scan = await readLatestScan();
+        const stamp = scan?.stamp;
+        if (stamp === lastStamp) return;
+        lastStamp = stamp;
         ws.send(
           JSON.stringify({
-            type: "relay.rover.heartbeat",
+            type: "relay.lidar.scan",
             success: true,
-            rover: {
-              ...rover,
-              environment,
-              environmentError,
-            },
+            ...scan,
             ts: Date.now(),
           }),
         );
@@ -70,7 +72,7 @@ export function attachRoverChargingWss(httpServer) {
         const msg = e instanceof Error ? e.message : String(e);
         ws.send(
           JSON.stringify({
-            type: "relay.rover.heartbeat",
+            type: "relay.lidar.scan",
             success: false,
             error: msg,
             ts: Date.now(),
@@ -80,7 +82,7 @@ export function attachRoverChargingWss(httpServer) {
     };
 
     void tick();
-    timer = setInterval(tick, intervalMs);
+    timer = setInterval(tick, pushMs);
 
     const cleanup = () => {
       stopped = true;

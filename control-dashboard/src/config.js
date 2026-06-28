@@ -53,6 +53,24 @@ export const ROVER_CHARGING_ENDPOINT =
   import.meta.env.VITE_ROVER_CHARGING_URL ||
   ROVER_STATE_ENDPOINT.replace(/\/state\/?$/, "/charging");
 
+/** Latest LiDAR scan JSON proxied by relay (HTTPS same-origin). */
+export const LIDAR_SCAN_ENDPOINT =
+  import.meta.env.VITE_LIDAR_SCAN_URL ||
+  `${RELAY_BASE_URL.replace(/\/$/, "")}/api/lidar/scan`;
+
+/** Live LiDAR scan WebSocket (relay pushes decimated scans). */
+export function getLidarWebSocketUrl() {
+  const configured = import.meta.env.VITE_LIDAR_WS_URL;
+  if (configured) return configured;
+  try {
+    const u = new URL(RELAY_BASE_URL);
+    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${u.host}/ws/lidar`;
+  } catch {
+    return "wss://localhost/ws/lidar";
+  }
+}
+
 /** Relay WebSocket: rover heartbeat incl. charging — 5s default, `?backup=1` for 1s (backup camera UI). */
 export function getRelayRoverHeartbeatWebSocketUrl(backupViewEnabled) {
   try {

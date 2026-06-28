@@ -54,14 +54,9 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
       // As soon as MQTT auth succeeds, transition UI and let the main app manage MQTT.
       onLoginSuccess(client, formData);
 
-      // Fire-and-forget boot signals only from an active visible dashboard tab.
+      // Fire-and-forget Pi boot only from an active visible dashboard tab.
       if (canWakeNow()) {
-        const topic1 = "rover/power/pi";
-        const topic2 = "rover/power/aux";
-        const payload = "On";
-        const pubOptions = { qos: 1 };
-        client.publish(topic1, payload, pubOptions);
-        client.publish(topic2, payload, pubOptions);
+        client.publish("rover/power/pi", "On", { qos: 1 });
       }
 
       // Close this temporary client shortly after; App will create its own via useMqtt.

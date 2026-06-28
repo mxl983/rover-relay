@@ -21,11 +21,13 @@ import { DualJoystickControls } from "./components/JoystickControlCluster";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
+import { LidarMinimap } from "./components/LidarMinimap";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useMqtt } from "./hooks/useMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
+import { useLidarScan } from "./hooks/useLidarScan";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
@@ -53,6 +55,7 @@ function isGimbalOnlyAssistantSequence(steps) {
 const GIMBAL_HOME_SETTLE_MS = 600;
 
 const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
+const LIDAR_MINIMAP_STORAGE_KEY = "rover-dashboard-lidar-minimap";
 
 function readInitialControlMode() {
   if (typeof window === "undefined") return "keyboard";
@@ -63,6 +66,15 @@ function readInitialControlMode() {
     /* ignore */
   }
   return getIsMobileSnapshot() ? "joystick" : "keyboard";
+}
+
+function readInitialLidarMinimap() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(LIDAR_MINIMAP_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
 }
 
 function formatRemainingTime(minutes) {
@@ -89,6 +101,16 @@ export default function App() {
   const [focusMode, setFocusMode] = useState("far");
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
+  const [showLidarMinimap, setShowLidarMinimapState] = useState(readInitialLidarMinimap);
+
+  const setShowLidarMinimap = (enabled) => {
+    setShowLidarMinimapState(enabled);
+    try {
+      window.localStorage.setItem(LIDAR_MINIMAP_STORAGE_KEY, enabled ? "true" : "false");
+    } catch {
+      /* ignore */
+    }
+  };
 
   const setControlMode = (mode) => {
     if (mode !== "keyboard" && mode !== "joystick") return;
@@ -114,6 +136,9 @@ export default function App() {
   const [relayDistanceMeters, setRelayDistanceMeters] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
+  const { scan: lidarScan, isLive: lidarLive, error: lidarError } = useLidarScan(
+    isAuthenticated && showLidarMinimap,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -717,6 +742,14 @@ export default function App() {
 
       {isAuthenticated && (
         <div className="hud-overlay">
+          {showLidarMinimap && (
+            <LidarMinimap
+              scan={lidarScan}
+              isLive={lidarLive}
+              error={lidarError}
+              onClose={() => setShowLidarMinimap(false)}
+            />
+          )}
           <HudHeader
             wifiSignal={stats?.wifiSignal}
             distanceMeters={relayDistanceMeters}
@@ -735,6 +768,8 @@ export default function App() {
             onFocusChange={handleFocusChange}
             controlMode={controlMode}
             onControlModeChange={setControlMode}
+            lidarMinimapEnabled={showLidarMinimap}
+            onLidarMinimapChange={setShowLidarMinimap}
           />
 
           <HudFooter
@@ -814,6 +849,8 @@ function HudHeader({
   onFocusChange,
   controlMode,
   onControlModeChange,
+  lidarMinimapEnabled,
+  onLidarMinimapChange,
 }) {
   const distanceLabel = formatRoverDistance(distanceMeters);
 
@@ -850,6 +887,8 @@ function HudHeader({
           onFocusChange={onFocusChange}
           controlMode={controlMode}
           onControlModeChange={onControlModeChange}
+          lidarMinimapEnabled={lidarMinimapEnabled}
+          onLidarMinimapChange={onLidarMinimapChange}
         />
         <FullscreenButton />
       </div>

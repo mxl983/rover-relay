@@ -52,7 +52,6 @@ export function useMqtt(sessionCreds) {
       if (client.connected !== true) return;
       if (!canWakeNow()) return;
       client.publish("rover/power/pi", "On", { qos: 1 });
-      client.publish("rover/power/aux", "On", { qos: 1 });
       didWakeRef.current = true;
     };
 

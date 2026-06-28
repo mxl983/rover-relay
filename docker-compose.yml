@@ -49,13 +49,51 @@ services:
       CONTROL_DASHBOARD_PROXY_ENABLED: ${CONTROL_DASHBOARD_PROXY_ENABLED:-true}
       CONTROL_DASHBOARD_PROXY_BASE_PATH: ${CONTROL_DASHBOARD_PROXY_BASE_PATH:-/mangomate}
       CONTROL_DASHBOARD_PROXY_TARGET: ${CONTROL_DASHBOARD_PROXY_TARGET:-http://control-dashboard:80}
+      LIDAR_SCAN_FILE_PATH: ${LIDAR_SCAN_FILE_PATH:-/app/lidar/scan.json}
+      LIDAR_SCAN_UPSTREAM_URL: ${LIDAR_SCAN_UPSTREAM_URL:-}
+      LIDAR_WS_PUSH_MS: ${LIDAR_WS_PUSH_MS:-500}
     volumes:
       - relay-data:/app/data
+      - lidar-data:/app/lidar
       - ./certs:/certs:ro
     # USB webcam for charger LED (must exist on the Docker host). If the host has no camera,
     # comment out `devices` below or `docker compose up` may fail when /dev/video0 is missing.
     devices:
       - ${CHARGING_LED_WEBCAM_DEVICE:-/dev/video0}:${CHARGING_LED_WEBCAM_DEVICE:-/dev/video0}
+
+  ros2-lidar:
+    build:
+      context: .
+      dockerfile: ros2-lidar/Dockerfile
+    restart: always
+    # Host networking is required so CycloneDDS can bind to tailscale0 for Pi discovery.
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+      LIDAR_TOPIC: ${LIDAR_TOPIC:-/scan}
+      DDS_LOCAL_INTERFACE: ${DDS_LOCAL_INTERFACE:-lo}
+      DDS_TAILSCALE_INTERFACE: ${DDS_TAILSCALE_INTERFACE:-tailscale0}
+      SERVER_DDS_EXTERNAL_ADDRESS: ${SERVER_DDS_EXTERNAL_ADDRESS:-100.96.16.121}
+      ROVER_DDS_PEER: ${ROVER_DDS_PEER:-100.109.197.90}
+      LOCAL_DDS_PEER: ${LOCAL_DDS_PEER:-127.0.0.1}
+      LIDAR_VIEWER_PORT: ${LIDAR_VIEWER_PORT:-8765}
+      LIDAR_VIEWER_HOST: ${LIDAR_VIEWER_HOST:-0.0.0.0}
+      LIDAR_SCAN_FILE_PATH: ${LIDAR_SCAN_FILE_PATH:-/app/lidar/scan.json}
+      LIDAR_WS_MAX_POINTS: ${LIDAR_WS_MAX_POINTS:-0}
+      LIDAR_STABILIZED_TOPIC: ${LIDAR_STABILIZED_TOPIC:-/stabilized_scan}
+      LIDAR_VIEW_TOPIC: ${LIDAR_VIEW_TOPIC:-/scan}
+      LIDAR_STABILIZER_FRAMES: ${LIDAR_STABILIZER_FRAMES:-8}
+      LIDAR_STABILIZER_DECAY: ${LIDAR_STABILIZER_DECAY:-0.75}
+      LIDAR_STABILIZER_HIT_BOOST: ${LIDAR_STABILIZER_HIT_BOOST:-0.35}
+      LIDAR_STABILIZER_MIN_CONFIDENCE: ${LIDAR_STABILIZER_MIN_CONFIDENCE:-0.25}
+      LIDAR_STABILIZER_BIN_DEG: ${LIDAR_STABILIZER_BIN_DEG:-2}
+      LIDAR_STABILIZER_TARGET_FRAME: ${LIDAR_STABILIZER_TARGET_FRAME:-base_link}
+      LIDAR_STABILIZER_LOG_INTERVAL_S: ${LIDAR_STABILIZER_LOG_INTERVAL_S:-2}
+    volumes:
+      - lidar-data:/app/lidar
+    command: ["viewer"]
 
   control-dashboard:
     build:
@@ -72,6 +110,7 @@ services:
         VITE_VOICE_DRIVE_DEBUG: ${CONTROL_DASHBOARD_VOICE_DRIVE_DEBUG:-true}
         VITE_BACKUP_STREAM_URL: ${CONTROL_DASHBOARD_BACKUP_STREAM_URL:-}
         VITE_CAMERA_SECRET: ${CONTROL_DASHBOARD_CAMERA_SECRET:-}
+        VITE_LIDAR_SCAN_URL: ${CONTROL_DASHBOARD_LIDAR_SCAN_URL:-}
     restart: always
     depends_on:
       - relay
@@ -80,3 +119,4 @@ services:
 
 volumes:
   relay-data:
+  lidar-data:

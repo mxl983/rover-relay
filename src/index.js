@@ -11,6 +11,7 @@ import {
   stopChargingTelemetryLogger,
 } from "./services/chargingTelemetryLogger.js";
 import { attachRoverChargingWss } from "./ws/roverChargingWss.js";
+import { attachLidarWss } from "./ws/lidarWss.js";
 
 initTelemetry();
 startChargingTelemetryLogger();
@@ -36,6 +37,7 @@ if (config.ssl.enabled) {
 }
 
 attachRoverChargingWss(server);
+attachLidarWss(server);
 
 function shutdown() {
   stopChargingTelemetryLogger();

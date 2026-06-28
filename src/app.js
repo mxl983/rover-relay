@@ -7,6 +7,7 @@ import config from "./config.js";
 import telemetryRoutes from "./routes/telemetry.js";
 import roverRoutes from "./routes/rover.js";
 import backupCamRoutes from "./routes/backupCam.js";
+import lidarRoutes from "./routes/lidar.js";
 import pulseRoutes from "./routes/pulse.js";
 import { success, error } from "./utils/apiResponse.js";
 
@@ -91,6 +92,7 @@ export function createApp() {
   app.use("/api/rover/pulse", pulseRoutes);
   app.use("/api/rover", roverRoutes);
   app.use("/api/cams/backup", backupCamRoutes);
+  app.use("/api/lidar", lidarRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ success: false, error: "Not found" });

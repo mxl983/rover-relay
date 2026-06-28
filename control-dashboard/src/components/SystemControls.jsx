@@ -17,6 +17,7 @@ import {
   Gamepad2,
   PawPrint,
   BarChart3,
+  Radar,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -35,6 +36,8 @@ export const SystemControls = ({
   onAction,
   controlMode,
   onControlModeChange,
+  lidarMinimapEnabled,
+  onLidarMinimapChange,
 }) => {
   if (!isPowered) return null;
 
@@ -232,6 +235,17 @@ export const SystemControls = ({
             onSelect={() => onAction("meow")}
           >
             <PawPrint size={14} /> <span>Meow</span>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Separator style={styles.separator} />
+
+          <DropdownMenu.Item
+            style={styles.menuItem}
+            onSelect={() => onLidarMinimapChange?.(!lidarMinimapEnabled)}
+            title="Toggle live LiDAR minimap overlay"
+          >
+            <Radar size={14} />
+            <span>LiDAR minimap is {lidarMinimapEnabled ? "ON" : "OFF"}</span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator style={styles.separator} />
