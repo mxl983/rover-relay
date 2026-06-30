@@ -32,6 +32,14 @@ import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
 import { formatRoverDistance } from "./utils/formatRoverDistance.js";
+import {
+  applyAssistiveControl,
+  controlPayloadHasDrive,
+  driveNeedsAssistFilter,
+  evaluateAssistiveThreat,
+  keyboardNeedsAssistFilter,
+} from "./utils/assistiveDriving.js";
+import { closestBodyThreatFromPoints, LIDAR_MINIMAP_ARC_DEG } from "./utils/lidarCoords.js";
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -56,6 +64,8 @@ const GIMBAL_HOME_SETTLE_MS = 600;
 
 const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
 const LIDAR_MINIMAP_STORAGE_KEY = "rover-dashboard-lidar-minimap";
+const ASSISTIVE_DRIVING_STORAGE_KEY = "rover-dashboard-assistive-driving";
+const ASSISTIVE_BRAKE_INTERVAL_MS = 50;
 
 function readInitialControlMode() {
   if (typeof window === "undefined") return "keyboard";
@@ -72,6 +82,15 @@ function readInitialLidarMinimap() {
   if (typeof window === "undefined") return false;
   try {
     return window.localStorage.getItem(LIDAR_MINIMAP_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function readInitialAssistiveDriving() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(ASSISTIVE_DRIVING_STORAGE_KEY) === "true";
   } catch {
     return false;
   }
@@ -102,11 +121,26 @@ export default function App() {
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
   const [showLidarMinimap, setShowLidarMinimapState] = useState(readInitialLidarMinimap);
+  const [assistiveDrivingEnabled, setAssistiveDrivingEnabledState] = useState(
+    readInitialAssistiveDriving,
+  );
 
   const setShowLidarMinimap = (enabled) => {
     setShowLidarMinimapState(enabled);
     try {
       window.localStorage.setItem(LIDAR_MINIMAP_STORAGE_KEY, enabled ? "true" : "false");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const setAssistiveDrivingEnabled = (enabled) => {
+    setAssistiveDrivingEnabledState(enabled);
+    try {
+      window.localStorage.setItem(
+        ASSISTIVE_DRIVING_STORAGE_KEY,
+        enabled ? "true" : "false",
+      );
     } catch {
       /* ignore */
     }
@@ -136,8 +170,11 @@ export default function App() {
   const [relayDistanceMeters, setRelayDistanceMeters] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
+  const lidarSubscribed =
+    isAuthenticated &&
+    (assistiveDrivingEnabled || (showLidarMinimap && controlMode === "keyboard"));
   const { scan: lidarScan, isLive: lidarLive, error: lidarError } = useLidarScan(
-    isAuthenticated && showLidarMinimap,
+    lidarSubscribed,
   );
 
   useEffect(() => {
@@ -287,9 +324,62 @@ export default function App() {
   const lastDriveRef = useRef({ x: 0, y: 0 });
   const pendingControlRef = useRef(null);
   const controlTimerRef = useRef(null);
+  const assistiveThreatRef = useRef(null);
+  const lastKeyboardKeysRef = useRef([]);
+  const prevAssistiveDrivingRef = useRef(assistiveDrivingEnabled);
   const mountedAtRef = useRef(Date.now());
 
   const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
+
+  const assistiveThreat = closestBodyThreatFromPoints(lidarScan?.points, {
+    displayArcDeg: LIDAR_MINIMAP_ARC_DEG,
+  });
+  const evaluatedAssistiveThreat = evaluateAssistiveThreat(
+    assistiveThreat,
+    assistiveDrivingEnabled,
+    lidarLive,
+  );
+  assistiveThreatRef.current = assistiveDrivingEnabled ? evaluatedAssistiveThreat : null;
+
+  const withAssistiveBrake = (payload) => {
+    if (!assistiveDrivingEnabled) return payload;
+    const threat = assistiveThreatRef.current;
+    if (!threat || !controlPayloadHasDrive(payload)) return payload;
+    return applyAssistiveControl(payload, threat);
+  };
+
+  /** Re-send held inputs when assist turns off (avoids stuck brake / held-key gap). */
+  useEffect(() => {
+    const wasEnabled = prevAssistiveDrivingRef.current;
+    prevAssistiveDrivingRef.current = assistiveDrivingEnabled;
+    if (!wasEnabled || assistiveDrivingEnabled || !isAuthenticated || !piOnline) return;
+    assistiveThreatRef.current = null;
+    if (controlMode === "keyboard") {
+      sendControl?.(lastKeyboardKeysRef.current);
+      return;
+    }
+    sendControl?.({ drive: lastDriveRef.current });
+  }, [assistiveDrivingEnabled, isAuthenticated, piOnline, controlMode, sendControl]);
+
+  useEffect(() => {
+    if (!assistiveDrivingEnabled || !isAuthenticated || !piOnline) return undefined;
+    const holdTimer = setInterval(() => {
+      const threat = assistiveThreatRef.current;
+      if (!threat) return;
+      if (controlMode === "keyboard") {
+        const keys = lastKeyboardKeysRef.current;
+        if (keyboardNeedsAssistFilter(keys, threat)) {
+          sendControl?.(applyAssistiveControl(keys, threat));
+        }
+        return;
+      }
+      const d = lastDriveRef.current;
+      if (driveNeedsAssistFilter(d, threat)) {
+        sendControl?.(applyAssistiveControl({ drive: d }, threat));
+      }
+    }, ASSISTIVE_BRAKE_INTERVAL_MS);
+    return () => clearInterval(holdTimer);
+  }, [assistiveDrivingEnabled, isAuthenticated, piOnline, sendControl, controlMode]);
 
   useEffect(() => {
     setIsPowered(piOnline);
@@ -309,8 +399,9 @@ export default function App() {
   }, [actionToast]);
 
   const sendControlNow = (payload) => {
+    const outbound = withAssistiveBrake(payload);
     if (piOnline && sendControl) {
-      sendControl(payload);
+      sendControl(outbound);
       return Promise.resolve();
     }
     const startupGraceActive = Date.now() - mountedAtRef.current < 15000;
@@ -354,7 +445,7 @@ export default function App() {
   const handleDriveUpdate = (payload) => {
     clearErrorIfAny();
     if (Array.isArray(payload)) {
-      // Keyboard control arrays are sparse and should remain immediate.
+      lastKeyboardKeysRef.current = payload;
       void sendControlNow(payload);
       return;
     }
@@ -742,14 +833,6 @@ export default function App() {
 
       {isAuthenticated && (
         <div className="hud-overlay">
-          {showLidarMinimap && (
-            <LidarMinimap
-              scan={lidarScan}
-              isLive={lidarLive}
-              error={lidarError}
-              onClose={() => setShowLidarMinimap(false)}
-            />
-          )}
           <HudHeader
             wifiSignal={stats?.wifiSignal}
             distanceMeters={relayDistanceMeters}
@@ -770,11 +853,17 @@ export default function App() {
             onControlModeChange={setControlMode}
             lidarMinimapEnabled={showLidarMinimap}
             onLidarMinimapChange={setShowLidarMinimap}
+            assistiveDrivingEnabled={assistiveDrivingEnabled}
+            onAssistiveDrivingChange={setAssistiveDrivingEnabled}
           />
 
           <HudFooter
             isMobile={isMobile}
             controlMode={controlMode}
+            showLidarMinimap={showLidarMinimap}
+            lidarScan={lidarScan}
+            lidarLive={lidarLive}
+            lidarError={lidarError}
             stats={displayStats}
             batteryPct={batteryPct}
             isCharging={effectiveIsCharging}
@@ -851,6 +940,8 @@ function HudHeader({
   onControlModeChange,
   lidarMinimapEnabled,
   onLidarMinimapChange,
+  assistiveDrivingEnabled,
+  onAssistiveDrivingChange,
 }) {
   const distanceLabel = formatRoverDistance(distanceMeters);
 
@@ -889,6 +980,8 @@ function HudHeader({
           onControlModeChange={onControlModeChange}
           lidarMinimapEnabled={lidarMinimapEnabled}
           onLidarMinimapChange={onLidarMinimapChange}
+          assistiveDrivingEnabled={assistiveDrivingEnabled}
+          onAssistiveDrivingChange={onAssistiveDrivingChange}
         />
         <FullscreenButton />
       </div>
@@ -899,6 +992,10 @@ function HudHeader({
 function HudFooter({
   isMobile,
   controlMode,
+  showLidarMinimap,
+  lidarScan,
+  lidarLive,
+  lidarError,
   stats,
   batteryPct,
   isCharging,
@@ -958,6 +1055,42 @@ function HudFooter({
     />
   );
 
+  const lidarPanel =
+    showLidarMinimap && controlMode === "keyboard" ? (
+      <LidarMinimap
+        scan={lidarScan}
+        isLive={lidarLive}
+        error={lidarError}
+        pan={stats.pan}
+      />
+    ) : null;
+
+  const renderControlCluster = () => (
+    <div className="control-cluster-with-lidar">
+      <ControlCluster
+        onDrive={onDrive}
+        usbPower={stats.usbPower}
+        laserOn={laserOn}
+        onVoiceStart={onVoiceStart}
+        onVoiceStop={onVoiceStop}
+        voiceSupported={voiceSupported}
+        voiceListening={voiceListening}
+        onLightToggle={() => {
+          const nextState = stats.usbPower === "on" ? "off" : "on";
+          onToggleLight(nextState);
+        }}
+        onLaserToggle={onLaserToggle}
+        onCapture={onCapture}
+        isCapturing={isCapturing}
+        onReset={onResetCamera}
+        onToggleBackupView={onToggleBackupView}
+        backupViewEnabled={backupViewEnabled}
+        onTreat={onFeederTreat}
+      />
+      {lidarPanel}
+    </div>
+  );
+
   return (
     <div className="hud-footer">
       {!isMobile && controlMode === "keyboard" && schematic}
@@ -971,58 +1104,14 @@ function HudFooter({
       <div className="footer-controls">
         {piOnline ? (
           <>
-            {!isMobile && controlMode === "keyboard" && (
-              <ControlCluster
-                onDrive={onDrive}
-                usbPower={stats.usbPower}
-                laserOn={laserOn}
-                onVoiceStart={onVoiceStart}
-                onVoiceStop={onVoiceStop}
-                voiceSupported={voiceSupported}
-                voiceListening={voiceListening}
-                onLightToggle={() => {
-                  const nextState =
-                    stats.usbPower === "on" ? "off" : "on";
-                  onToggleLight(nextState);
-                }}
-                onLaserToggle={onLaserToggle}
-                onCapture={onCapture}
-                isCapturing={isCapturing}
-                onReset={onResetCamera}
-                onToggleBackupView={onToggleBackupView}
-                backupViewEnabled={backupViewEnabled}
-                onTreat={onFeederTreat}
-              />
-            )}
+            {!isMobile && controlMode === "keyboard" && renderControlCluster()}
             {!isMobile && controlMode === "joystick" && (
               <DualJoystickControls {...joystickProps}>
                 {schematic}
               </DualJoystickControls>
             )}
 
-            {isMobile && controlMode === "keyboard" && (
-              <ControlCluster
-                onDrive={onDrive}
-                usbPower={stats.usbPower}
-                laserOn={laserOn}
-                onVoiceStart={onVoiceStart}
-                onVoiceStop={onVoiceStop}
-                voiceSupported={voiceSupported}
-                voiceListening={voiceListening}
-                onLightToggle={() => {
-                  const nextState =
-                    stats.usbPower === "on" ? "off" : "on";
-                  onToggleLight(nextState);
-                }}
-                onLaserToggle={onLaserToggle}
-                onCapture={onCapture}
-                isCapturing={isCapturing}
-                onReset={onResetCamera}
-                onToggleBackupView={onToggleBackupView}
-                backupViewEnabled={backupViewEnabled}
-                onTreat={onFeederTreat}
-              />
-            )}
+            {isMobile && controlMode === "keyboard" && renderControlCluster()}
           </>
         ) : null}
       </div>

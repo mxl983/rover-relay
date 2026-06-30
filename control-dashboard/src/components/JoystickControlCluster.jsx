@@ -35,6 +35,23 @@ function deadzone2d(x, y, dead) {
 const GAMEPAD_DEAD_ZONE = 0.14;
 const GIMBAL_LINEAR_SCALE = 0.58;
 const TRIGGER_HELD_THRESHOLD = 0.45;
+/** Cap drive/gimbal WS updates while sticks are held (~25 Hz). Stops are always immediate. */
+const ANALOG_SEND_MIN_INTERVAL_MS = 40;
+/** Snap stick values to reduce gamepad ADC noise re-triggering sends. */
+const DRIVE_ANALOG_STEP = 0.05;
+const GIMBAL_ANALOG_STEP = 0.03;
+const DRIVE_CHANGE_THRESHOLD = 0.06;
+const GIMBAL_CHANGE_THRESHOLD = 0.02;
+
+export function quantizeAnalog(v, step = DRIVE_ANALOG_STEP) {
+  if (!Number.isFinite(v) || Math.abs(v) < step * 0.45) return 0;
+  const q = Math.round(v / step) * step;
+  return Math.max(-1, Math.min(1, q));
+}
+
+export function snapAnalogPair({ x = 0, y = 0 }, step = DRIVE_ANALOG_STEP) {
+  return { x: quantizeAnalog(x, step), y: quantizeAnalog(y, step) };
+}
 
 /** Standard mapping: LB 4, RB 5, LT 6, RT 7 (analog value 0–1 when supported). */
 function triggerHeld(button) {
@@ -160,7 +177,7 @@ export const DualJoystickControls = ({
   });
   const ignoreGamepadRef = useRef(false);
   const lastSentRef = useRef({ drive: null, gimbal: null });
-  const DRIVE_CHANGE_THRESHOLD = 0.04;
+  const lastSendAtRef = useRef(0);
   const gimbalRafRef = useRef(null);
   const syncMergedRef = useRef(() => {});
   const gamepadRafRef = useRef(null);
@@ -248,16 +265,19 @@ export const DualJoystickControls = ({
   };
 
   const sendIfChanged = (isStop = false) => {
-    const drive = { ...analogState.current.drive };
-    const gimbal = { ...analogState.current.gimbal };
+    const drive = snapAnalogPair(analogState.current.drive, DRIVE_ANALOG_STEP);
+    const gimbal = snapAnalogPair(analogState.current.gimbal, GIMBAL_ANALOG_STEP);
     const last = lastSentRef.current;
     const driveChanged = isStop || driveStateChanged(drive, last.drive);
     const gimbalChanged =
       isStop ||
       last.gimbal === null ||
-      Math.abs((gimbal.x ?? 0) - (last.gimbal.x ?? 0)) > 0.01 ||
-      Math.abs((gimbal.y ?? 0) - (last.gimbal.y ?? 0)) > 0.01;
+      Math.abs((gimbal.x ?? 0) - (last.gimbal.x ?? 0)) > GIMBAL_CHANGE_THRESHOLD ||
+      Math.abs((gimbal.y ?? 0) - (last.gimbal.y ?? 0)) > GIMBAL_CHANGE_THRESHOLD;
     if (!driveChanged && !gimbalChanged) return;
+    const now = performance.now();
+    if (!isStop && now - lastSendAtRef.current < ANALOG_SEND_MIN_INTERVAL_MS) return;
+    lastSendAtRef.current = now;
     sendState(drive, gimbal);
   };
 

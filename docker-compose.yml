@@ -51,7 +51,7 @@ services:
       CONTROL_DASHBOARD_PROXY_TARGET: ${CONTROL_DASHBOARD_PROXY_TARGET:-http://control-dashboard:80}
       LIDAR_SCAN_FILE_PATH: ${LIDAR_SCAN_FILE_PATH:-/app/lidar/scan.json}
       LIDAR_SCAN_UPSTREAM_URL: ${LIDAR_SCAN_UPSTREAM_URL:-}
-      LIDAR_WS_PUSH_MS: ${LIDAR_WS_PUSH_MS:-500}
+      LIDAR_WS_PUSH_MS: ${LIDAR_WS_PUSH_MS:-50}
     volumes:
       - relay-data:/app/data
       - lidar-data:/app/lidar

@@ -1,35 +1,32 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  bodyProximityPointColor,
+  bearingToCanvasPx,
+  distanceToRoverBodyM,
+  forwardViewConeEdgesDeg,
+  isAngleInDisplayArc,
+  laserBearingToCanvas,
   laserToCanvas,
+  lidarMinimapMarkedAnglesDeg,
+  LIDAR_FORWARD_DEG,
+  LIDAR_MINIMAP_ARC_DEG,
   nearestPointWithAngle,
   pointToLaserXY,
+  ROVER_BODY_LENGTH_M,
+  ROVER_BODY_WIDTH_M,
+  roverBodyFootprintCornersM,
+  viewHeadingFromPan,
 } from "../utils/lidarCoords";
 
-const MINIMAP_RANGE_M = 4;
-const FILTER_MIN_DEG = 190;
-const FILTER_MAX_DEG = 350;
+const DEFAULT_RANGE_M = 4;
+const MIN_RANGE_M = 1.5;
+const MAX_RANGE_M = 10;
+const ZOOM_FACTOR = 1.25;
 const MAX_DPR = 3;
+const POINT_COLOR = "rgba(235, 248, 255";
 
-function normalizeDeg(deg) {
-  if (!Number.isFinite(deg)) return null;
-  const n = ((deg % 360) + 360) % 360;
-  return n;
-}
-
-function shouldIgnoreByAngle(angleDeg) {
-  const n = normalizeDeg(angleDeg);
-  if (!Number.isFinite(n)) return false;
-  return n >= FILTER_MIN_DEG && n <= FILTER_MAX_DEG;
-}
-
-function clamp01(v) {
-  return Math.max(0, Math.min(1, v));
-}
-
-function pointColorByRange(range) {
-  const t = clamp01(range / MINIMAP_RANGE_M);
-  const hue = 120 * t;
-  return `hsl(${hue.toFixed(1)} 95% 55%)`;
+function clampRange(rangeM) {
+  return Math.max(MIN_RANGE_M, Math.min(MAX_RANGE_M, rangeM));
 }
 
 function prepareCanvasContext(canvas) {
@@ -57,49 +54,124 @@ function prepareCanvasContext(canvas) {
   return { ctx, cssW, cssH };
 }
 
-function drawAngleLabels(ctx, cx, cy, maxR, scale = 1) {
-  const fontPx = Math.max(8, 7 * scale);
-  ctx.fillStyle = "rgba(0, 242, 255, 0.65)";
-  ctx.font = `${fontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+function drawFrostVignette(ctx, cx, cy, maxR) {
+  const frost = ctx.createRadialGradient(cx, cy, maxR * 0.1, cx, cy, maxR * 1.05);
+  frost.addColorStop(0, "rgba(255, 255, 255, 0.04)");
+  frost.addColorStop(0.55, "rgba(220, 235, 255, 0.02)");
+  frost.addColorStop(1, "rgba(180, 210, 235, 0.08)");
+  ctx.fillStyle = frost;
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPoint(ctx, x, y, range, scale, rangeM, proximityRgb = null) {
+  const alpha = Math.max(0.5, 0.95 - (range / rangeM) * 0.35);
+  const r = Math.max(0.85, 1 * scale);
+  const colorBase = proximityRgb ?? POINT_COLOR;
+  const pointAlpha = proximityRgb ? Math.max(0.85, alpha) : alpha;
+  ctx.fillStyle = `${colorBase}, ${pointAlpha})`;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawRadarRim(ctx, cx, cy, maxR, scale) {
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = Math.max(0.5, 0.75 * scale);
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/**
+ * Rim ticks and labels using scan data bearings (`a_deg`, 0° = +x forward).
+ */
+function drawAngleMarks(ctx, cx, cy, maxR, scale) {
+  const { cardinal, assistBounds, minor } = lidarMinimapMarkedAnglesDeg();
+  const fontSize = Math.max(7, 7.5 * scale);
+  ctx.font = `600 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const inset = 12 * scale;
-  const labels = [
-    { label: "90°", x: cx, y: cy - maxR + inset },
-    { label: "180°", x: cx - maxR + inset, y: cy },
-    { label: "270°", x: cx, y: cy + maxR - inset },
-    { label: "0°", x: cx + maxR - inset, y: cy },
-  ];
-  for (const { label, x, y } of labels) {
-    ctx.fillText(label, x, y);
+
+  const drawTick = (
+    angleDeg,
+    { tickLen = 0.05, color = "rgba(255, 255, 255, 0.35)", label = null, labelColor = null } = {},
+  ) => {
+    if (!isAngleInDisplayArc(angleDeg)) return;
+    const innerR = maxR * (1 - tickLen);
+    const p0 = bearingToCanvasPx(cx, cy, angleDeg, innerR);
+    const p1 = bearingToCanvasPx(cx, cy, angleDeg, maxR);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(0.5, 0.75 * scale);
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+
+    if (label != null) {
+      const lp = bearingToCanvasPx(cx, cy, angleDeg, maxR - 14 * scale);
+      ctx.fillStyle = labelColor ?? color;
+      ctx.fillText(`${label}°`, lp.x, lp.y);
+    }
+  };
+
+  for (const angleDeg of minor) drawTick(angleDeg, { tickLen: 0.035 });
+  for (const angleDeg of assistBounds) {
+    drawTick(angleDeg, {
+      tickLen: 0.09,
+      color: "rgba(255, 185, 90, 0.85)",
+      label: angleDeg,
+      labelColor: "rgba(255, 200, 120, 0.95)",
+    });
+  }
+  for (const angleDeg of cardinal) {
+    drawTick(angleDeg, {
+      tickLen: 0.065,
+      color: "rgba(235, 248, 255, 0.55)",
+      label: angleDeg,
+      labelColor: "rgba(220, 240, 255, 0.88)",
+    });
   }
 }
 
-function drawRangeLegend(ctx, cx, cy, maxR, scale = 1) {
-  const fontPx = Math.max(8, 7 * scale);
-  ctx.fillStyle = "rgba(0, 242, 255, 0.6)";
-  ctx.font = `${fontPx}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  for (let ring = 1; ring <= 3; ring += 1) {
-    const r = (maxR * ring) / 3;
-    const meters = ((MINIMAP_RANGE_M * ring) / 3).toFixed(1);
-    ctx.fillText(`${meters}m`, cx + 5 * scale, cy - r);
-  }
-}
+function drawForwardViewCone(ctx, cx, cy, maxR, rangeM, scale, viewHeadingDeg) {
+  const { edgeADeg, edgeBDeg } = forwardViewConeEdgesDeg(viewHeadingDeg);
+  const tipA = laserBearingToCanvas(cx, cy, edgeADeg, maxR, rangeM);
+  const tipB = laserBearingToCanvas(cx, cy, edgeBDeg, maxR, rangeM);
 
-function drawSmoothPoint(ctx, x, y, color, alpha, radius) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  glow.addColorStop(0, color);
-  glow.addColorStop(0.45, color);
-  glow.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = glow;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.24)";
+  ctx.lineWidth = Math.max(0.75, 1 * scale);
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(tipA.x, tipA.y);
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(tipB.x, tipB.y);
+  ctx.stroke();
+}
+
+function drawCarBody(ctx, cx, cy, maxR, rangeM, uiScale) {
+  const pxPerM = maxR / rangeM;
+  const corners = roverBodyFootprintCornersM();
+  const plot = corners.map(([lx, ly]) => laserToCanvas(cx, cy, lx, ly, maxR, rangeM));
+
+  ctx.fillStyle = "rgba(200, 220, 240, 0.2)";
+  ctx.strokeStyle = "rgba(235, 248, 255, 0.5)";
+  ctx.lineWidth = Math.max(0.75, 0.05 * pxPerM);
+  ctx.beginPath();
+  ctx.moveTo(plot[0].x, plot[0].y);
+  for (let i = 1; i < plot.length; i += 1) {
+    ctx.lineTo(plot[i].x, plot[i].y);
+  }
+  ctx.closePath();
   ctx.fill();
-  ctx.restore();
+  ctx.stroke();
+
+  const centerR = Math.max(1.25, Math.min(ROVER_BODY_WIDTH_M * pxPerM * 0.14, 4 * uiScale));
+  ctx.fillStyle = "rgba(0, 242, 255, 0.8)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, centerR, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 /**
@@ -107,71 +179,39 @@ function drawSmoothPoint(ctx, x, y, color, alpha, radius) {
  * @param {number} w
  * @param {number} h
  * @param {{ points?: { x?: number; y?: number; r?: number; a?: number; a_deg?: number }[] }} scan
+ * @param {number} rangeM
+ * @param {number} [viewHeadingDeg]
  */
-export function drawLidarMinimap(ctx, w, h, scan) {
+export function drawLidarMinimap(
+  ctx,
+  w,
+  h,
+  scan,
+  rangeM = DEFAULT_RANGE_M,
+  viewHeadingDeg = LIDAR_FORWARD_DEG,
+) {
   const cx = w / 2;
   const cy = h / 2;
-  const scale = w / 200;
+  const scale = w / 180;
   const maxR = Math.min(cx, cy) - 14 * scale;
-  const gridLine = Math.max(0.75, 1 * scale);
+  const points = scan?.points ?? [];
 
   ctx.clearRect(0, 0, w, h);
+  drawFrostVignette(ctx, cx, cy, maxR);
+  drawRadarRim(ctx, cx, cy, maxR, scale);
+  drawAngleMarks(ctx, cx, cy, maxR, scale);
+  drawForwardViewCone(ctx, cx, cy, maxR, rangeM, scale, viewHeadingDeg);
 
-  ctx.strokeStyle = "rgba(0, 242, 255, 0.22)";
-  ctx.lineWidth = gridLine;
-  for (let ring = 1; ring <= 3; ring += 1) {
-    const r = (maxR * ring) / 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - maxR);
-  ctx.lineTo(cx, cy + maxR);
-  ctx.moveTo(cx - maxR, cy);
-  ctx.lineTo(cx + maxR, cy);
-  ctx.stroke();
-
-  drawAngleLabels(ctx, cx, cy, maxR, scale);
-  drawRangeLegend(ctx, cx, cy, maxR, scale);
-
-  ctx.fillStyle = "rgba(0, 242, 255, 0.4)";
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 4 * scale);
-  ctx.lineTo(cx - 3 * scale, cy + 3 * scale);
-  ctx.lineTo(cx + 3 * scale, cy + 3 * scale);
-  ctx.closePath();
-  ctx.fill();
-
-  const pointRadius = Math.max(1.8, 2.2 * scale);
-  for (const point of scan?.points ?? []) {
+  for (const point of points) {
     const { lx, ly, range, angleDeg } = pointToLaserXY(point);
-    if (shouldIgnoreByAngle(angleDeg)) continue;
-
-    const { x, y } = laserToCanvas(cx, cy, lx, ly, maxR, MINIMAP_RANGE_M);
-    const alpha = Math.max(0.3, 1 - range / MINIMAP_RANGE_M);
-    drawSmoothPoint(ctx, x, y, pointColorByRange(range), alpha, pointRadius);
+    if (!isAngleInDisplayArc(angleDeg)) continue;
+    const plot = laserToCanvas(cx, cy, lx, ly, maxR, rangeM);
+    const bodyDist = distanceToRoverBodyM(lx, ly, ROVER_BODY_LENGTH_M, ROVER_BODY_WIDTH_M);
+    const proximityRgb = bodyProximityPointColor(bodyDist);
+    drawPoint(ctx, plot.x, plot.y, range, scale, rangeM, proximityRgb);
   }
-}
 
-function formatAngleRange(scan) {
-  if (!scan) return "θ —";
-  const min = scan.angle_min_deg;
-  const max = scan.angle_max_deg;
-  const step = scan.angle_increment_deg;
-  if (!Number.isFinite(min) || !Number.isFinite(max)) return "θ —";
-  const stepLabel = Number.isFinite(step) ? ` Δ${step}°` : "";
-  return `θ ${min}°→${max}°${stepLabel}`;
-}
-
-function formatNearestAngle(scan) {
-  const nearest = nearestPointWithAngle(scan?.points ?? []);
-  if (!nearest || !Number.isFinite(nearest.range)) return "near —";
-  const deg = Number.isFinite(nearest.angleDeg)
-    ? `${nearest.angleDeg.toFixed(0)}°`
-    : "—";
-  return `near ${nearest.range.toFixed(2)}m @ ${deg}`;
+  drawCarBody(ctx, cx, cy, maxR, rangeM, scale);
 }
 
 /**
@@ -179,14 +219,19 @@ function formatNearestAngle(scan) {
  *   scan: import("../hooks/useLidarScan").LidarScan | null;
  *   isLive: boolean;
  *   error: string | null;
- *   onClose: () => void;
+ *   pan?: number | null;
  * }} props
  */
-export function LidarMinimap({ scan, isLive, error, onClose }) {
+export function LidarMinimap({ scan, isLive, error, pan }) {
   const canvasRef = useRef(null);
   const scanRef = useRef(scan);
+  const rangeRef = useRef(DEFAULT_RANGE_M);
+  const panRef = useRef(viewHeadingFromPan(pan));
+  const [rangeM, setRangeM] = useState(DEFAULT_RANGE_M);
 
   scanRef.current = scan;
+  rangeRef.current = rangeM;
+  panRef.current = viewHeadingFromPan(pan);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -196,7 +241,14 @@ export function LidarMinimap({ scan, isLive, error, onClose }) {
     const render = () => {
       const prepared = prepareCanvasContext(canvas);
       if (prepared) {
-        drawLidarMinimap(prepared.ctx, prepared.cssW, prepared.cssH, scanRef.current);
+        drawLidarMinimap(
+          prepared.ctx,
+          prepared.cssW,
+          prepared.cssH,
+          scanRef.current,
+          rangeRef.current,
+          panRef.current,
+        );
       }
       frame = requestAnimationFrame(render);
     };
@@ -213,42 +265,59 @@ export function LidarMinimap({ scan, isLive, error, onClose }) {
     };
   }, []);
 
+  const zoomIn = () => {
+    setRangeM((prev) => clampRange(prev / ZOOM_FACTOR));
+  };
+
+  const zoomOut = () => {
+    setRangeM((prev) => clampRange(prev * ZOOM_FACTOR));
+  };
+
   const statusClass = error ? "stale" : isLive ? "live" : "stale";
-  const statusText = error
-    ? "LiDAR offline"
-    : isLive
-      ? "Live"
-      : "Waiting";
+  const nearest = nearestPointWithAngle(scan?.points ?? [], {
+    displayArcDeg: LIDAR_MINIMAP_ARC_DEG,
+  });
+  const nearestLabel =
+    nearest && Number.isFinite(nearest.range)
+      ? `near ${nearest.range.toFixed(2)}m${
+          Number.isFinite(nearest.angleDeg) ? ` @ ${nearest.angleDeg.toFixed(0)}°` : ""
+        }`
+      : "near —";
+
+  const atMinZoom = rangeM <= MIN_RANGE_M + 0.01;
+  const atMaxZoom = rangeM >= MAX_RANGE_M - 0.01;
 
   return (
-    <div className="lidar-minimap glass-card" aria-label="LiDAR minimap">
+    <div className="lidar-minimap lidar-minimap--embedded" aria-label="LiDAR minimap">
       <div className="lidar-minimap-header">
         <span className="lidar-minimap-title">LiDAR</span>
-        <span className={`lidar-minimap-status ${statusClass}`}>{statusText}</span>
-        <button
-          type="button"
-          className="lidar-minimap-close"
-          onClick={onClose}
-          aria-label="Hide LiDAR minimap"
-        >
-          ×
-        </button>
+        <div className="lidar-minimap-zoom">
+          <button
+            type="button"
+            className="lidar-minimap-zoom-btn"
+            onClick={zoomIn}
+            disabled={atMinZoom}
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="lidar-minimap-zoom-btn"
+            onClick={zoomOut}
+            disabled={atMaxZoom}
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+        </div>
+        <span className={`lidar-minimap-status ${statusClass}`} aria-hidden="true" />
       </div>
       <canvas ref={canvasRef} className="lidar-minimap-canvas" />
       <div className="lidar-minimap-stats">
         <span>{scan?.hz ? `${scan.hz} Hz` : "—"}</span>
-        <span>{scan?.valid ? `${scan.valid} pts` : "—"}</span>
-        <span>{scan?.nearest != null ? `${scan.nearest}m` : "—"}</span>
-      </div>
-      <div className="lidar-minimap-debug">
-        <span>{formatAngleRange(scan)}</span>
-        <span>{formatNearestAngle(scan)}</span>
-        <span>{`range 0–${MINIMAP_RANGE_M}m · hide ${FILTER_MIN_DEG}°–${FILTER_MAX_DEG}° · raw`}</span>
-      </div>
-      <div className="lidar-minimap-color-legend" aria-hidden="true">
-        <span className="lidar-legend-dot near" /> <span>near</span>
-        <span className="lidar-legend-gradient" />
-        <span>far</span> <span className="lidar-legend-dot far" />
+        <span>{`${rangeM.toFixed(1)}m`}</span>
+        <span className="lidar-minimap-nearest">{nearestLabel}</span>
       </div>
     </div>
   );

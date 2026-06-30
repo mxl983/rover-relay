@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import fsSync from "fs";
 import { WebSocketServer } from "ws";
 import config from "../config.js";
 
@@ -10,11 +11,66 @@ async function readLatestScan() {
 }
 
 /**
- * Browser clients subscribe for decimated LiDAR scans from the shared snapshot file.
+ * Browser clients subscribe for LiDAR scans from the shared snapshot file.
  */
 export function attachLidarWss(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
   const pushMs = config.lidar.wsPushMs;
+  const scanPath = config.lidar.scanFilePath;
+
+  /** @type {Set<import("ws").WebSocket>} */
+  const clients = new Set();
+  let lastStamp = null;
+  let pollTimer = null;
+  let watchStarted = false;
+
+  const broadcast = async () => {
+    if (clients.size === 0) return;
+    try {
+      const scan = await readLatestScan();
+      const stamp = scan?.stamp;
+      if (stamp === lastStamp) return;
+      lastStamp = stamp;
+      const frame = JSON.stringify({
+        type: "relay.lidar.scan",
+        success: true,
+        ...scan,
+        ts: Date.now(),
+      });
+      for (const ws of clients) {
+        if (ws.readyState === 1) ws.send(frame);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const frame = JSON.stringify({
+        type: "relay.lidar.scan",
+        success: false,
+        error: msg,
+        ts: Date.now(),
+      });
+      for (const ws of clients) {
+        if (ws.readyState === 1) ws.send(frame);
+      }
+    }
+  };
+
+  const ensurePump = () => {
+    if (watchStarted) return;
+    watchStarted = true;
+
+    try {
+      fsSync.watch(scanPath, { persistent: false }, () => {
+        void broadcast();
+      });
+    } catch {
+      /* file may not exist until first scan */
+    }
+
+    if (!pollTimer) {
+      pollTimer = setInterval(() => void broadcast(), pushMs);
+      if (typeof pollTimer.unref === "function") pollTimer.unref();
+    }
+  };
 
   httpServer.on("upgrade", (request, socket, head) => {
     let pathname;
@@ -49,45 +105,12 @@ export function attachLidarWss(httpServer) {
       return;
     }
 
-    let timer = null;
-    let stopped = false;
-    let lastStamp = null;
-
-    const tick = async () => {
-      if (stopped || ws.readyState !== 1) return;
-      try {
-        const scan = await readLatestScan();
-        const stamp = scan?.stamp;
-        if (stamp === lastStamp) return;
-        lastStamp = stamp;
-        ws.send(
-          JSON.stringify({
-            type: "relay.lidar.scan",
-            success: true,
-            ...scan,
-            ts: Date.now(),
-          }),
-        );
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        ws.send(
-          JSON.stringify({
-            type: "relay.lidar.scan",
-            success: false,
-            error: msg,
-            ts: Date.now(),
-          }),
-        );
-      }
-    };
-
-    void tick();
-    timer = setInterval(tick, pushMs);
+    clients.add(ws);
+    ensurePump();
+    void broadcast();
 
     const cleanup = () => {
-      stopped = true;
-      if (timer) clearInterval(timer);
-      timer = null;
+      clients.delete(ws);
     };
 
     ws.on("close", cleanup);

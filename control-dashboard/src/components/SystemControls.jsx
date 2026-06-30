@@ -18,6 +18,7 @@ import {
   PawPrint,
   BarChart3,
   Radar,
+  ShieldAlert,
 } from "lucide-react";
 
 export const SystemControls = ({
@@ -38,6 +39,8 @@ export const SystemControls = ({
   onControlModeChange,
   lidarMinimapEnabled,
   onLidarMinimapChange,
+  assistiveDrivingEnabled,
+  onAssistiveDrivingChange,
 }) => {
   if (!isPowered) return null;
 
@@ -246,6 +249,17 @@ export const SystemControls = ({
           >
             <Radar size={14} />
             <span>LiDAR minimap is {lidarMinimapEnabled ? "ON" : "OFF"}</span>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Item
+            style={styles.menuItem}
+            onSelect={() => onAssistiveDrivingChange?.(!assistiveDrivingEnabled)}
+            title="Auto-stop when LiDAR detects obstacles within 15 cm of the rover body"
+          >
+            <ShieldAlert size={14} />
+            <span>
+              Assistive driving is {assistiveDrivingEnabled ? "ON" : "OFF"}
+            </span>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator style={styles.separator} />

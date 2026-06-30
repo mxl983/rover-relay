@@ -173,7 +173,7 @@ const config = {
     /** Optional HTTP fallback (ros2-lidar viewer on the Docker host). */
     scanUrl: process.env.LIDAR_SCAN_UPSTREAM_URL || "",
     /** LiDAR WebSocket push interval for dashboard clients (ms). */
-    wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 500),
+    wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 50),
   },
   controlDashboard: {
     /** If true, relay proxies the UI under basePath (e.g. /mangomate). */
