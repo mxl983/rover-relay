@@ -41,4 +41,28 @@ router.get("/scan", async (req, res) => {
   }
 });
 
+async function readMapFromFile() {
+  try {
+    const raw = await fs.readFile(config.lidar.slamLiveFilePath, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    const raw = await fs.readFile(config.lidar.slamMapFilePath, "utf8");
+    return JSON.parse(raw);
+  }
+}
+
+router.get("/map", async (req, res) => {
+  try {
+    const data = await readMapFromFile();
+    res.setHeader("Cache-Control", "no-store");
+    return success(res, data);
+  } catch (e) {
+    return error(
+      res,
+      config.env === "production" ? "SLAM map unavailable" : e.message,
+      502,
+    );
+  }
+});
+
 export default router;

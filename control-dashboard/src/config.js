@@ -58,6 +58,14 @@ export const LIDAR_SCAN_ENDPOINT =
   import.meta.env.VITE_LIDAR_SCAN_URL ||
   `${RELAY_BASE_URL.replace(/\/$/, "")}/api/lidar/scan`;
 
+/** Memorized SLAM map overlay on the LiDAR minimap (grey points). */
+export const SLAM_ENABLED = import.meta.env.VITE_SLAM_ENABLED === "true";
+
+/** Persistent SLAM map JSON proxied by relay. */
+export const SLAM_MAP_ENDPOINT =
+  import.meta.env.VITE_SLAM_MAP_URL ||
+  `${RELAY_BASE_URL.replace(/\/$/, "")}/api/lidar/map`;
+
 /** Live LiDAR scan WebSocket (relay pushes decimated scans). */
 export function getLidarWebSocketUrl() {
   const configured = import.meta.env.VITE_LIDAR_WS_URL;
@@ -68,6 +76,19 @@ export function getLidarWebSocketUrl() {
     return `${wsProto}//${u.host}/ws/lidar`;
   } catch {
     return "wss://localhost/ws/lidar";
+  }
+}
+
+/** Live SLAM map WebSocket (relay pushes map updates). */
+export function getSlamWebSocketUrl() {
+  const configured = import.meta.env.VITE_SLAM_WS_URL;
+  if (configured) return configured;
+  try {
+    const u = new URL(RELAY_BASE_URL);
+    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${u.host}/ws/slam`;
+  } catch {
+    return "wss://localhost/ws/slam";
   }
 }
 
@@ -87,6 +108,10 @@ export function getRelayRoverHeartbeatWebSocketUrl(backupViewEnabled) {
 /** Set VITE_VOICE_DRIVE_DEBUG=true to log assistant actions and control payloads in the browser console. */
 export const VOICE_DRIVE_DEBUG =
   import.meta.env.VITE_VOICE_DRIVE_DEBUG === "true";
+
+/** Drive-assist /info polling logs to the console (default on unless explicitly false). */
+export const DRIVE_ASSIST_DEBUG =
+  import.meta.env.VITE_DRIVE_ASSIST_DEBUG !== "false";
 
 /** Allowed origin for capture URL (same host as API). Used to validate redirects. */
 export function getAllowedCaptureOrigin() {

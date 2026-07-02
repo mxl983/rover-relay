@@ -8,8 +8,10 @@ import {
   BACKUP_STREAM_ENDPOINT,
   CAMERA_SECRET,
   VOICE_DRIVE_DEBUG,
+  DRIVE_ASSIST_DEBUG,
   getRelayRoverHeartbeatWebSocketUrl,
   ROVER_CLIENT_DISTANCE_ENDPOINT,
+  SLAM_ENABLED,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
@@ -22,24 +24,37 @@ import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { LidarMinimap } from "./components/LidarMinimap";
+import { HudIndicatorStrip } from "./components/HudIndicatorStrip";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useMqtt } from "./hooks/useMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useLidarScan } from "./hooks/useLidarScan";
+import { useSlamMap } from "./hooks/useSlamMap";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
 import { formatRoverDistance } from "./utils/formatRoverDistance.js";
 import {
-  applyAssistiveControl,
-  controlPayloadHasDrive,
-  driveNeedsAssistFilter,
-  evaluateAssistiveThreat,
-  keyboardNeedsAssistFilter,
-} from "./utils/assistiveDriving.js";
-import { closestBodyThreatFromPoints, LIDAR_MINIMAP_ARC_DEG } from "./utils/lidarCoords.js";
+  fetchDriveAssistStatus,
+  postDriveAssist,
+  readDriveAssistEnabled,
+} from "./utils/driveAssistApi.js";
+import {
+  fetchNavigationStatus,
+  postNavigation,
+  readNavigationEnabled,
+} from "./utils/navigationApi.js";
+
+function isManualDrivePayload(payload) {
+  if (!payload) return false;
+  if (payload.command !== undefined) return false;
+  if (Array.isArray(payload)) return true;
+  if (payload.drive) return true;
+  if (Array.isArray(payload.payload)) return true;
+  return false;
+}
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -64,14 +79,14 @@ const GIMBAL_HOME_SETTLE_MS = 600;
 
 const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
 const LIDAR_MINIMAP_STORAGE_KEY = "rover-dashboard-lidar-minimap";
-const ASSISTIVE_DRIVING_STORAGE_KEY = "rover-dashboard-assistive-driving";
-const ASSISTIVE_BRAKE_INTERVAL_MS = 50;
+const METRICS_PANEL_STORAGE_KEY = "rover-dashboard-metrics-panel";
+const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
 
 function readInitialControlMode() {
   if (typeof window === "undefined") return "keyboard";
   try {
     const v = window.localStorage.getItem(CONTROL_MODE_STORAGE_KEY);
-    if (v === "keyboard" || v === "joystick") return v;
+    if (v === "keyboard" || v === "joystick" || v === "immersive") return v;
   } catch {
     /* ignore */
   }
@@ -81,19 +96,24 @@ function readInitialControlMode() {
 function readInitialLidarMinimap() {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(LIDAR_MINIMAP_STORAGE_KEY) === "true";
+    const v = window.localStorage.getItem(LIDAR_MINIMAP_STORAGE_KEY);
+    if (v === "true") return true;
   } catch {
-    return false;
+    /* ignore */
   }
+  return false;
 }
 
-function readInitialAssistiveDriving() {
-  if (typeof window === "undefined") return false;
+function readInitialMetricsPanel() {
+  if (typeof window === "undefined") return true;
   try {
-    return window.localStorage.getItem(ASSISTIVE_DRIVING_STORAGE_KEY) === "true";
+    const v = window.localStorage.getItem(METRICS_PANEL_STORAGE_KEY);
+    if (v === "false") return false;
+    if (v === "true") return true;
   } catch {
-    return false;
+    /* ignore */
   }
+  return true;
 }
 
 function formatRemainingTime(minutes) {
@@ -108,7 +128,34 @@ function formatRemainingTime(minutes) {
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login } = useRoverSession();
-  const { stats, isOnline: piOnline, hasEverConnected, sendControl } = usePiWebSocket();
+  const { stats, driveAssistUpdate, isOnline: piOnline, hasEverConnected, sendControl } =
+    usePiWebSocket();
+  const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
+  const [navigationEnabled, setNavigationEnabled] = useState(false);
+  const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
+
+  useEffect(() => {
+    if (typeof stats?.driveAssistEnabled === "boolean") {
+      setDriveAssistEnabled(stats.driveAssistEnabled);
+    }
+  }, [stats?.driveAssistEnabled]);
+
+  useEffect(() => {
+    if (typeof stats?.navigationEnabled === "boolean") {
+      setNavigationEnabled(stats.navigationEnabled);
+    }
+  }, [stats?.navigationEnabled]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !DRIVE_ASSIST_DEBUG) return;
+    console.log(
+      "[drive-assist]",
+      driveAssistEnabled
+        ? "WS collision updates active (DRIVE_ASSIST_UPDATE)"
+        : 'idle — turn Assist ON in Settings (gear icon → Driving → Assist)',
+    );
+  }, [isAuthenticated, driveAssistEnabled]);
+
   const { isEspOnline, mqttClientRef } = useMqtt(
     isAuthenticated ? sessionCreds : null,
   );
@@ -121,9 +168,7 @@ export default function App() {
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
   const [showLidarMinimap, setShowLidarMinimapState] = useState(readInitialLidarMinimap);
-  const [assistiveDrivingEnabled, setAssistiveDrivingEnabledState] = useState(
-    readInitialAssistiveDriving,
-  );
+  const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
 
   const setShowLidarMinimap = (enabled) => {
     setShowLidarMinimapState(enabled);
@@ -134,20 +179,17 @@ export default function App() {
     }
   };
 
-  const setAssistiveDrivingEnabled = (enabled) => {
-    setAssistiveDrivingEnabledState(enabled);
+  const setShowMetricsPanel = (enabled) => {
+    setShowMetricsPanelState(enabled);
     try {
-      window.localStorage.setItem(
-        ASSISTIVE_DRIVING_STORAGE_KEY,
-        enabled ? "true" : "false",
-      );
+      window.localStorage.setItem(METRICS_PANEL_STORAGE_KEY, enabled ? "true" : "false");
     } catch {
       /* ignore */
     }
   };
 
   const setControlMode = (mode) => {
-    if (mode !== "keyboard" && mode !== "joystick") return;
+    if (mode !== "keyboard" && mode !== "joystick" && mode !== "immersive") return;
     setControlModeState(mode);
     try {
       window.localStorage.setItem(CONTROL_MODE_STORAGE_KEY, mode);
@@ -170,12 +212,15 @@ export default function App() {
   const [relayDistanceMeters, setRelayDistanceMeters] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
-  const lidarSubscribed =
-    isAuthenticated &&
-    (assistiveDrivingEnabled || (showLidarMinimap && controlMode === "keyboard"));
+  const lidarSubscribed = isAuthenticated && showLidarMinimap;
   const { scan: lidarScan, isLive: lidarLive, error: lidarError } = useLidarScan(
     lidarSubscribed,
   );
+  const {
+    map: slamMap,
+    isLive: slamLive,
+    error: slamError,
+  } = useSlamMap(SLAM_ENABLED && lidarSubscribed);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,6 +338,48 @@ export default function App() {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+
+    const fetchDriveAssist = async () => {
+      try {
+        const status = await fetchDriveAssistStatus();
+        if (!cancelled) {
+          const enabled = readDriveAssistEnabled(status);
+          if (enabled != null) setDriveAssistEnabled(enabled);
+          if (DRIVE_ASSIST_DEBUG) {
+            console.log("[drive-assist] GET /drive-assist", JSON.stringify(status, null, 2));
+          }
+        }
+      } catch (err) {
+        if (!cancelled && DRIVE_ASSIST_DEBUG) {
+          console.log("[drive-assist] status fetch failed", err?.message ?? err);
+        }
+      }
+    };
+
+    const fetchNavigation = async () => {
+      try {
+        const status = await fetchNavigationStatus();
+        if (!cancelled) {
+          const enabled = readNavigationEnabled(status);
+          if (enabled != null) setNavigationEnabled(enabled);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.log("[navigation] status fetch failed", err?.message ?? err);
+        }
+      }
+    };
+
+    void fetchDriveAssist();
+    void fetchNavigation();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     const timer = setTimeout(() => setLowBatteryGlowArmed(true), 5000);
     return () => clearTimeout(timer);
   }, []);
@@ -310,13 +397,7 @@ export default function App() {
         ? relayBatteryPct
         : null;
   const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
-  // Relay WebSocket `relay.rover.heartbeat` is the charging source of truth.
   const effectiveIsCharging = relayCharging === true;
-  const viewportGlowClass = effectiveIsCharging
-    ? "status-glow-charging"
-    : lowBatteryGlowArmed && isLowBattery
-      ? "status-glow-low-battery"
-      : "";
 
   const isMobile = useIsMobile();
   const isFullscreen = useFullscreen();
@@ -324,62 +405,8 @@ export default function App() {
   const lastDriveRef = useRef({ x: 0, y: 0 });
   const pendingControlRef = useRef(null);
   const controlTimerRef = useRef(null);
-  const assistiveThreatRef = useRef(null);
   const lastKeyboardKeysRef = useRef([]);
-  const prevAssistiveDrivingRef = useRef(assistiveDrivingEnabled);
-  const mountedAtRef = useRef(Date.now());
-
-  const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
-
-  const assistiveThreat = closestBodyThreatFromPoints(lidarScan?.points, {
-    displayArcDeg: LIDAR_MINIMAP_ARC_DEG,
-  });
-  const evaluatedAssistiveThreat = evaluateAssistiveThreat(
-    assistiveThreat,
-    assistiveDrivingEnabled,
-    lidarLive,
-  );
-  assistiveThreatRef.current = assistiveDrivingEnabled ? evaluatedAssistiveThreat : null;
-
-  const withAssistiveBrake = (payload) => {
-    if (!assistiveDrivingEnabled) return payload;
-    const threat = assistiveThreatRef.current;
-    if (!threat || !controlPayloadHasDrive(payload)) return payload;
-    return applyAssistiveControl(payload, threat);
-  };
-
-  /** Re-send held inputs when assist turns off (avoids stuck brake / held-key gap). */
-  useEffect(() => {
-    const wasEnabled = prevAssistiveDrivingRef.current;
-    prevAssistiveDrivingRef.current = assistiveDrivingEnabled;
-    if (!wasEnabled || assistiveDrivingEnabled || !isAuthenticated || !piOnline) return;
-    assistiveThreatRef.current = null;
-    if (controlMode === "keyboard") {
-      sendControl?.(lastKeyboardKeysRef.current);
-      return;
-    }
-    sendControl?.({ drive: lastDriveRef.current });
-  }, [assistiveDrivingEnabled, isAuthenticated, piOnline, controlMode, sendControl]);
-
-  useEffect(() => {
-    if (!assistiveDrivingEnabled || !isAuthenticated || !piOnline) return undefined;
-    const holdTimer = setInterval(() => {
-      const threat = assistiveThreatRef.current;
-      if (!threat) return;
-      if (controlMode === "keyboard") {
-        const keys = lastKeyboardKeysRef.current;
-        if (keyboardNeedsAssistFilter(keys, threat)) {
-          sendControl?.(applyAssistiveControl(keys, threat));
-        }
-        return;
-      }
-      const d = lastDriveRef.current;
-      if (driveNeedsAssistFilter(d, threat)) {
-        sendControl?.(applyAssistiveControl({ drive: d }, threat));
-      }
-    }, ASSISTIVE_BRAKE_INTERVAL_MS);
-    return () => clearInterval(holdTimer);
-  }, [assistiveDrivingEnabled, isAuthenticated, piOnline, sendControl, controlMode]);
+  const driveAssistBeforeNavRef = useRef(null);
 
   useEffect(() => {
     setIsPowered(piOnline);
@@ -399,9 +426,11 @@ export default function App() {
   }, [actionToast]);
 
   const sendControlNow = (payload) => {
-    const outbound = withAssistiveBrake(payload);
+    if (navigationEnabled && isManualDrivePayload(payload)) {
+      return Promise.resolve();
+    }
     if (piOnline && sendControl) {
-      sendControl(outbound);
+      sendControl(payload);
       return Promise.resolve();
     }
     const startupGraceActive = Date.now() - mountedAtRef.current < 15000;
@@ -598,9 +627,64 @@ export default function App() {
     setActionError(null);
     try {
       await apiPostJson(`${PI_SYSTEM_ENDPOINT}/quiet-mode`, { enabled });
-      showActionToast(`Quiet mode ${enabled ? "enabled" : "disabled"}`);
+      showActionToast(`Drive mode: ${enabled ? "ECO" : "Sport"}`);
     } catch (err) {
       setActionError(err.message ?? "Drive mode update failed");
+    }
+  };
+
+  const setDriveAssist = async (enabled) => {
+    setActionError(null);
+    const previousEnabled = driveAssistEnabled;
+    setDriveAssistEnabled(enabled);
+    try {
+      const info = await postDriveAssist(enabled);
+      const nextEnabled = readDriveAssistEnabled(info);
+      if (nextEnabled != null) setDriveAssistEnabled(nextEnabled);
+      showActionToast(`Drive assist ${enabled ? "enabled" : "disabled"}`);
+    } catch (err) {
+      setDriveAssistEnabled(previousEnabled);
+      setActionError(err.message ?? "Drive assist update failed");
+      if (DRIVE_ASSIST_DEBUG) {
+        console.log("[drive-assist] toggle failed", err?.message ?? err);
+      }
+    }
+  };
+
+  const setNavigation = async (enabled) => {
+    setActionError(null);
+    const previousEnabled = navigationEnabled;
+    setNavigationEnabled(enabled);
+    try {
+      if (enabled) {
+        driveAssistBeforeNavRef.current = driveAssistEnabled;
+        if (driveAssistEnabled) {
+          try {
+            await postDriveAssist(false);
+            setDriveAssistEnabled(false);
+          } catch {
+            // Relay also disables assist when roam turns on.
+          }
+        }
+      }
+      const status = await postNavigation(enabled);
+      const nextEnabled = readNavigationEnabled(status);
+      if (nextEnabled != null) setNavigationEnabled(nextEnabled);
+      if (enabled) {
+        void sendControlNow({ drive: { x: 0, y: 0 } });
+      } else if (driveAssistBeforeNavRef.current === true) {
+        try {
+          await postDriveAssist(true);
+          setDriveAssistEnabled(true);
+        } catch {
+          // User can re-enable assist manually.
+        }
+        driveAssistBeforeNavRef.current = null;
+      }
+      showActionToast(`Autonomous roam ${enabled ? "enabled" : "disabled"}`);
+    } catch (err) {
+      setNavigationEnabled(previousEnabled);
+      setActionError(err.message ?? "Navigation update failed");
     }
   };
 
@@ -778,10 +862,9 @@ export default function App() {
 
   return (
     <div
-      className={`viewport${isPointerLocked ? " viewport-mouse-look" : ""}${viewportGlowClass ? ` ${viewportGlowClass}` : ""}`}
+      className={`viewport${isPointerLocked ? " viewport-mouse-look" : ""}`}
       ref={viewportRef}
     >
-      <div className="status-glow-layer" aria-hidden="true" />
       <ActionErrorBanner message={actionError} onDismiss={clearError} />
       <ActionToast message={actionToast} />
       {SHOW_ASSISTANT_AGENT_UI && (
@@ -814,13 +897,13 @@ export default function App() {
       />
       <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
 
-      {isAuthenticated && isMobile && (
+      {isAuthenticated && isMobile && controlMode !== "immersive" && (
         <MobileTouchGimbalLayer
           onGimbal={handleGimbalUpdate}
         />
       )}
 
-      {isAuthenticated && isFullscreen && !isMobile && (
+      {isAuthenticated && isFullscreen && !isMobile && controlMode !== "immersive" && (
         <MouseGimbalLayer
           viewportRef={viewportRef}
           isFullscreen={isFullscreen}
@@ -831,8 +914,33 @@ export default function App() {
         />
       )}
 
+      {isAuthenticated && controlMode === "immersive" && (
+        <DualJoystickControls
+          immersive
+          onDrive={handleDriveUpdate}
+          onReset={handleCameraReset}
+          onLookDown={handleLookDown}
+          onTurnLeft={() => handleQuickTurn("L")}
+          onTurnRight={() => handleQuickTurn("R")}
+          onLaserToggle={handleLaserToggle}
+          laserOn={stats.laserOn}
+          onVoiceStart={startVoice}
+          onVoiceStop={stopVoice}
+          voiceSupported={voiceSupported}
+          voiceListening={voiceListening}
+          onHeadlightToggle={() => {
+            const nextState = stats.usbPower === "on" ? "off" : "on";
+            toggleLight(nextState);
+          }}
+          headlightOn={stats.usbPower === "on"}
+          onToggleBackupView={handleToggleBackupView}
+          backupViewEnabled={showBackupView}
+          onTreat={handleFeederTreat}
+        />
+      )}
+
       {isAuthenticated && (
-        <div className="hud-overlay">
+        <div className={`hud-overlay${controlMode === "immersive" ? " hud-overlay--immersive" : ""}`}>
           <HudHeader
             wifiSignal={stats?.wifiSignal}
             distanceMeters={relayDistanceMeters}
@@ -842,8 +950,16 @@ export default function App() {
             isCapturing={isCapturing}
             focusMode={focusMode}
             quietMode={stats?.quietMode}
+            driveAssistEnabled={driveAssistEnabled}
+            driveAssistUpdate={driveAssistHudUpdate}
+            navigationEnabled={navigationEnabled}
             powerSavingEnabled={powerSavingEnabled}
+            isCharging={effectiveIsCharging}
+            isLowBattery={isLowBattery}
+            lowBatteryIndicatorArmed={lowBatteryGlowArmed}
             onQuietModeChange={setQuietMode}
+            onDriveAssistChange={setDriveAssist}
+            onNavigationChange={setNavigation}
             onPowerSavingChange={setPowerSaving}
             onNVToggle={handleNVToggle}
             onResChange={handleResChange}
@@ -853,17 +969,28 @@ export default function App() {
             onControlModeChange={setControlMode}
             lidarMinimapEnabled={showLidarMinimap}
             onLidarMinimapChange={setShowLidarMinimap}
-            assistiveDrivingEnabled={assistiveDrivingEnabled}
-            onAssistiveDrivingChange={setAssistiveDrivingEnabled}
+            metricsPanelEnabled={showMetricsPanel}
+            onMetricsPanelChange={setShowMetricsPanel}
           />
+
+          {showLidarMinimap && (
+            <div className="lidar-minimap-float">
+              <LidarMinimap
+                scan={lidarScan}
+                isLive={lidarLive}
+                error={lidarError}
+                slamMap={slamMap}
+                slamLive={slamLive}
+                slamError={slamError}
+                pan={displayStats.pan}
+              />
+            </div>
+          )}
 
           <HudFooter
             isMobile={isMobile}
             controlMode={controlMode}
-            showLidarMinimap={showLidarMinimap}
-            lidarScan={lidarScan}
-            lidarLive={lidarLive}
-            lidarError={lidarError}
+            metricsPanelEnabled={showMetricsPanel}
             stats={displayStats}
             batteryPct={batteryPct}
             isCharging={effectiveIsCharging}
@@ -929,8 +1056,16 @@ function HudHeader({
   isCapturing,
   focusMode,
   quietMode,
+  driveAssistEnabled,
+  driveAssistUpdate,
+  navigationEnabled,
   powerSavingEnabled,
+  isCharging,
+  isLowBattery,
+  lowBatteryIndicatorArmed,
   onQuietModeChange,
+  onDriveAssistChange,
+  onNavigationChange,
   onPowerSavingChange,
   onNVToggle,
   onResChange,
@@ -940,8 +1075,8 @@ function HudHeader({
   onControlModeChange,
   lidarMinimapEnabled,
   onLidarMinimapChange,
-  assistiveDrivingEnabled,
-  onAssistiveDrivingChange,
+  metricsPanelEnabled,
+  onMetricsPanelChange,
 }) {
   const distanceLabel = formatRoverDistance(distanceMeters);
 
@@ -961,6 +1096,18 @@ function HudHeader({
         </div>
         {wifiSignal && <WifiSignal dbm={wifiSignal} />}
       </div>
+      <div className="hud-header-center">
+        <HudIndicatorStrip
+          driveAssistEnabled={driveAssistEnabled}
+          driveAssistUpdate={driveAssistUpdate}
+          powerSavingEnabled={powerSavingEnabled}
+          navigationEnabled={navigationEnabled}
+          quietMode={quietMode}
+          isCharging={isCharging}
+          isLowBattery={isLowBattery}
+          lowBatteryIndicatorArmed={lowBatteryIndicatorArmed}
+        />
+      </div>
       <div className="glass-card hud-header-actions">
         <SystemControls
           isPowered={isPowered}
@@ -968,8 +1115,12 @@ function HudHeader({
           resMode={resMode}
           isCapturing={isCapturing}
           quietMode={quietMode}
+          driveAssistEnabled={driveAssistEnabled}
+          navigationEnabled={navigationEnabled}
           powerSavingEnabled={powerSavingEnabled}
           onQuietModeChange={onQuietModeChange}
+          onDriveAssistChange={onDriveAssistChange}
+          onNavigationChange={onNavigationChange}
           onPowerSavingChange={onPowerSavingChange}
           onNVToggle={onNVToggle}
           onResChange={onResChange}
@@ -980,8 +1131,8 @@ function HudHeader({
           onControlModeChange={onControlModeChange}
           lidarMinimapEnabled={lidarMinimapEnabled}
           onLidarMinimapChange={onLidarMinimapChange}
-          assistiveDrivingEnabled={assistiveDrivingEnabled}
-          onAssistiveDrivingChange={onAssistiveDrivingChange}
+          metricsPanelEnabled={metricsPanelEnabled}
+          onMetricsPanelChange={onMetricsPanelChange}
         />
         <FullscreenButton />
       </div>
@@ -992,10 +1143,7 @@ function HudHeader({
 function HudFooter({
   isMobile,
   controlMode,
-  showLidarMinimap,
-  lidarScan,
-  lidarLive,
-  lidarError,
+  metricsPanelEnabled = true,
   stats,
   batteryPct,
   isCharging,
@@ -1042,7 +1190,7 @@ function HudFooter({
     onTreat: onFeederTreat,
   };
 
-  const schematic = (
+  const schematic = metricsPanelEnabled ? (
     <RoverSchematic
       pan={stats.pan}
       battery={batteryPct}
@@ -1053,50 +1201,43 @@ function HudFooter({
       isCharging={isCharging}
       ambientTempC={ambientTemperatureC}
     />
-  );
+  ) : null;
 
-  const lidarPanel =
-    showLidarMinimap && controlMode === "keyboard" ? (
-      <LidarMinimap
-        scan={lidarScan}
-        isLive={lidarLive}
-        error={lidarError}
-        pan={stats.pan}
-      />
-    ) : null;
+  const joystickCenter = metricsPanelEnabled ? schematic : null;
 
   const renderControlCluster = () => (
-    <div className="control-cluster-with-lidar">
-      <ControlCluster
-        onDrive={onDrive}
-        usbPower={stats.usbPower}
-        laserOn={laserOn}
-        onVoiceStart={onVoiceStart}
-        onVoiceStop={onVoiceStop}
-        voiceSupported={voiceSupported}
-        voiceListening={voiceListening}
-        onLightToggle={() => {
-          const nextState = stats.usbPower === "on" ? "off" : "on";
-          onToggleLight(nextState);
-        }}
-        onLaserToggle={onLaserToggle}
-        onCapture={onCapture}
-        isCapturing={isCapturing}
-        onReset={onResetCamera}
-        onToggleBackupView={onToggleBackupView}
-        backupViewEnabled={backupViewEnabled}
-        onTreat={onFeederTreat}
-      />
-      {lidarPanel}
-    </div>
+    <ControlCluster
+      onDrive={onDrive}
+      usbPower={stats.usbPower}
+      laserOn={laserOn}
+      onVoiceStart={onVoiceStart}
+      onVoiceStop={onVoiceStop}
+      voiceSupported={voiceSupported}
+      voiceListening={voiceListening}
+      onLightToggle={() => {
+        const nextState = stats.usbPower === "on" ? "off" : "on";
+        onToggleLight(nextState);
+      }}
+      onLaserToggle={onLaserToggle}
+      onCapture={onCapture}
+      isCapturing={isCapturing}
+      onReset={onResetCamera}
+      onToggleBackupView={onToggleBackupView}
+      backupViewEnabled={backupViewEnabled}
+      onTreat={onFeederTreat}
+    />
   );
+
+  if (controlMode === "immersive") {
+    return null;
+  }
 
   return (
     <div className="hud-footer">
       {!isMobile && controlMode === "keyboard" && schematic}
 
       {isMobile && controlMode === "joystick" && (
-        <DualJoystickControls {...joystickProps}>{schematic}</DualJoystickControls>
+        <DualJoystickControls {...joystickProps}>{joystickCenter}</DualJoystickControls>
       )}
 
       {isMobile && controlMode === "keyboard" && schematic}
@@ -1106,9 +1247,7 @@ function HudFooter({
           <>
             {!isMobile && controlMode === "keyboard" && renderControlCluster()}
             {!isMobile && controlMode === "joystick" && (
-              <DualJoystickControls {...joystickProps}>
-                {schematic}
-              </DualJoystickControls>
+              <DualJoystickControls {...joystickProps}>{joystickCenter}</DualJoystickControls>
             )}
 
             {isMobile && controlMode === "keyboard" && renderControlCluster()}

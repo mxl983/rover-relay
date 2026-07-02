@@ -1,11 +1,9 @@
-import { remapReportedBatteryPctRounded } from "./batteryPctScale.js";
-
 const V_MAX = 12.3;
 const V_MIN = 9.0;
 
 /**
- * Map pack voltage (V) to 0–100% for 3S-style range. Returns a number or null.
- * Not used for telemetry batching — only for realtime WebSocket health.
+ * Map pack voltage (V) to 0–100% using a 9.0V (empty) → 12.3V (full) range.
+ * Returns a number or null. Used for realtime WebSocket health display.
  */
 export function getBatteryPercentage(voltage) {
   if (voltage === null || voltage === undefined || voltage === "") return null;
@@ -14,6 +12,5 @@ export function getBatteryPercentage(voltage) {
   let percentage = ((v - V_MIN) / (V_MAX - V_MIN)) * 100;
   if (percentage > 100) percentage = 100;
   if (percentage < 0) percentage = 0;
-  const reported = Math.round(percentage * 10) / 10;
-  return remapReportedBatteryPctRounded(reported);
+  return Math.round(percentage * 10) / 10;
 }

@@ -16,9 +16,12 @@ COPY ros2-lidar/scan_monitor.py /opt/ros2-lidar/scan_monitor.py
 COPY ros2-lidar/scan_viewer.py /opt/ros2-lidar/scan_viewer.py
 COPY ros2-lidar/lidar_stabilizer.py /opt/ros2-lidar/lidar_stabilizer.py
 COPY ros2-lidar/scan_pipeline.py /opt/ros2-lidar/scan_pipeline.py
+COPY ros2-lidar/slam_mapper.py /opt/ros2-lidar/slam_mapper.py
+COPY ros2-lidar/scan_slam_pipeline.py /opt/ros2-lidar/scan_slam_pipeline.py
 
 RUN chmod +x /entrypoint.sh /opt/ros2-lidar/scan_monitor.py /opt/ros2-lidar/scan_viewer.py \
-    /opt/ros2-lidar/lidar_stabilizer.py /opt/ros2-lidar/scan_pipeline.py
+    /opt/ros2-lidar/lidar_stabilizer.py /opt/ros2-lidar/scan_pipeline.py \
+    /opt/ros2-lidar/slam_mapper.py /opt/ros2-lidar/scan_slam_pipeline.py
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["monitor"]

@@ -174,6 +174,28 @@ const config = {
     scanUrl: process.env.LIDAR_SCAN_UPSTREAM_URL || "",
     /** LiDAR WebSocket push interval for dashboard clients (ms). */
     wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 50),
+    /** Persistent SLAM occupancy grid written by ros2-lidar slam_mapper. */
+    slamMapFilePath: process.env.SLAM_MAP_FILE_PATH || "/app/lidar/slam_map.json",
+    /** Fast SLAM view for dashboard (pose + map_points), updated every scan. */
+    slamLiveFilePath: process.env.SLAM_LIVE_FILE_PATH || "/app/lidar/slam_live.json",
+    /** SLAM map WebSocket push interval (ms). */
+    slamWsPushMs: parseNumber(process.env.SLAM_WS_PUSH_MS, 500),
+  },
+  navigation: {
+    statusFilePath:
+      process.env.NAV_STATUS_FILE_PATH || "/app/lidar/navigation_status.json",
+    modeFilePath:
+      process.env.NAV_MODE_FILE_PATH || "/app/lidar/navigation_mode.json",
+    piWebSocketUrl:
+      process.env.NAV_PI_WS_URL ||
+      (process.env.NAV_PI_BASE_URL
+        ? process.env.NAV_PI_BASE_URL.replace(/^http/, "ws")
+        : "wss://rover.tail9d0237.ts.net:3000"),
+    piWsTlsInsecure: parseBoolean(process.env.NAV_PI_WS_TLS_INSECURE, true),
+    driveBaseUrl:
+      process.env.NAV_DRIVE_BASE_URL ||
+      process.env.RELAY_PUBLIC_BASE_URL ||
+      "https://jjcloud.tail9d0237.ts.net",
   },
   controlDashboard: {
     /** If true, relay proxies the UI under basePath (e.g. /mangomate). */

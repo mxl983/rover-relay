@@ -15,11 +15,79 @@ import {
   Zap,
   Keyboard,
   Gamepad2,
-  PawPrint,
   BarChart3,
   Radar,
   ShieldAlert,
+  Route,
+  Glasses,
+  Gauge,
 } from "lucide-react";
+
+const CONTROL_MODE_OPTIONS = [
+  { value: "keyboard", label: "Keyboard", icon: <Keyboard size={10} strokeWidth={2.25} /> },
+  { value: "joystick", label: "Joystick", icon: <Gamepad2 size={10} strokeWidth={2.25} /> },
+  { value: "immersive", label: "Immersive", icon: <Glasses size={10} strokeWidth={2.25} /> },
+];
+
+const SEGMENT_TOGGLE_WIDTH = "88px";
+
+function SegmentedToggle({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+  uppercase = true,
+  iconMode = false,
+}) {
+  return (
+    <div
+      style={styles.segmentGroup}
+      role="group"
+      aria-label={ariaLabel}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            style={{
+              ...styles.segmentBtn,
+              ...(uppercase ? {} : styles.segmentBtnMixedCase),
+              ...(iconMode ? styles.segmentBtnIcon : {}),
+              ...(active ? styles.segmentBtnActive : {}),
+            }}
+            aria-pressed={active}
+            aria-label={option.label}
+            title={option.label}
+            onClick={() => {
+              if (!active) onChange(option.value);
+            }}
+          >
+            {iconMode && option.icon ? option.icon : option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SettingsToggleRow({ icon, label, children, title }) {
+  return (
+    <DropdownMenu.Item
+      style={styles.toggleRow}
+      onSelect={(event) => event.preventDefault()}
+      title={title}
+    >
+      <span style={styles.toggleRowMain}>
+        {icon}
+        <span>{label}</span>
+      </span>
+      {children}
+    </DropdownMenu.Item>
+  );
+}
 
 export const SystemControls = ({
   isPowered,
@@ -28,8 +96,12 @@ export const SystemControls = ({
   focusMode,
   isCapturing,
   quietMode,
+  driveAssistEnabled,
+  navigationEnabled,
   powerSavingEnabled,
   onQuietModeChange,
+  onDriveAssistChange,
+  onNavigationChange,
   onPowerSavingChange,
   onNVToggle,
   onResChange,
@@ -37,10 +109,10 @@ export const SystemControls = ({
   onAction,
   controlMode,
   onControlModeChange,
-  lidarMinimapEnabled,
+  lidarMinimapEnabled = false,
   onLidarMinimapChange,
-  assistiveDrivingEnabled,
-  onAssistiveDrivingChange,
+  metricsPanelEnabled,
+  onMetricsPanelChange,
 }) => {
   if (!isPowered) return null;
 
@@ -165,102 +237,122 @@ export const SystemControls = ({
 
           <DropdownMenu.Separator style={styles.separator} />
 
-          {/* Quiet (default) vs boost drive — does not affect speaker */}
-          <DropdownMenu.Item
-            style={styles.menuItem}
-            onSelect={() => onQuietModeChange && onQuietModeChange(!quietMode)}
-            title={
-              quietMode
-                ? "Switch to boost: full motor speed"
-                : "Switch to quiet: slow driving (default)"
-            }
-          >
-            {quietMode ? <Footprints size={14} /> : <Zap size={14} />}
-            <span>
-              Drive mode is {quietMode ? "Quiet" : "Boost"}
-            </span>
-          </DropdownMenu.Item>
-
-          <DropdownMenu.Separator style={styles.separator} />
-
-          <DropdownMenu.Item
-            style={styles.menuItem}
-            onSelect={() =>
-              onPowerSavingChange && onPowerSavingChange(!powerSavingEnabled)
-            }
+          <SettingsToggleRow
+            icon={<Power size={12} />}
+            label="PSM"
             title={
               powerSavingEnabled
-                ? "Power saving currently on; click to disable idle shutdown for this session."
-                : "Power saving currently off; click to re-enable idle shutdown."
+                ? "Power saving on; disables idle shutdown when off."
+                : "Power saving off; re-enables idle shutdown when on."
             }
           >
-            <Power size={14} />
-            <span>
-              Power saving is {powerSavingEnabled ? "ON" : "OFF"}
-            </span>
-          </DropdownMenu.Item>
+            <SegmentedToggle
+              ariaLabel="Power saving"
+              uppercase={false}
+              value={powerSavingEnabled ? "on" : "off"}
+              options={[
+                { label: "Off", value: "off" },
+                { label: "On", value: "on" },
+              ]}
+              onChange={(mode) => onPowerSavingChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
 
           <DropdownMenu.Separator style={styles.separator} />
 
           <DropdownMenu.Label style={styles.menuLabel}>
-            Drive input
+            Driving
           </DropdownMenu.Label>
-          <DropdownMenu.RadioGroup
-            value={controlMode}
-            onValueChange={onControlModeChange}
+
+          <SettingsToggleRow
+            icon={
+              controlMode === "immersive" ? (
+                <Glasses size={12} />
+              ) : controlMode === "joystick" ? (
+                <Gamepad2 size={12} />
+              ) : (
+                <Keyboard size={12} />
+              )
+            }
+            label="Control"
           >
-            <DropdownMenu.RadioItem
-              style={styles.menuItem}
-              value="keyboard"
-            >
-              <Keyboard size={14} />
-              <span>Keyboard</span>
-              <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
-                <Check size={12} color="#00f2ff" />
-              </DropdownMenu.ItemIndicator>
-            </DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem
-              style={styles.menuItem}
-              value="joystick"
-            >
-              <Gamepad2 size={14} />
-              <span>Joystick</span>
-              <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
-                <Check size={12} color="#00f2ff" />
-              </DropdownMenu.ItemIndicator>
-            </DropdownMenu.RadioItem>
-          </DropdownMenu.RadioGroup>
+            <SegmentedToggle
+              ariaLabel="Control mode"
+              iconMode
+              value={controlMode}
+              options={CONTROL_MODE_OPTIONS}
+              onChange={onControlModeChange}
+            />
+          </SettingsToggleRow>
 
-          <DropdownMenu.Separator style={styles.separator} />
-
-          <DropdownMenu.Item
-            style={styles.menuItem}
-            onSelect={() => onAction("meow")}
+          <SettingsToggleRow
+            icon={quietMode ? <Footprints size={12} /> : <Zap size={12} />}
+            label="Mode"
           >
-            <PawPrint size={14} /> <span>Meow</span>
-          </DropdownMenu.Item>
+            <SegmentedToggle
+              ariaLabel="Drive mode"
+              value={quietMode ? "eco" : "sport"}
+              options={[
+                { label: "ECO", value: "eco" },
+                { label: "Sport", value: "sport" },
+              ]}
+              onChange={(mode) => onQuietModeChange?.(mode === "eco")}
+            />
+          </SettingsToggleRow>
 
-          <DropdownMenu.Separator style={styles.separator} />
-
-          <DropdownMenu.Item
-            style={styles.menuItem}
-            onSelect={() => onLidarMinimapChange?.(!lidarMinimapEnabled)}
-            title="Toggle live LiDAR minimap overlay"
+          <SettingsToggleRow
+            icon={<ShieldAlert size={12} />}
+            label="Assist"
           >
-            <Radar size={14} />
-            <span>LiDAR minimap is {lidarMinimapEnabled ? "ON" : "OFF"}</span>
-          </DropdownMenu.Item>
+            <SegmentedToggle
+              ariaLabel="Drive assist"
+              value={driveAssistEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onDriveAssistChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
 
-          <DropdownMenu.Item
-            style={styles.menuItem}
-            onSelect={() => onAssistiveDrivingChange?.(!assistiveDrivingEnabled)}
-            title="Auto-stop when LiDAR detects obstacles within 15 cm of the rover body"
+          <SettingsToggleRow icon={<Route size={12} />} label="Roam">
+            <SegmentedToggle
+              ariaLabel="Autonomous roam"
+              value={navigationEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onNavigationChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow
+            icon={<Radar size={12} />}
+            label="Map"
           >
-            <ShieldAlert size={14} />
-            <span>
-              Assistive driving is {assistiveDrivingEnabled ? "ON" : "OFF"}
-            </span>
-          </DropdownMenu.Item>
+            <SegmentedToggle
+              ariaLabel="LiDAR map"
+              value={lidarMinimapEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onLidarMinimapChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow icon={<Gauge size={12} />} label="Metrics">
+            <SegmentedToggle
+              ariaLabel="Metrics panel"
+              value={metricsPanelEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onMetricsPanelChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
 
           <DropdownMenu.Separator style={styles.separator} />
 
@@ -306,7 +398,7 @@ const styles = {
     padding: "4px",
   },
   menuContent: {
-    minWidth: "180px",
+    minWidth: "220px",
     backgroundColor: "rgba(10, 10, 10, 0.95)",
     backdropFilter: "blur(12px)",
     borderRadius: "6px",
@@ -326,6 +418,67 @@ const styles = {
     cursor: "pointer",
     outline: "none",
     transition: "background 0.2s",
+  },
+  toggleRow: {
+    fontSize: "11px",
+    color: "#eee",
+    borderRadius: "3px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+    padding: "4px 8px",
+    minHeight: "unset",
+    cursor: "default",
+    outline: "none",
+  },
+  toggleRowMain: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    minWidth: 0,
+    flex: "1 1 auto",
+  },
+  segmentGroup: {
+    display: "inline-flex",
+    flexShrink: 0,
+    width: SEGMENT_TOGGLE_WIDTH,
+    borderRadius: "3px",
+    border: "1px solid rgba(0, 242, 255, 0.2)",
+    overflow: "hidden",
+    background: "rgba(255, 255, 255, 0.04)",
+    height: "18px",
+  },
+  segmentBtn: {
+    border: "none",
+    background: "transparent",
+    color: "rgba(238, 238, 238, 0.72)",
+    fontSize: "8px",
+    fontWeight: 600,
+    letterSpacing: "0.03em",
+    flex: "1 1 0",
+    minWidth: 0,
+    padding: "0 4px",
+    height: "18px",
+    cursor: "pointer",
+    lineHeight: 1,
+    textTransform: "uppercase",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  segmentBtnActive: {
+    background: "rgba(0, 242, 255, 0.18)",
+    color: "#00f2ff",
+  },
+  segmentBtnMixedCase: {
+    fontSize: "7px",
+    letterSpacing: "0",
+    textTransform: "none",
+    padding: "0 4px",
+  },
+  segmentBtnIcon: {
+    padding: 0,
   },
   menuLabel: {
     paddingLeft: "10px",

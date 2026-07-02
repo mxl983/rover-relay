@@ -48,4 +48,39 @@ describe("usePiWebSocket", () => {
     });
     expect(result.current.isOnline).toBe(true);
   });
+
+  it("handles DRIVE_ASSIST_UPDATE collision and clear messages", async () => {
+    const { result } = renderHook(() => usePiWebSocket());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+
+    act(() => {
+      handlers.onmessage?.({
+        data: JSON.stringify({
+          type: "DRIVE_ASSIST_UPDATE",
+          data: {
+            active: true,
+            assistUiState: "warning",
+            obstacle: { closest: { rangeM: 0.18 } },
+          },
+        }),
+      });
+    });
+    expect(result.current.driveAssistUpdate).toEqual({
+      active: true,
+      assistUiState: "warning",
+      obstacle: { closest: { rangeM: 0.18 } },
+    });
+
+    act(() => {
+      handlers.onmessage?.({
+        data: JSON.stringify({
+          type: "DRIVE_ASSIST_UPDATE",
+          data: { active: false, assistUiState: "clear" },
+        }),
+      });
+    });
+    expect(result.current.driveAssistUpdate).toBeNull();
+  });
 });

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { PI_WEBSOCKET } from "../config";
+import { PI_WEBSOCKET, DRIVE_ASSIST_DEBUG } from "../config";
 import { getBatteryPercentage } from "../utils/batteryFromVoltage.js";
 import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
+import { logDriveAssistInfoDetail } from "../utils/driveAssistApi.js";
 
 const PING_INTERVAL_MS = 3000;
 const HEARTBEAT_STALE_MS = 5000;
@@ -11,6 +12,7 @@ const RECONNECT_MAX_MS = 8000;
 export function usePiWebSocket() {
   const socketRef = useRef(null);
   const [stats, setStats] = useState({});
+  const [driveAssistUpdate, setDriveAssistUpdate] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [hasEverConnected, setHasEverConnected] = useState(false);
   const lastPingTime = useRef(0);
@@ -75,8 +77,23 @@ export function usePiWebSocket() {
               ...prev,
               latency: Date.now() - lastPingTime.current,
             }));
-          } else {
-            const raw = data?.data && typeof data.data === "object" ? { ...data.data } : {};
+            return;
+          }
+
+          if (data.type === "DRIVE_ASSIST_UPDATE") {
+            const payload = data?.data && typeof data.data === "object" ? data.data : null;
+            if (payload?.active === false) {
+              setDriveAssistUpdate(null);
+            } else if (payload?.active === true) {
+              setDriveAssistUpdate(payload);
+            }
+            if (DRIVE_ASSIST_DEBUG && payload) {
+              logDriveAssistInfoDetail("WS DRIVE_ASSIST_UPDATE", payload);
+            }
+            return;
+          }
+
+          const raw = data?.data && typeof data.data === "object" ? { ...data.data } : {};
             if (Number.isFinite(Number(raw.voltage))) {
               const pct = getBatteryPercentage(Number(raw.voltage));
               if (pct != null) {
@@ -87,7 +104,6 @@ export function usePiWebSocket() {
               if (mapped != null) raw.battery = mapped;
             }
             setStats((prev) => ({ ...prev, ...raw }));
-          }
         } catch {
           // ignore parse errors
         }
@@ -95,6 +111,7 @@ export function usePiWebSocket() {
 
       socket.onclose = () => {
         if (isUnmounted) return;
+        setDriveAssistUpdate(null);
         setIsOnline(false);
         const attempt = reconnectAttemptRef.current;
         const base = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
@@ -145,5 +162,5 @@ export function usePiWebSocket() {
     socketRef.current.send(JSON.stringify(msg));
   };
 
-  return { stats, isOnline, hasEverConnected, socketRef, sendControl };
+  return { stats, driveAssistUpdate, isOnline, hasEverConnected, socketRef, sendControl };
 }

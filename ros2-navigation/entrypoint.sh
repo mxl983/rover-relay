@@ -4,7 +4,7 @@ set -eo pipefail
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}"
-LIDAR_TOPIC="${LIDAR_TOPIC:-/scan}"
+NAV_SCAN_TOPIC="${NAV_SCAN_TOPIC:-/scan}"
 DDS_LOCAL_INTERFACE="${DDS_LOCAL_INTERFACE:-lo}"
 DDS_TAILSCALE_INTERFACE="${DDS_TAILSCALE_INTERFACE:-tailscale0}"
 SERVER_DDS_EXTERNAL_ADDRESS="${SERVER_DDS_EXTERNAL_ADDRESS:-100.96.16.121}"
@@ -64,54 +64,17 @@ export ROS_DOMAIN_ID
 export RMW_IMPLEMENTATION
 export ROS_LOCALHOST_ONLY
 export CYCLONEDDS_URI="file://${CYCLONEDDS_CONFIG_PATH}"
-export LIDAR_TOPIC
+export NAV_SCAN_TOPIC
 
 source /opt/ros/humble/setup.bash
 
-echo "ros2-lidar: domain=${ROS_DOMAIN_ID} rmw=${RMW_IMPLEMENTATION} topic=${LIDAR_TOPIC}"
-echo "ros2-lidar: interfaces=${DDS_LOCAL_INTERFACE}(1),${DDS_TAILSCALE_INTERFACE}(2) external_address=${SERVER_DDS_EXTERNAL_ADDRESS}"
-echo "ros2-lidar: rover_peer=${ROVER_DDS_PEER} (${ROVER_DDS_PEER_RESOLVED}) local_peer=${LOCAL_DDS_PEER}"
-echo "ros2-lidar: cyclonedds=${CYCLONEDDS_URI}"
+echo "ros2-navigation: domain=${ROS_DOMAIN_ID} topic=${NAV_SCAN_TOPIC} pi=${NAV_PI_BASE_URL:-unset}"
 
-case "${1:-viewer}" in
-  viewer|viewer-slam)
-    export LIDAR_VIEW_TOPIC="${LIDAR_TOPIC:-/scan}"
-    exec python3 /opt/ros2-lidar/scan_slam_pipeline.py
+case "${1:-run}" in
+  test)
+    exec python3 -m unittest discover -s /opt/ros2-navigation -p 'test_*.py' -v
     ;;
-  viewer-only)
-    export LIDAR_VIEW_TOPIC="${LIDAR_TOPIC:-/scan}"
-    exec python3 /opt/ros2-lidar/scan_viewer.py
-    ;;
-  viewer-stable)
-    exec python3 /opt/ros2-lidar/scan_pipeline.py
-    ;;
-  slam)
-    exec python3 /opt/ros2-lidar/slam_mapper.py
-    ;;
-  stabilizer)
-    exec python3 /opt/ros2-lidar/lidar_stabilizer.py
-    ;;
-  monitor)
-    exec python3 /opt/ros2-lidar/scan_monitor.py
-    ;;
-  echo)
-    shift
-    exec ros2 topic echo "${LIDAR_TOPIC}" "$@"
-    ;;
-  hz)
-    exec ros2 topic hz "${LIDAR_TOPIC}"
-    ;;
-  list)
-    exec ros2 topic list
-    ;;
-  nodes)
-    exec ros2 node list
-    ;;
-  bash)
-    shift
-    exec bash "$@"
-    ;;
-  *)
-    exec "$@"
+  run|*)
+    exec python3 /opt/ros2-navigation/navigation_node.py
     ;;
 esac

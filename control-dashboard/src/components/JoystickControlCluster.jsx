@@ -160,6 +160,7 @@ export const DualJoystickControls = ({
   onToggleBackupView,
   backupViewEnabled,
   onTreat,
+  immersive = false,
   children,
 }) => {
   const leftZoneRef = useRef(null);
@@ -311,6 +312,8 @@ export const DualJoystickControls = ({
   };
 
   useEffect(() => {
+    if (immersive) return undefined;
+
     const leftEl = leftZoneRef.current;
     const rightEl = rightZoneRef.current;
     if (!leftEl || !rightEl) return;
@@ -405,7 +408,27 @@ export const DualJoystickControls = ({
       driveManager.destroy();
       lookManager.destroy();
     };
-  }, []);
+  }, [immersive]);
+
+  useEffect(() => {
+    if (!immersive) return undefined;
+
+    const handleSafetyStop = () => {
+      sendAllStopWithRetries();
+    };
+    const onVisibility = () => {
+      if (document.hidden || document.visibilityState !== "visible") {
+        handleSafetyStop();
+      }
+    };
+    window.addEventListener("blur", handleSafetyStop);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", handleSafetyStop);
+      document.removeEventListener("visibilitychange", onVisibility);
+      handleSafetyStop();
+    };
+  }, [immersive]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.getGamepads) return undefined;
@@ -477,6 +500,10 @@ export const DualJoystickControls = ({
       }
     };
   }, []);
+
+  if (immersive) {
+    return null;
+  }
 
   return (
     <div
@@ -873,5 +900,6 @@ DualJoystickControls.propTypes = {
   onToggleBackupView: PropTypes.func,
   backupViewEnabled: PropTypes.bool,
   onTreat: PropTypes.func,
+  immersive: PropTypes.bool,
   children: PropTypes.node,
 };

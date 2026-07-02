@@ -8,17 +8,8 @@ export const LIDAR_FORWARD_DEG = 90;
 export const LIDAR_VIEW_CONE_DEG = 60;
 /** Points within this distance (m) of the rover body get yellow→red coloring. */
 export const LIDAR_BODY_PROXIMITY_M = 0.3;
-/** Assistive driving: auto-stop when any point is closer than this (m). */
-export const LIDAR_ASSIST_STOP_M = 0.2;
-/** Side threats only matter when a point is this close to / on the body (m). */
-export const LIDAR_BODY_HIT_M = 0.01;
 /** Scan-frame bearing for driving forward (0° = +x). */
 export const LIDAR_DRIVE_FORWARD_DEG = 0;
-/** Assistive driving zone boundaries (data bearing, degrees). */
-export const LIDAR_ASSIST_BACKUP_RANGE_START_DEG = 150;
-export const LIDAR_ASSIST_BACKUP_RANGE_END_DEG = 30;
-export const LIDAR_ASSIST_FORWARD_RANGE_START_DEG = 210;
-export const LIDAR_ASSIST_FORWARD_RANGE_END_DEG = 330;
 export const ROVER_BODY_LENGTH_M = 0.305;
 export const ROVER_BODY_WIDTH_M = 0.26;
 
@@ -101,17 +92,11 @@ export function bearingToCanvasPx(cx, cy, angleDeg, radiusPx) {
 
 /**
  * Angles drawn on the minimap rim (data frame, same as point `a_deg`).
- * @returns {{ cardinal: number[]; assistBounds: number[]; minor: number[] }}
+ * @returns {{ cardinal: number[]; minor: number[] }}
  */
 export function lidarMinimapMarkedAnglesDeg() {
   return {
     cardinal: [0, 90, 180, 270],
-    assistBounds: [
-      LIDAR_ASSIST_BACKUP_RANGE_START_DEG,
-      LIDAR_ASSIST_BACKUP_RANGE_END_DEG,
-      LIDAR_ASSIST_FORWARD_RANGE_START_DEG,
-      LIDAR_ASSIST_FORWARD_RANGE_END_DEG,
-    ],
     minor: [60, 120, 240, 300],
   };
 }
@@ -167,37 +152,6 @@ export function isAngleInArc(angleDeg, centerDeg, spreadDeg) {
   let delta = Math.abs(n - c);
   if (delta > 180) delta = 360 - delta;
   return delta <= spreadDeg / 2;
-}
-
-/**
- * Whether a data bearing lies in [rangeStartDeg, rangeEndDeg], wrapping through 0° when start > end.
- * @param {number} angleDeg
- * @param {number} rangeStartDeg
- * @param {number} rangeEndDeg
- */
-export function isAngleInBearingRange(angleDeg, rangeStartDeg, rangeEndDeg) {
-  const n = normalizeDeg(angleDeg);
-  const start = normalizeDeg(rangeStartDeg);
-  const end = normalizeDeg(rangeEndDeg);
-  if (!Number.isFinite(n) || !Number.isFinite(start) || !Number.isFinite(end)) return false;
-  if (start <= end) return n >= start && n <= end;
-  return n >= start || n <= end;
-}
-
-/** Sector between the 30° and 150° boundary lines (left-side wedge). */
-export function isAngleInAssistBackupRange(angleDeg) {
-  const low = Math.min(LIDAR_ASSIST_BACKUP_RANGE_START_DEG, LIDAR_ASSIST_BACKUP_RANGE_END_DEG);
-  const high = Math.max(LIDAR_ASSIST_BACKUP_RANGE_START_DEG, LIDAR_ASSIST_BACKUP_RANGE_END_DEG);
-  return isAngleInBearingRange(angleDeg, low, high);
-}
-
-/** 210°–330°: forward only when close. */
-export function isAngleInAssistForwardRange(angleDeg) {
-  return isAngleInBearingRange(
-    angleDeg,
-    LIDAR_ASSIST_FORWARD_RANGE_START_DEG,
-    LIDAR_ASSIST_FORWARD_RANGE_END_DEG,
-  );
 }
 
 /**
@@ -298,40 +252,6 @@ export function minBodyProximityFromPoints(points, options = {}) {
     if (d < min) min = d;
   }
   return Number.isFinite(min) ? min : null;
-}
-
-/**
- * @param {Array<{ x?: number; y?: number; r?: number; a?: number; a_deg?: number }>} points
- * @param {{
- *   lengthM?: number;
- *   widthM?: number;
- *   displayArcDeg?: number;
- *   rearCenterDeg?: number;
- * }} [options]
- * @returns {{ distanceM: number; angleDeg: number }|null}
- */
-export function closestBodyThreatFromPoints(points, options = {}) {
-  const {
-    lengthM = ROVER_BODY_LENGTH_M,
-    widthM = ROVER_BODY_WIDTH_M,
-    displayArcDeg = 360,
-    rearCenterDeg = LIDAR_MINIMAP_REAR_CENTER_DEG,
-  } = options;
-  let best = null;
-  for (const point of points ?? []) {
-    const { lx, ly, range, angleDeg } = pointToLaserXY(point);
-    if (!Number.isFinite(range) || range <= 0) continue;
-    if (!Number.isFinite(angleDeg)) continue;
-    if (!isAngleInDisplayArc(angleDeg, displayArcDeg, rearCenterDeg)) continue;
-    const distanceM = Math.min(
-      distanceToRoverBodyM(lx, ly, lengthM, widthM),
-      range,
-    );
-    if (!best || distanceM < best.distanceM) {
-      best = { distanceM, angleDeg };
-    }
-  }
-  return best;
 }
 
 /**

@@ -50,8 +50,15 @@ services:
       CONTROL_DASHBOARD_PROXY_BASE_PATH: ${CONTROL_DASHBOARD_PROXY_BASE_PATH:-/mangomate}
       CONTROL_DASHBOARD_PROXY_TARGET: ${CONTROL_DASHBOARD_PROXY_TARGET:-http://control-dashboard:80}
       LIDAR_SCAN_FILE_PATH: ${LIDAR_SCAN_FILE_PATH:-/app/lidar/scan.json}
+      SLAM_MAP_FILE_PATH: ${SLAM_MAP_FILE_PATH:-/app/lidar/slam_map.json}
+      SLAM_LIVE_FILE_PATH: ${SLAM_LIVE_FILE_PATH:-/app/lidar/slam_live.json}
       LIDAR_SCAN_UPSTREAM_URL: ${LIDAR_SCAN_UPSTREAM_URL:-}
+      NAV_STATUS_FILE_PATH: ${NAV_STATUS_FILE_PATH:-/app/lidar/navigation_status.json}
+      NAV_MODE_FILE_PATH: ${NAV_MODE_FILE_PATH:-/app/lidar/navigation_mode.json}
+      NAV_PI_WS_URL: ${NAV_PI_WS_URL:-wss://rover.tail9d0237.ts.net:3000}
+      NAV_PI_WS_TLS_INSECURE: ${NAV_PI_WS_TLS_INSECURE:-true}
       LIDAR_WS_PUSH_MS: ${LIDAR_WS_PUSH_MS:-50}
+      SLAM_WS_PUSH_MS: ${SLAM_WS_PUSH_MS:-500}
     volumes:
       - relay-data:/app/data
       - lidar-data:/app/lidar
@@ -91,9 +98,47 @@ services:
       LIDAR_STABILIZER_BIN_DEG: ${LIDAR_STABILIZER_BIN_DEG:-2}
       LIDAR_STABILIZER_TARGET_FRAME: ${LIDAR_STABILIZER_TARGET_FRAME:-base_link}
       LIDAR_STABILIZER_LOG_INTERVAL_S: ${LIDAR_STABILIZER_LOG_INTERVAL_S:-2}
+      SLAM_MAP_FILE_PATH: ${SLAM_MAP_FILE_PATH:-/app/lidar/slam_map.json}
+      SLAM_LIVE_FILE_PATH: ${SLAM_LIVE_FILE_PATH:-/app/lidar/slam_live.json}
+      SLAM_SCAN_TOPIC: ${SLAM_SCAN_TOPIC:-/scan}
+      SLAM_RESOLUTION: ${SLAM_RESOLUTION:-0.08}
+      SLAM_GRID_SIZE_M: ${SLAM_GRID_SIZE_M:-48}
+      SLAM_SAVE_INTERVAL_S: ${SLAM_SAVE_INTERVAL_S:-3}
+      SLAM_PURGE_ON_START: ${SLAM_PURGE_ON_START:-false}
     volumes:
       - lidar-data:/app/lidar
-    command: ["viewer"]
+    command: ["viewer-only"]
+
+  ros2-navigation:
+    build:
+      context: .
+      dockerfile: ros2-navigation/Dockerfile
+    restart: always
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+      NAV_SCAN_TOPIC: ${NAV_SCAN_TOPIC:-/scan}
+      DDS_LOCAL_INTERFACE: ${DDS_LOCAL_INTERFACE:-lo}
+      DDS_TAILSCALE_INTERFACE: ${DDS_TAILSCALE_INTERFACE:-tailscale0}
+      SERVER_DDS_EXTERNAL_ADDRESS: ${SERVER_DDS_EXTERNAL_ADDRESS:-100.96.16.121}
+      ROVER_DDS_PEER: ${ROVER_DDS_PEER:-100.109.197.90}
+      LOCAL_DDS_PEER: ${LOCAL_DDS_PEER:-127.0.0.1}
+      NAV_PI_BASE_URL: ${NAV_PI_BASE_URL:-https://rover.tail9d0237.ts.net:3000}
+      NAV_PI_WS_URL: ${NAV_PI_WS_URL:-wss://rover.tail9d0237.ts.net:3000}
+      NAV_DRIVE_BASE_URL: ${NAV_DRIVE_BASE_URL:-https://jjcloud.tail9d0237.ts.net}
+      NAVIGATION_API_TOKEN: ${NAVIGATION_API_TOKEN:-}
+      NAV_STATUS_FILE_PATH: ${NAV_STATUS_FILE_PATH:-/app/lidar/navigation_status.json}
+      NAV_MODE_FILE_PATH: ${NAV_MODE_FILE_PATH:-/app/lidar/navigation_mode.json}
+      NAV_CONTROL_HZ: ${NAV_CONTROL_HZ:-10}
+      NAV_ROAM_LINEAR: ${NAV_ROAM_LINEAR:-0.48}
+      NAV_ESCAPE_LINEAR: ${NAV_ESCAPE_LINEAR:-0.38}
+      NAV_STOP_DISTANCE_M: ${NAV_STOP_DISTANCE_M:-0.28}
+      NAV_SSL_VERIFY: ${NAV_SSL_VERIFY:-false}
+    volumes:
+      - lidar-data:/app/lidar
+    command: ["run"]
 
   control-dashboard:
     build:

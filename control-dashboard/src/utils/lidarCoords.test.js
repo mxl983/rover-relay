@@ -61,7 +61,6 @@ describe("lidarCoords", () => {
   it("lists minimap rim angles in the data frame", () => {
     const marks = lidarMinimapMarkedAnglesDeg();
     expect(marks.cardinal).toEqual([0, 90, 180, 270]);
-    expect(marks.assistBounds).toEqual([150, 30, 210, 330]);
     expect(marks.minor).toEqual([60, 120, 240, 300]);
   });
 
