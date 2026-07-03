@@ -4,6 +4,7 @@ import {
   PI_WEBSOCKET,
   PI_CONTROL_ENDPOINT,
   getAllowedCaptureOrigin,
+  getRelayRoverHeartbeatWebSocketUrl,
   MQTT_HOST,
 } from "./config.js";
 
@@ -17,5 +18,14 @@ describe("config", () => {
 
   it("getAllowedCaptureOrigin matches control endpoint origin", () => {
     expect(getAllowedCaptureOrigin()).toBe("https://test.rover.local:3000");
+  });
+
+  it("relay rover WebSocket uses ROVER_STATE host and port", () => {
+    expect(getRelayRoverHeartbeatWebSocketUrl(false)).toBe(
+      "wss://relay.test:8787/ws/rover",
+    );
+    expect(getRelayRoverHeartbeatWebSocketUrl(true)).toBe(
+      "wss://relay.test:8787/ws/rover?backup=1",
+    );
   });
 });

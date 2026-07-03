@@ -9,7 +9,6 @@ import { apiFetch } from "../api/client";
 import { VideoLoadingPhysics } from "./VideoLoadingPhysics.jsx";
 
 export const VideoStream = ({
-  dockingData: _dockingData,
   onVideoReadyChange,
   controlChannelReady = false,
   backupStreamUrl = "",

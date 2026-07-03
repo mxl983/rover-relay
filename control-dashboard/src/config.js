@@ -20,7 +20,6 @@ export const VIDEO_STREAM_HOST = `https://${PI_SERVER_IP}:8889/cam/whep`;
 export const AUDIO_TALK_HOST = `https://${PI_SERVER_IP}:8889/talk/whip`;
 
 export const PI_CONTROL_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/control/drive`;
-export const PI_DOCKING_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/control/docking`;
 export const PI_SYSTEM_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/system`;
 export const PI_CAMERA_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/camera`;
 export const PI_VOICE_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/voice/interpret`;
@@ -42,6 +41,19 @@ export const BACKUP_STREAM_ENDPOINT =
 export const ROVER_STATE_ENDPOINT =
   import.meta.env.VITE_ROVER_STATE_URL ||
   "https://jjcloud.tail9d0237.ts.net:8787/api/rover/state";
+
+/** Relay HTTP origin (host + port) aligned with ROVER_STATE_ENDPOINT. */
+export function getRelayHttpOrigin() {
+  try {
+    return new URL(ROVER_STATE_ENDPOINT).origin;
+  } catch {
+    return RELAY_BASE_URL.replace(/\/$/, "");
+  }
+}
+
+function relayWebSocketOrigin() {
+  return getRelayHttpOrigin().replace(/^http/i, "ws");
+}
 
 /** POST client geolocation; distance to fixed rover site (meters). */
 export const ROVER_CLIENT_DISTANCE_ENDPOINT =
@@ -70,39 +82,20 @@ export const SLAM_MAP_ENDPOINT =
 export function getLidarWebSocketUrl() {
   const configured = import.meta.env.VITE_LIDAR_WS_URL;
   if (configured) return configured;
-  try {
-    const u = new URL(RELAY_BASE_URL);
-    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
-    return `${wsProto}//${u.host}/ws/lidar`;
-  } catch {
-    return "wss://localhost/ws/lidar";
-  }
+  return `${relayWebSocketOrigin()}/ws/lidar`;
 }
 
 /** Live SLAM map WebSocket (relay pushes map updates). */
 export function getSlamWebSocketUrl() {
   const configured = import.meta.env.VITE_SLAM_WS_URL;
   if (configured) return configured;
-  try {
-    const u = new URL(RELAY_BASE_URL);
-    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
-    return `${wsProto}//${u.host}/ws/slam`;
-  } catch {
-    return "wss://localhost/ws/slam";
-  }
+  return `${relayWebSocketOrigin()}/ws/slam`;
 }
 
 /** Relay WebSocket: rover heartbeat incl. charging — 5s default, `?backup=1` for 1s (backup camera UI). */
 export function getRelayRoverHeartbeatWebSocketUrl(backupViewEnabled) {
-  try {
-    const u = new URL(RELAY_BASE_URL);
-    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
-    const q = backupViewEnabled ? "?backup=1" : "";
-    return `${wsProto}//${u.host}/ws/rover${q}`;
-  } catch {
-    const q = backupViewEnabled ? "?backup=1" : "";
-    return `wss://localhost/ws/rover${q}`;
-  }
+  const q = backupViewEnabled ? "?backup=1" : "";
+  return `${relayWebSocketOrigin()}/ws/rover${q}`;
 }
 
 /** Set VITE_VOICE_DRIVE_DEBUG=true to log assistant actions and control payloads in the browser console. */

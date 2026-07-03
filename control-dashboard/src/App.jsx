@@ -11,6 +11,8 @@ import {
   DRIVE_ASSIST_DEBUG,
   getRelayRoverHeartbeatWebSocketUrl,
   ROVER_CLIENT_DISTANCE_ENDPOINT,
+  ROVER_CHARGING_ENDPOINT,
+  ROVER_STATE_ENDPOINT,
   SLAM_ENABLED,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
@@ -36,6 +38,7 @@ import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
 import { formatRoverDistance } from "./utils/formatRoverDistance.js";
+import { deriveRoverCharging } from "./utils/deriveRoverCharging.js";
 import {
   fetchDriveAssistStatus,
   postDriveAssist,
@@ -242,7 +245,7 @@ export default function App() {
           const msg = JSON.parse(ev.data);
           if (msg.type !== "relay.rover.heartbeat" || !msg.success || !msg.rover) return;
           const rover = msg.rover;
-          setRelayCharging(rover.charging?.isCharging === true);
+          setRelayCharging(deriveRoverCharging(rover));
           const pct = Number(rover?.battery?.currentPct);
           setRelayBatteryPct(Number.isFinite(pct) ? pct : null);
           const minsRemaining = Number(rover?.battery?.estimatedMinutesRemainingActiveVideo);
@@ -285,6 +288,54 @@ export default function App() {
       }
     };
   }, [showBackupView]);
+
+  /** Charging HUD: poll relay when logged in (WS is primary; HTTP backs up flaky WS). */
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+
+    let cancelled = false;
+
+    const applyFromState = (rover) => {
+      if (cancelled || !rover) return;
+      setRelayCharging(deriveRoverCharging(rover));
+    };
+
+    const poll = async () => {
+      try {
+        const res = await apiFetch(ROVER_STATE_ENDPOINT, {
+          method: "GET",
+          timeout: 8000,
+          retries: 0,
+        });
+        if (!res.ok || cancelled) return;
+        const body = await res.json();
+        applyFromState(body?.rover ?? body?.data?.rover);
+      } catch {
+        try {
+          const res = await apiFetch(ROVER_CHARGING_ENDPOINT, {
+            method: "GET",
+            timeout: 5000,
+            retries: 0,
+          });
+          if (!res.ok || cancelled) return;
+          const body = await res.json();
+          applyFromState({ charging: body?.charging ?? body?.data?.charging });
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    void poll();
+    const timer = setInterval(() => {
+      void poll();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated || !navigator.geolocation?.watchPosition) return;
@@ -887,7 +938,6 @@ export default function App() {
       )}
 
       <VideoStream
-        dockingData={stats.docking}
         onVideoReadyChange={setVideoStreamReady}
         controlChannelReady={piOnline}
         backupStreamUrl={BACKUP_STREAM_ENDPOINT}

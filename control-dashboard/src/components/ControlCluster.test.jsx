@@ -13,14 +13,12 @@ describe("ControlCluster", () => {
         onLaserToggle={noop}
         onVoiceStart={noop}
         onVoiceStop={noop}
-        onDockingToggle={noop}
         onCapture={noop}
         onReset={noop}
         usbPower
         laserOn={false}
         voiceSupported={false}
         voiceListening={false}
-        isDockingMode={false}
         isCapturing={false}
       />,
     );

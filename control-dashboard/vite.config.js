@@ -12,6 +12,7 @@ export default defineConfig({
     env: {
       VITE_PI_SERVER_IP: "test.rover.local",
       VITE_MQTT_HOST: "wss://mqtt.test/mqtt",
+      VITE_ROVER_STATE_URL: "https://relay.test:8787/api/rover/state",
     },
   },
 });
