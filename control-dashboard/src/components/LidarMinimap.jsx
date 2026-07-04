@@ -227,8 +227,8 @@ export function LidarMinimap({
   return (
     <div className="lidar-minimap lidar-minimap--floating" aria-label="LiDAR minimap">
       <div className="lidar-minimap-header">
-        <span className="lidar-minimap-title">LiDAR Map</span>
-        <div className="lidar-minimap-zoom">
+        <span className="lidar-minimap-title">LiDAR</span>
+        <div className="lidar-minimap-zoom" role="group" aria-label="Zoom">
           <button
             type="button"
             className="lidar-minimap-zoom-btn"

@@ -3,7 +3,6 @@ import {
   BatteryCharging,
   BatteryLow,
   Clock,
-  Compass,
   Radar,
   TriangleAlert,
   WifiLow,
@@ -117,28 +116,6 @@ function SportModeIndicator({ enabled }) {
   );
 }
 
-function NavigationIndicator({ enabled }) {
-  return (
-    <div
-      className={`hud-indicator-slot${
-        enabled ? " hud-indicator-slot--navigation" : " hud-indicator-slot--reserved"
-      }`}
-      role={enabled ? "status" : undefined}
-      aria-label={enabled ? "Autonomous roam active" : undefined}
-      aria-hidden={enabled ? undefined : true}
-    >
-      {enabled ? (
-        <IndicatorIcon toneClass="hud-indicator-icon-wrap--navigation">
-          <Compass
-            className="hud-indicator-icon hud-indicator-icon--navigation"
-            {...indicatorIconProps}
-          />
-        </IndicatorIcon>
-      ) : null}
-    </div>
-  );
-}
-
 function DriveAssistIndicator({ enabled }) {
   return (
     <div
@@ -219,7 +196,6 @@ export function HudIndicatorStrip({
   driveAssistEnabled,
   driveAssistUpdate,
   powerSavingEnabled = false,
-  navigationEnabled = false,
   quietMode = true,
   isCharging = false,
   isLowBattery = false,
@@ -234,7 +210,6 @@ export function HudIndicatorStrip({
     <div className="hud-indicator-strip" aria-label="Status indicators">
       <PowerSavingIndicator enabled={powerSavingEnabled} />
       <SportModeIndicator enabled={sportModeEnabled} />
-      <NavigationIndicator enabled={navigationEnabled} />
       <DriveAssistIndicator enabled={driveAssistEnabled} />
       <CollisionIndicator update={driveAssistUpdate} enabled={driveAssistEnabled} />
       <ChargingIndicator enabled={showCharging} />

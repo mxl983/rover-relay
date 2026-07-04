@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import nipplejs from "nipplejs";
+import { JOYSTICK_DRIVE_DEBUG } from "../config";
 
 const ZONE_SIZE_PX = 100;
 const RESET_BTN_SIZE = 20; 
@@ -12,39 +13,35 @@ function clamp1(v) {
   return Math.max(-1, Math.min(1, v));
 }
 
-/** Minimum |y| once the stick leaves neutral — overcomes motor deadband. */
-const MIN_DRIVE_THROTTLE = 0.42;
-/** Minimum |x| for turn-in-place (little/no throttle). */
-const MIN_TURN = 0.28;
+/** Touch stick → drive axes. Nipple inverts Y in vector; rover forward = negative y. */
+export function touchStickToDriveRaw(data) {
+  const force =
+    typeof data?.force === "number"
+      ? data.force
+      : data?.distance
+        ? Math.min(1, data.distance / 50)
+        : 1;
+  if (data?.vector && typeof data.vector.x === "number" && typeof data.vector.y === "number") {
+    return { x: data.vector.x * force, y: -data.vector.y * force };
+  }
+  const rad = data?.angle?.radian ?? 0;
+  return { x: Math.cos(rad) * force, y: -Math.sin(rad) * force };
+}
+
 /** Stick magnitudes below this are treated as centered. */
 const STICK_IDLE = 0.04;
 
 /**
- * Map stick deflection to a responsive drive vector.
- * - Lateral (x) is proportional — no quantization / attenuation for fine turns.
- * - Forward/back (y) starts at MIN_DRIVE_THROTTLE and ramps to full.
+ * Linear polar drive mapping: direction from stick angle, speed from pull force.
+ * 12 o'clock → {x:0,y:-1}, 6 → {x:0,y:1}, 3 → {x:1,y:0}, 9 → {x:-1,y:0}.
  */
 export function applyDriveCurve(raw) {
-  let x = clamp1(Number(raw?.x) || 0);
-  let y = clamp1(Number(raw?.y) || 0);
-  if (Math.abs(x) < STICK_IDLE) x = 0;
-  if (Math.abs(y) < STICK_IDLE) y = 0;
-
-  const absY = Math.abs(y);
-  if (absY > 0) {
-    // stick 0→1 maps to MIN_DRIVE_THROTTLE→1 (half stick ≈ 0.71)
-    y = Math.sign(y) * (MIN_DRIVE_THROTTLE + (1 - MIN_DRIVE_THROTTLE) * absY);
-  }
-
-  const absX = Math.abs(x);
-  if (absX > 0) {
-    // Keep fine turns proportional while driving; floor only for spin-in-place.
-    if (absY < 0.12) {
-      x = Math.sign(x) * (MIN_TURN + (1 - MIN_TURN) * absX);
-    }
-  }
-
-  return { x: clamp1(x), y: clamp1(y) };
+  const x = Number(raw?.x) || 0;
+  const y = Number(raw?.y) || 0;
+  const mag = Math.hypot(x, y);
+  if (mag < STICK_IDLE) return { x: 0, y: 0 };
+  if (mag > 1) return { x: x / mag, y: y / mag };
+  return { x, y };
 }
 
 /** Radial dead zone; axes expected in range ~[-1, 1]. */
@@ -250,6 +247,17 @@ export const DualJoystickControls = ({
 
   const sendState = (drive, gimbal, updateLast = true) => {
     if (updateLast) lastSentRef.current = { drive: { ...drive }, gimbal: { ...gimbal } };
+    if (JOYSTICK_DRIVE_DEBUG) {
+      const x = Number(drive?.x ?? 0);
+      const y = Number(drive?.y ?? 0);
+      if (x !== 0 || y !== 0) {
+        // eslint-disable-next-line no-console
+        console.log("[joystick→drive] speed vector", {
+          x: x.toFixed(3),
+          y: y.toFixed(3),
+        });
+      }
+    }
     if (onDriveRef.current) onDriveRef.current({ drive, gimbal });
   };
 
@@ -376,14 +384,7 @@ export const DualJoystickControls = ({
     managersRef.current.drive = driveManager;
     managersRef.current.look = lookManager;
 
-    const toAnalog = (data) => {
-      const force = typeof data.force === "number" ? data.force : (data.distance ? Math.min(1, data.distance / 50) : 1);
-      if (data.vector && typeof data.vector.x === "number" && typeof data.vector.y === "number") {
-        return { x: data.vector.x * force, y: -data.vector.y * force };
-      }
-      const rad = data.angle?.radian ?? 0;
-      return { x: Math.cos(rad) * force, y: -Math.sin(rad) * force };
-    };
+    const toAnalog = (data) => touchStickToDriveRaw(data);
 
     // Gimbal: linear and less sensitive (scale down so small drag = proportional movement)
     const toGimbalAnalog = (data) => {

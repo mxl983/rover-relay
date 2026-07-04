@@ -18,7 +18,6 @@ import {
   BarChart3,
   Radar,
   ShieldAlert,
-  Route,
   Glasses,
   Gauge,
   Volume2,
@@ -99,11 +98,9 @@ export const SystemControls = ({
   isCapturing,
   quietMode,
   driveAssistEnabled,
-  navigationEnabled,
   powerSavingEnabled,
   onQuietModeChange,
   onDriveAssistChange,
-  onNavigationChange,
   onPowerSavingChange,
   onNVToggle,
   onResChange,
@@ -318,18 +315,6 @@ export const SystemControls = ({
                 { label: "ON", value: "on" },
               ]}
               onChange={(mode) => onDriveAssistChange?.(mode === "on")}
-            />
-          </SettingsToggleRow>
-
-          <SettingsToggleRow icon={<Route size={12} />} label="Roam">
-            <SegmentedToggle
-              ariaLabel="Autonomous roam"
-              value={navigationEnabled ? "on" : "off"}
-              options={[
-                { label: "OFF", value: "off" },
-                { label: "ON", value: "on" },
-              ]}
-              onChange={(mode) => onNavigationChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 

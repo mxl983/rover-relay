@@ -481,31 +481,36 @@ export const VideoStream = ({
       />
 
       {showBackupView && backupAvailable && (
-        <div style={pipContainerStyle}>
+        <div className="backup-view-pip" aria-label="Backup camera view">
+          <div className="backup-view-header">
+            <span className="backup-view-title">Backup View</span>
+            <span
+              className={`backup-view-status ${isBackupLoading ? "stale" : "live"}`}
+              aria-hidden="true"
+            />
+          </div>
           {backupImgSrc ? (
-            <>
+            <div className="backup-view-media">
               <img
                 ref={backupImgRef}
                 src={backupImgSrc}
                 alt="Backup camera stream"
-                style={pipVideoStyle}
+                className="backup-view-img"
                 onLoad={() => {
                   setIsBackupLoading(false);
                 }}
                 onError={() => {
                   setIsBackupLoading(false);
-                  // Relay unavailable: remove backup PiP and keep main view unaffected.
                   setBackupAvailable(false);
                 }}
               />
-              <div style={backupBadgeStyle}>BACKUP VIEW</div>
-              <div style={pipCursorStyle} aria-hidden="true" />
+              <div className="backup-view-cursor" aria-hidden="true" />
               {isBackupLoading ? (
-                <div style={pipOverlayTextStyle}>Connecting...</div>
+                <div className="backup-view-overlay">Connecting...</div>
               ) : null}
-            </>
+            </div>
           ) : (
-            <div style={backupMissingStyle}>Backup stream URL is not configured.</div>
+            <div className="backup-view-missing">Backup stream URL is not configured.</div>
           )}
         </div>
       )}
@@ -580,82 +585,4 @@ const loaderSubStyle = {
   textAlign: "center",
   maxWidth: "280px",
   lineHeight: 1.45,
-};
-
-const backupMissingStyle = {
-  width: "100%",
-  height: "100%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "rgba(255, 255, 255, 0.75)",
-  fontSize: "14px",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  textAlign: "center",
-  padding: "8px",
-};
-
-const backupBadgeStyle = {
-  position: "absolute",
-  top: "8px",
-  left: "8px",
-  zIndex: 120,
-  padding: "4px 8px",
-  borderRadius: "8px",
-  color: "#f3e8ff",
-  fontSize: "10px",
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  background: "rgba(139, 92, 246, 0.7)",
-  border: "1px solid rgba(196, 181, 253, 0.85)",
-};
-
-const pipContainerStyle = {
-  position: "absolute",
-  top: "20px",
-  right: "20px",
-  width: "28vw",
-  maxWidth: "360px",
-  minWidth: "220px",
-  aspectRatio: "4 / 3",
-  overflow: "hidden",
-  borderRadius: "10px",
-  border: "1px solid rgba(196, 181, 253, 0.75)",
-  background: "rgba(0, 0, 0, 0.8)",
-  boxShadow: "0 8px 20px rgba(0, 0, 0, 0.45)",
-  zIndex: 115,
-};
-
-const pipVideoStyle = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-};
-
-const pipOverlayTextStyle = {
-  position: "absolute",
-  left: "50%",
-  bottom: "10px",
-  transform: "translateX(-50%)",
-  background: "rgba(0, 0, 0, 0.58)",
-  color: "#f3f4f6",
-  border: "1px solid rgba(255, 255, 255, 0.25)",
-  borderRadius: "8px",
-  fontSize: "11px",
-  padding: "6px 8px",
-  whiteSpace: "nowrap",
-};
-
-const pipCursorStyle = {
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: "6px",
-  height: "6px",
-  border: "1px solid rgba(255, 255, 255, 0.55)",
-  borderRadius: "50%",
-  zIndex: 121,
-  pointerEvents: "none",
 };

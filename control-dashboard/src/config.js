@@ -106,6 +106,10 @@ export const VOICE_DRIVE_DEBUG =
 export const DRIVE_ASSIST_DEBUG =
   import.meta.env.VITE_DRIVE_ASSIST_DEBUG !== "false";
 
+/** Log joystick drive vectors in the browser console (default on unless explicitly false). */
+export const JOYSTICK_DRIVE_DEBUG =
+  import.meta.env.VITE_JOYSTICK_DRIVE_DEBUG !== "false";
+
 /** Allowed origin for capture URL (same host as API). Used to validate redirects. */
 export function getAllowedCaptureOrigin() {
   try {

@@ -26,10 +26,9 @@ describe("HudIndicatorStrip", () => {
       <HudIndicatorStrip
         driveAssistEnabled={false}
         driveAssistUpdate={null}
-        navigationEnabled={false}
       />,
     );
-    expect(container.querySelectorAll(".hud-indicator-slot")).toHaveLength(6);
+    expect(container.querySelectorAll(".hud-indicator-slot")).toHaveLength(5);
     expect(screen.queryByLabelText(/collision warning/i)).toBeNull();
   });
 
@@ -39,11 +38,10 @@ describe("HudIndicatorStrip", () => {
         driveAssistEnabled
         driveAssistUpdate={null}
         powerSavingEnabled
-        navigationEnabled={false}
       />,
     );
     const slots = container.querySelectorAll(".hud-indicator-slot");
-    expect(slots).toHaveLength(7);
+    expect(slots).toHaveLength(6);
     expect(slots[0]).toHaveClass("hud-indicator-slot--power-saving");
     expect(screen.getByLabelText("Idle shutdown enabled").querySelector(".hud-indicator-icon--power-saving")).toBeTruthy();
   });
@@ -69,17 +67,6 @@ describe("HudIndicatorStrip", () => {
       />,
     );
     expect(screen.queryByLabelText("Sport drive mode")).toBeNull();
-  });
-
-  it("shows navigation compass when roam is enabled", () => {
-    render(
-      <HudIndicatorStrip
-        driveAssistEnabled={false}
-        driveAssistUpdate={null}
-        navigationEnabled
-      />,
-    );
-    expect(screen.getByLabelText("Autonomous roam active")).toBeTruthy();
   });
 
   it("shows radar icon when drive assist is on", () => {

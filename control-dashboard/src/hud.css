@@ -364,8 +364,11 @@ html {
 }
 
 .lidar-minimap--floating {
-  width: 180px;
-  padding: 8px 10px 10px;
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: 6px 8px 8px;
+  flex-shrink: 0;
   background: rgba(8, 14, 24, 0.16);
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
@@ -379,8 +382,11 @@ html {
 }
 
 .lidar-minimap--embedded {
-  width: 180px;
-  padding: 8px 10px 10px;
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: 6px 8px 8px;
+  flex-shrink: 0;
   background: rgba(12, 20, 36, 0.28);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
@@ -395,54 +401,88 @@ html {
 .lidar-minimap-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
   margin-bottom: 6px;
   font-size: 8px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
+  overflow: hidden;
 }
 
 .lidar-minimap-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: rgba(220, 245, 255, 0.85);
   font-weight: 700;
 }
 
 .lidar-minimap-zoom {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.lidar-minimap-zoom-btn {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.06);
+/* Beat `.hud-overlay button` padding/size (12px 18px) and global `button` 45×45 */
+.lidar-minimap-zoom .lidar-minimap-zoom-btn {
+  width: 15px !important;
+  height: 15px !important;
+  min-width: 15px !important;
+  max-width: 15px !important;
+  min-height: 15px !important;
+  max-height: 15px !important;
+  padding: 0 !important;
+  margin: 0;
+  border: none !important;
+  border-radius: 0;
+  background: transparent !important;
   color: rgba(235, 248, 255, 0.9);
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
   font-family: ui-monospace, monospace;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  backdrop-filter: none;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  transition: background 0.1s ease;
 }
 
-.lidar-minimap-zoom-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.35);
+.lidar-minimap-zoom-btn + .lidar-minimap-zoom-btn {
+  border-left: 1px solid rgba(255, 255, 255, 0.18) !important;
 }
 
-.lidar-minimap-zoom-btn:disabled {
+.lidar-minimap-zoom .lidar-minimap-zoom-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(235, 248, 255, 0.9);
+}
+
+.lidar-minimap-zoom .lidar-minimap-zoom-btn:active {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: rgba(235, 248, 255, 0.9) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.lidar-minimap-zoom .lidar-minimap-zoom-btn:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
 .lidar-minimap-status {
-  margin-left: 6px;
+  flex: 0 0 auto;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -451,7 +491,7 @@ html {
 }
 
 .lidar-minimap-status--map {
-  margin-left: 2px;
+  margin-left: 0;
 }
 
 .lidar-minimap-status.live {
@@ -465,9 +505,12 @@ html {
 }
 
 .lidar-minimap-canvas {
-  width: 100%;
-  aspect-ratio: 1;
-  height: auto;
+  width: 124px;
+  height: 124px;
+  min-width: 124px;
+  min-height: 124px;
+  max-width: 124px;
+  max-height: 124px;
   display: block;
   border: none;
   border-radius: 0;
@@ -498,11 +541,124 @@ html {
     left: max(8px, env(safe-area-inset-left));
   }
 
-  .lidar-minimap--floating,
-  .lidar-minimap--embedded {
+  .backup-view-pip {
+    top: max(56px, calc(env(safe-area-inset-top) + 44px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
     width: 140px;
     padding: 6px 8px 8px;
   }
+}
+
+.backup-view-pip {
+  position: absolute;
+  top: max(68px, calc(env(safe-area-inset-top) + 52px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  padding: 8px 10px 10px;
+  background: rgba(8, 14, 24, 0.16);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 20px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+  z-index: 115;
+  pointer-events: none;
+}
+
+.backup-view-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.backup-view-title {
+  color: rgba(220, 245, 255, 0.85);
+  font-weight: 700;
+}
+
+.backup-view-status {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
+}
+
+.backup-view-status.live {
+  background: rgba(140, 255, 200, 0.95);
+  box-shadow: 0 0 10px rgba(140, 255, 200, 0.55);
+}
+
+.backup-view-status.stale {
+  background: rgba(255, 190, 120, 0.9);
+  box-shadow: 0 0 10px rgba(255, 190, 120, 0.45);
+}
+
+.backup-view-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.backup-view-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.backup-view-cursor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.backup-view-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(8, 14, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(200, 220, 245, 0.85);
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.backup-view-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  padding: 8px;
+  color: rgba(200, 220, 245, 0.72);
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 /* COMPONENT STATUS STYLING */

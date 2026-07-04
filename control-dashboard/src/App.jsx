@@ -9,6 +9,7 @@ import {
   CAMERA_SECRET,
   VOICE_DRIVE_DEBUG,
   DRIVE_ASSIST_DEBUG,
+  JOYSTICK_DRIVE_DEBUG,
   getRelayRoverHeartbeatWebSocketUrl,
   ROVER_CLIENT_DISTANCE_ENDPOINT,
   ROVER_CHARGING_ENDPOINT,
@@ -44,20 +45,6 @@ import {
   postDriveAssist,
   readDriveAssistEnabled,
 } from "./utils/driveAssistApi.js";
-import {
-  fetchNavigationStatus,
-  postNavigation,
-  readNavigationEnabled,
-} from "./utils/navigationApi.js";
-
-function isManualDrivePayload(payload) {
-  if (!payload) return false;
-  if (payload.command !== undefined) return false;
-  if (Array.isArray(payload)) return true;
-  if (payload.drive) return true;
-  if (Array.isArray(payload.payload)) return true;
-  return false;
-}
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -81,7 +68,6 @@ function isGimbalOnlyAssistantSequence(steps) {
 const GIMBAL_HOME_SETTLE_MS = 600;
 
 const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
-const LIDAR_MINIMAP_STORAGE_KEY = "rover-dashboard-lidar-minimap";
 const METRICS_PANEL_STORAGE_KEY = "rover-dashboard-metrics-panel";
 const ROVER_SPEAKER_STORAGE_KEY = "rover-dashboard-rover-speaker";
 const DASH_MIC_STORAGE_KEY = "rover-dashboard-dash-mic";
@@ -96,17 +82,6 @@ function readInitialControlMode() {
     /* ignore */
   }
   return getIsMobileSnapshot() ? "joystick" : "keyboard";
-}
-
-function readInitialLidarMinimap() {
-  if (typeof window === "undefined") return false;
-  try {
-    const v = window.localStorage.getItem(LIDAR_MINIMAP_STORAGE_KEY);
-    if (v === "true") return true;
-  } catch {
-    /* ignore */
-  }
-  return false;
 }
 
 function readInitialMetricsPanel() {
@@ -160,7 +135,6 @@ export default function App() {
   const { stats, driveAssistUpdate, isOnline: piOnline, hasEverConnected, sendControl } =
     usePiWebSocket();
   const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
-  const [navigationEnabled, setNavigationEnabled] = useState(false);
   const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
 
   useEffect(() => {
@@ -168,12 +142,6 @@ export default function App() {
       setDriveAssistEnabled(stats.driveAssistEnabled);
     }
   }, [stats?.driveAssistEnabled]);
-
-  useEffect(() => {
-    if (typeof stats?.navigationEnabled === "boolean") {
-      setNavigationEnabled(stats.navigationEnabled);
-    }
-  }, [stats?.navigationEnabled]);
 
   useEffect(() => {
     if (!isAuthenticated || !DRIVE_ASSIST_DEBUG) return;
@@ -196,19 +164,10 @@ export default function App() {
   const [focusMode, setFocusMode] = useState("far");
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
-  const [showLidarMinimap, setShowLidarMinimapState] = useState(readInitialLidarMinimap);
+  const [showLidarMinimap, setShowLidarMinimap] = useState(false);
   const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
   const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
   const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
-
-  const setShowLidarMinimap = (enabled) => {
-    setShowLidarMinimapState(enabled);
-    try {
-      window.localStorage.setItem(LIDAR_MINIMAP_STORAGE_KEY, enabled ? "true" : "false");
-    } catch {
-      /* ignore */
-    }
-  };
 
   const setShowMetricsPanel = (enabled) => {
     setShowMetricsPanelState(enabled);
@@ -455,22 +414,7 @@ export default function App() {
       }
     };
 
-    const fetchNavigation = async () => {
-      try {
-        const status = await fetchNavigationStatus();
-        if (!cancelled) {
-          const enabled = readNavigationEnabled(status);
-          if (enabled != null) setNavigationEnabled(enabled);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.log("[navigation] status fetch failed", err?.message ?? err);
-        }
-      }
-    };
-
     void fetchDriveAssist();
-    void fetchNavigation();
     return () => {
       cancelled = true;
     };
@@ -503,7 +447,6 @@ export default function App() {
   const pendingControlRef = useRef(null);
   const controlTimerRef = useRef(null);
   const lastKeyboardKeysRef = useRef([]);
-  const driveAssistBeforeNavRef = useRef(null);
 
   useEffect(() => {
     setIsPowered(piOnline);
@@ -523,8 +466,21 @@ export default function App() {
   }, [actionToast]);
 
   const sendControlNow = (payload) => {
-    if (navigationEnabled && isManualDrivePayload(payload)) {
-      return Promise.resolve();
+    if (
+      JOYSTICK_DRIVE_DEBUG &&
+      payload?.drive != null &&
+      !Array.isArray(payload) &&
+      payload.command === undefined
+    ) {
+      const x = Number(payload.drive.x ?? 0);
+      const y = Number(payload.drive.y ?? 0);
+      if (x !== 0 || y !== 0) {
+        // eslint-disable-next-line no-console
+        console.log("[drive→backend] speed vector", {
+          x: x.toFixed(3),
+          y: y.toFixed(3),
+        });
+      }
     }
     if (piOnline && sendControl) {
       sendControl(payload);
@@ -745,43 +701,6 @@ export default function App() {
       if (DRIVE_ASSIST_DEBUG) {
         console.log("[drive-assist] toggle failed", err?.message ?? err);
       }
-    }
-  };
-
-  const setNavigation = async (enabled) => {
-    setActionError(null);
-    const previousEnabled = navigationEnabled;
-    setNavigationEnabled(enabled);
-    try {
-      if (enabled) {
-        driveAssistBeforeNavRef.current = driveAssistEnabled;
-        if (driveAssistEnabled) {
-          try {
-            await postDriveAssist(false);
-            setDriveAssistEnabled(false);
-          } catch {
-            // Relay also disables assist when roam turns on.
-          }
-        }
-      }
-      const status = await postNavigation(enabled);
-      const nextEnabled = readNavigationEnabled(status);
-      if (nextEnabled != null) setNavigationEnabled(nextEnabled);
-      if (enabled) {
-        void sendControlNow({ drive: { x: 0, y: 0 } });
-      } else if (driveAssistBeforeNavRef.current === true) {
-        try {
-          await postDriveAssist(true);
-          setDriveAssistEnabled(true);
-        } catch {
-          // User can re-enable assist manually.
-        }
-        driveAssistBeforeNavRef.current = null;
-      }
-      showActionToast(`Autonomous roam ${enabled ? "enabled" : "disabled"}`);
-    } catch (err) {
-      setNavigationEnabled(previousEnabled);
-      setActionError(err.message ?? "Navigation update failed");
     }
   };
 
@@ -1048,14 +967,12 @@ export default function App() {
             quietMode={stats?.quietMode}
             driveAssistEnabled={driveAssistEnabled}
             driveAssistUpdate={driveAssistHudUpdate}
-            navigationEnabled={navigationEnabled}
             powerSavingEnabled={powerSavingEnabled}
             isCharging={effectiveIsCharging}
             isLowBattery={isLowBattery}
             lowBatteryIndicatorArmed={lowBatteryGlowArmed}
             onQuietModeChange={setQuietMode}
             onDriveAssistChange={setDriveAssist}
-            onNavigationChange={setNavigation}
             onPowerSavingChange={setPowerSaving}
             onNVToggle={handleNVToggle}
             onResChange={handleResChange}
@@ -1156,14 +1073,12 @@ function HudHeader({
   quietMode,
   driveAssistEnabled,
   driveAssistUpdate,
-  navigationEnabled,
   powerSavingEnabled,
   isCharging,
   isLowBattery,
   lowBatteryIndicatorArmed,
   onQuietModeChange,
   onDriveAssistChange,
-  onNavigationChange,
   onPowerSavingChange,
   onNVToggle,
   onResChange,
@@ -1205,7 +1120,6 @@ function HudHeader({
           driveAssistEnabled={driveAssistEnabled}
           driveAssistUpdate={driveAssistUpdate}
           powerSavingEnabled={powerSavingEnabled}
-          navigationEnabled={navigationEnabled}
           quietMode={quietMode}
           isCharging={isCharging}
           isLowBattery={isLowBattery}
@@ -1221,11 +1135,9 @@ function HudHeader({
           isCapturing={isCapturing}
           quietMode={quietMode}
           driveAssistEnabled={driveAssistEnabled}
-          navigationEnabled={navigationEnabled}
           powerSavingEnabled={powerSavingEnabled}
           onQuietModeChange={onQuietModeChange}
           onDriveAssistChange={onDriveAssistChange}
-          onNavigationChange={onNavigationChange}
           onPowerSavingChange={onPowerSavingChange}
           onNVToggle={onNVToggle}
           onResChange={onResChange}
