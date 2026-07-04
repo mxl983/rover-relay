@@ -8,21 +8,43 @@ const NEUTRAL_BORDER = "rgba(255, 255, 255, 0.2)";
 const NEUTRAL_LABEL = "rgba(255, 255, 255, 0.75)";
 const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)"; 
 
-/** Same curve as the on-screen drive stick (forward/back eases lateral). */
-function applyDriveCurve(raw) {
-  const ax = raw.x;
-  const ay = raw.y;
-  const absY = Math.abs(ay);
-  const absX = Math.abs(ax);
-  if (absY >= 0.25 && absY >= absX) {
-    const forwardBackScale = 0.35;
-    return { x: ax * forwardBackScale, y: ay };
-  }
-  return { x: ax, y: ay };
-}
-
 function clamp1(v) {
   return Math.max(-1, Math.min(1, v));
+}
+
+/** Minimum |y| once the stick leaves neutral — overcomes motor deadband. */
+const MIN_DRIVE_THROTTLE = 0.42;
+/** Minimum |x| for turn-in-place (little/no throttle). */
+const MIN_TURN = 0.28;
+/** Stick magnitudes below this are treated as centered. */
+const STICK_IDLE = 0.04;
+
+/**
+ * Map stick deflection to a responsive drive vector.
+ * - Lateral (x) is proportional — no quantization / attenuation for fine turns.
+ * - Forward/back (y) starts at MIN_DRIVE_THROTTLE and ramps to full.
+ */
+export function applyDriveCurve(raw) {
+  let x = clamp1(Number(raw?.x) || 0);
+  let y = clamp1(Number(raw?.y) || 0);
+  if (Math.abs(x) < STICK_IDLE) x = 0;
+  if (Math.abs(y) < STICK_IDLE) y = 0;
+
+  const absY = Math.abs(y);
+  if (absY > 0) {
+    // stick 0→1 maps to MIN_DRIVE_THROTTLE→1 (half stick ≈ 0.71)
+    y = Math.sign(y) * (MIN_DRIVE_THROTTLE + (1 - MIN_DRIVE_THROTTLE) * absY);
+  }
+
+  const absX = Math.abs(x);
+  if (absX > 0) {
+    // Keep fine turns proportional while driving; floor only for spin-in-place.
+    if (absY < 0.12) {
+      x = Math.sign(x) * (MIN_TURN + (1 - MIN_TURN) * absX);
+    }
+  }
+
+  return { x: clamp1(x), y: clamp1(y) };
 }
 
 /** Radial dead zone; axes expected in range ~[-1, 1]. */
@@ -37,20 +59,30 @@ const GIMBAL_LINEAR_SCALE = 0.58;
 const TRIGGER_HELD_THRESHOLD = 0.45;
 /** Cap drive/gimbal WS updates while sticks are held (~25 Hz). Stops are always immediate. */
 const ANALOG_SEND_MIN_INTERVAL_MS = 40;
-/** Snap stick values to reduce gamepad ADC noise re-triggering sends. */
-const DRIVE_ANALOG_STEP = 0.05;
+/** Gimbal only — drive is continuous for fine steering. */
 const GIMBAL_ANALOG_STEP = 0.03;
-const DRIVE_CHANGE_THRESHOLD = 0.06;
+const DRIVE_CHANGE_THRESHOLD = 0.015;
 const GIMBAL_CHANGE_THRESHOLD = 0.02;
 
-export function quantizeAnalog(v, step = DRIVE_ANALOG_STEP) {
+/** @deprecated kept for tests; drive path no longer quantizes. */
+export function quantizeAnalog(v, step = 0.05) {
   if (!Number.isFinite(v) || Math.abs(v) < step * 0.45) return 0;
   const q = Math.round(v / step) * step;
   return Math.max(-1, Math.min(1, q));
 }
 
-export function snapAnalogPair({ x = 0, y = 0 }, step = DRIVE_ANALOG_STEP) {
+export function snapAnalogPair({ x = 0, y = 0 }, step = GIMBAL_ANALOG_STEP) {
   return { x: quantizeAnalog(x, step), y: quantizeAnalog(y, step) };
+}
+
+/** Continuous drive vector (no step quantization on turn or throttle). */
+export function prepareDriveVector(raw) {
+  const x = clamp1(Number(raw?.x) || 0);
+  const y = clamp1(Number(raw?.y) || 0);
+  return {
+    x: Math.abs(x) < 1e-4 ? 0 : x,
+    y: Math.abs(y) < 1e-4 ? 0 : y,
+  };
 }
 
 /** Standard mapping: LB 4, RB 5, LT 6, RT 7 (analog value 0–1 when supported). */
@@ -266,7 +298,7 @@ export const DualJoystickControls = ({
   };
 
   const sendIfChanged = (isStop = false) => {
-    const drive = snapAnalogPair(analogState.current.drive, DRIVE_ANALOG_STEP);
+    const drive = prepareDriveVector(analogState.current.drive);
     const gimbal = snapAnalogPair(analogState.current.gimbal, GIMBAL_ANALOG_STEP);
     const last = lastSentRef.current;
     const driveChanged = isStop || driveStateChanged(drive, last.drive);
