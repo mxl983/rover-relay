@@ -175,4 +175,26 @@ describe("HudIndicatorStrip", () => {
     );
     expect(screen.queryByLabelText(/collision warning/i)).toBeNull();
   });
+
+  it("shows blinking weak wifi icon only when signal is weak", () => {
+    const { container, rerender } = render(
+      <HudIndicatorStrip
+        driveAssistEnabled={false}
+        driveAssistUpdate={null}
+        wifiSignal={-50}
+      />,
+    );
+    expect(screen.queryByLabelText(/weak wi-fi signal/i)).toBeNull();
+
+    rerender(
+      <HudIndicatorStrip
+        driveAssistEnabled={false}
+        driveAssistUpdate={null}
+        wifiSignal={-82}
+      />,
+    );
+    expect(screen.getByLabelText(/weak wi-fi signal/i)).toBeTruthy();
+    expect(container.querySelector(".hud-indicator-slot--weak-wifi.hud-indicator-slot--active")).toBeTruthy();
+    expect(container.querySelector(".hud-indicator-icon--weak-wifi")).toBeTruthy();
+  });
 });

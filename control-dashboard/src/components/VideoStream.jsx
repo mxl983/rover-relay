@@ -11,6 +11,8 @@ import { VideoLoadingPhysics } from "./VideoLoadingPhysics.jsx";
 export const VideoStream = ({
   onVideoReadyChange,
   controlChannelReady = false,
+  roverSpeakerEnabled = true,
+  dashMicEnabled = false,
   backupStreamUrl = "",
   showBackupView = false,
   /** Same shape as GET /api/rover/state response body when from relay `wss://.../ws/rover` (optional). */
@@ -37,8 +39,6 @@ export const VideoStream = ({
   const [isBackupLoading, setIsBackupLoading] = useState(false);
   const [backupAvailable, setBackupAvailable] = useState(true);
   const [backupImgSrc, setBackupImgSrc] = useState("");
-  const [roverMicEnabled, setRoverMicEnabled] = useState(false);
-  const [dashMicEnabled, setDashMicEnabled] = useState(false);
 
   const getBackupStopUrl = useCallback(() => {
     if (!backupStreamUrl) return "";
@@ -352,7 +352,7 @@ export const VideoStream = ({
       pc.ontrack = (e) => {
         if (audioRef.current) {
           audioRef.current.srcObject = e.streams[0];
-          audioRef.current.muted = !roverMicEnabled;
+          audioRef.current.muted = !roverSpeakerEnabled;
         }
       };
       pc.addTransceiver("audio", { direction: "recvonly" });
@@ -373,23 +373,23 @@ export const VideoStream = ({
         void startListenWebRTC();
       }, 2200);
     }
-  }, [roverMicEnabled]);
+  }, [roverSpeakerEnabled]);
 
-  const toggleDashMic = () => {
-    const newState = !dashMicEnabled;
-    setDashMicEnabled(newState);
+  useEffect(() => {
     if (localStreamRef.current) {
       localStreamRef.current
         .getAudioTracks()
-        .forEach((t) => (t.enabled = newState));
+        .forEach((t) => {
+          t.enabled = dashMicEnabled;
+        });
     }
-  };
+  }, [dashMicEnabled]);
 
-  const toggleRoverMic = () => {
-    const newState = !roverMicEnabled;
-    setRoverMicEnabled(newState);
-    if (audioRef.current) audioRef.current.muted = !newState;
-  };
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = !roverSpeakerEnabled;
+    }
+  }, [roverSpeakerEnabled]);
 
   useEffect(() => {
     startVideoWebRTC();
@@ -438,9 +438,9 @@ export const VideoStream = ({
     <div style={containerStyle}>
       <audio ref={audioRef} autoPlay />
 
-      {/* HUD OVERLAY */}
-      <div style={hudWrapper}>
-        {loaderOverlayVisible ? (
+      {/* HUD OVERLAY — hard reset only while loading */}
+      {loaderOverlayVisible ? (
+        <div style={hudWrapper}>
           <button
             type="button"
             className="video-hud-hard-reset"
@@ -449,27 +449,8 @@ export const VideoStream = ({
           >
             Hard reset
           </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={toggleRoverMic}
-              style={btnStyle(roverMicEnabled, "#00f2ff")}
-              aria-label={roverMicEnabled ? "Mute rover audio" : "Unmute rover audio"}
-            >
-              <SpeakerIcon active={roverMicEnabled} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleDashMic}
-              style={btnStyle(dashMicEnabled, "#ff0055")}
-              aria-label={dashMicEnabled ? "Mute dashboard mic" : "Unmute dashboard mic"}
-            >
-              <MicIcon active={dashMicEnabled} />
-            </button>
-          </>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {loaderOverlayVisible && (
         <div style={loaderWrapper}>
@@ -532,47 +513,6 @@ export const VideoStream = ({
     </div>
   );
 };
-
-// --- SVG ICONS ---
-const SpeakerIcon = ({ active }) => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={active ? "#00f2ff" : "#888"}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polygon
-      points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"
-      fill={active ? "#00f2ff33" : "none"}
-    />
-    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-    {!active && <line x1="4" y1="20" x2="20" y2="4" stroke="#ff4d4f" strokeWidth="2.4" />}
-  </svg>
-);
-
-const MicIcon = ({ active }) => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={active ? "#fff" : "#888"}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path
-      d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
-      fill={active ? "#ff0055" : "none"}
-    />
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-    {!active && <line x1="4" y1="20" x2="20" y2="4" stroke="#ff4d4f" strokeWidth="2.4" />}
-  </svg>
-);
 
 // --- STYLES ---
 const containerStyle = {
@@ -719,18 +659,3 @@ const pipCursorStyle = {
   zIndex: 121,
   pointerEvents: "none",
 };
-
-const btnStyle = (active, color) => ({
-  background: active ? `${color}22` : "rgba(0,0,0,0.75)",
-  border: `1px solid ${active ? color : "#666"}`,
-  borderRadius: "50%",
-  width: "40px",
-  height: "40px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
-  transition: "all 0.2s ease",
-  boxShadow: active ? `0 0 15px ${color}44` : "inset 0 0 0 1px rgba(255,77,79,0.28)",
-  opacity: active ? 1 : 0.7,
-});

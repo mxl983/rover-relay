@@ -1,9 +1,19 @@
 import React from "react";
-import { BatteryCharging, BatteryLow, Clock, Compass, Radar, TriangleAlert, Zap } from "lucide-react";
+import {
+  BatteryCharging,
+  BatteryLow,
+  Clock,
+  Compass,
+  Radar,
+  TriangleAlert,
+  WifiLow,
+  Zap,
+} from "lucide-react";
 import {
   isDriveAssistHudActive,
   readDriveAssistClosestRangeM,
 } from "../utils/driveAssistApi.js";
+import { isWifiWeak } from "../utils/wifiSignal.js";
 
 const RESERVED_SLOT_COUNT = 0;
 const INDICATOR_ICON_SIZE = 12;
@@ -151,6 +161,30 @@ function DriveAssistIndicator({ enabled }) {
   );
 }
 
+function WeakWifiIndicator({ dbm }) {
+  const val = Number(dbm);
+  if (!Number.isFinite(val) || !isWifiWeak(val)) return null;
+
+  const label = `Weak Wi-Fi signal (${Math.round(val)} dBm)`;
+
+  return (
+    <div
+      className="hud-indicator-slot hud-indicator-slot--weak-wifi hud-indicator-slot--active"
+      role="status"
+      aria-live="assertive"
+      aria-label={label}
+      title={label}
+    >
+      <IndicatorIcon toneClass="hud-indicator-icon-wrap--weak-wifi">
+        <WifiLow
+          className="hud-indicator-icon hud-indicator-icon--weak-wifi"
+          {...indicatorIconProps}
+        />
+      </IndicatorIcon>
+    </div>
+  );
+}
+
 function CollisionIndicator({ update, enabled }) {
   const active = enabled && isDriveAssistHudActive(update);
   const rangeM = active ? readDriveAssistClosestRangeM(update) : null;
@@ -190,6 +224,7 @@ export function HudIndicatorStrip({
   isCharging = false,
   isLowBattery = false,
   lowBatteryIndicatorArmed = false,
+  wifiSignal = null,
 }) {
   const sportModeEnabled = quietMode === false;
   const showCharging = isCharging;
@@ -204,6 +239,7 @@ export function HudIndicatorStrip({
       <CollisionIndicator update={driveAssistUpdate} enabled={driveAssistEnabled} />
       <ChargingIndicator enabled={showCharging} />
       <LowBatteryIndicator enabled={showLowBattery} />
+      <WeakWifiIndicator dbm={wifiSignal} />
       {Array.from({ length: RESERVED_SLOT_COUNT }, (_, index) => (
         <div
           key={`reserved-${index}`}

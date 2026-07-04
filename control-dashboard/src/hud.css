@@ -168,7 +168,7 @@ html {
 .hud-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -219,6 +219,11 @@ html {
   animation: hud-indicator-warning-pulse 0.9s ease-in-out infinite;
 }
 
+.hud-indicator-slot--weak-wifi.hud-indicator-slot--active {
+  color: #ff9800;
+  animation: hud-indicator-warning-pulse 0.9s ease-in-out infinite;
+}
+
 .hud-indicator-icon-wrap {
   display: inline-flex;
   align-items: center;
@@ -236,6 +241,10 @@ html {
 
 .hud-indicator-icon-wrap--low-battery {
   color: #ff6b6b;
+}
+
+.hud-indicator-icon-wrap--weak-wifi {
+  color: #ff9800;
 }
 
 .hud-indicator-icon-wrap--sport {
@@ -275,6 +284,10 @@ html {
 
 .hud-indicator-icon--low-battery {
   color: #ff6b6b;
+}
+
+.hud-indicator-icon--weak-wifi {
+  color: #ff9800;
 }
 
 .hud-indicator-icon--sport {
@@ -755,8 +768,24 @@ button:active {
 }
 
 .hud-brand-title {
-  letter-spacing: 0.06em;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.hud-brand-emoji {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-brand-version {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(0, 242, 255, 0.72);
 }
 
 .hud-brand-distance {

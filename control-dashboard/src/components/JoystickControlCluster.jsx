@@ -179,8 +179,6 @@ export const DualJoystickControls = ({
   onDrive,
   onReset,
   onLookDown,
-  onTurnLeft,
-  onTurnRight,
   onLaserToggle,
   laserOn,
   onHeadlightToggle,
@@ -580,8 +578,6 @@ export const DualJoystickControls = ({
           flex-shrink: 0;
         }
 
-        /* Nudge drive joystick inward so the L button isn't off-screen on mobile */ 
-
         .j-zone {
           position: absolute;
           top: 0;
@@ -647,17 +643,6 @@ export const DualJoystickControls = ({
         .sibling-btn-right {
           left: auto;
           right: -8px;
-        }
-
-        .drive-sibling-left {
-          top: -8px;
-          left: -8px;
-        }
-
-        .drive-sibling-right {
-          top: -8px;
-          right: -8px;
-          left: auto;
         }
 
         .drive-bottom-center {
@@ -760,27 +745,11 @@ export const DualJoystickControls = ({
         }
       `}</style>
 
-      {/* LEFT JOYSTICK: DRIVE + L / R quick turn buttons */}
+      {/* LEFT JOYSTICK: DRIVE */}
       <div className="joystick-wrapper">
         <div ref={leftZoneRef} className="j-zone">
           <div className="j-label">Drive</div>
         </div>
-
-        <button
-          type="button"
-          className="reset-btn-sibling drive-sibling-left"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onTurnLeft?.();
-          }}
-          style={{ borderRadius: "20px" }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="Quick turn left"
-          title="L (slow 90° left)"
-        >
-          L
-        </button>
 
         {onTreat && (
           <button
@@ -799,22 +768,6 @@ export const DualJoystickControls = ({
             TRT
           </button>
         )}
-
-        <button
-          type="button"
-          className="reset-btn-sibling drive-sibling-right"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onTurnRight?.();
-          }}
-          style={{ borderRadius: "20px" }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="Quick turn right"
-          title="R (slow 90° right)"
-        >
-          R
-        </button>
 
         <button
           type="button"
@@ -919,8 +872,6 @@ DualJoystickControls.propTypes = {
   onDrive: PropTypes.func.isRequired,
   onReset: PropTypes.func,
   onLookDown: PropTypes.func,
-  onTurnLeft: PropTypes.func,
-  onTurnRight: PropTypes.func,
   onLaserToggle: PropTypes.func,
   laserOn: PropTypes.bool,
   onHeadlightToggle: PropTypes.func,

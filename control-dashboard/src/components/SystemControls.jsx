@@ -21,6 +21,8 @@ import {
   Route,
   Glasses,
   Gauge,
+  Volume2,
+  Mic,
 } from "lucide-react";
 
 const CONTROL_MODE_OPTIONS = [
@@ -113,6 +115,10 @@ export const SystemControls = ({
   onLidarMinimapChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
+  roverSpeakerEnabled = true,
+  onRoverSpeakerChange,
+  dashMicEnabled = false,
+  onDashMicChange,
 }) => {
   if (!isPowered) return null;
 
@@ -351,6 +357,38 @@ export const SystemControls = ({
                 { label: "ON", value: "on" },
               ]}
               onChange={(mode) => onMetricsPanelChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow
+            icon={<Volume2 size={12} />}
+            label="Speaker"
+            title="Hear rover microphone audio"
+          >
+            <SegmentedToggle
+              ariaLabel="Rover speaker"
+              value={roverSpeakerEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onRoverSpeakerChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow
+            icon={<Mic size={12} />}
+            label="Mic"
+            title="Send your voice to the rover"
+          >
+            <SegmentedToggle
+              ariaLabel="Dashboard microphone"
+              value={dashMicEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onDashMicChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 

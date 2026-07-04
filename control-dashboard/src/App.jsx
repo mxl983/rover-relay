@@ -17,7 +17,6 @@ import {
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
-import { WifiSignal } from "./components/WifiSignal";
 import { DriveAssistHUD } from "./components/DriveAssistHUD";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
@@ -26,6 +25,7 @@ import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { LidarMinimap } from "./components/LidarMinimap";
+import { BrandCatIcon } from "./components/BrandCatIcon";
 import { HudIndicatorStrip } from "./components/HudIndicatorStrip";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
@@ -83,6 +83,8 @@ const GIMBAL_HOME_SETTLE_MS = 600;
 const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
 const LIDAR_MINIMAP_STORAGE_KEY = "rover-dashboard-lidar-minimap";
 const METRICS_PANEL_STORAGE_KEY = "rover-dashboard-metrics-panel";
+const ROVER_SPEAKER_STORAGE_KEY = "rover-dashboard-rover-speaker";
+const DASH_MIC_STORAGE_KEY = "rover-dashboard-dash-mic";
 const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
 
 function readInitialControlMode() {
@@ -117,6 +119,30 @@ function readInitialMetricsPanel() {
     /* ignore */
   }
   return true;
+}
+
+function readInitialRoverSpeaker() {
+  if (typeof window === "undefined") return true;
+  try {
+    const v = window.localStorage.getItem(ROVER_SPEAKER_STORAGE_KEY);
+    if (v === "false") return false;
+    if (v === "true") return true;
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+function readInitialDashMic() {
+  if (typeof window === "undefined") return false;
+  try {
+    const v = window.localStorage.getItem(DASH_MIC_STORAGE_KEY);
+    if (v === "true") return true;
+    if (v === "false") return false;
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 function formatRemainingTime(minutes) {
@@ -172,6 +198,8 @@ export default function App() {
   const [showBackupView, setShowBackupView] = useState(false);
   const [showLidarMinimap, setShowLidarMinimapState] = useState(readInitialLidarMinimap);
   const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
+  const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
+  const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
 
   const setShowLidarMinimap = (enabled) => {
     setShowLidarMinimapState(enabled);
@@ -186,6 +214,24 @@ export default function App() {
     setShowMetricsPanelState(enabled);
     try {
       window.localStorage.setItem(METRICS_PANEL_STORAGE_KEY, enabled ? "true" : "false");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const setRoverSpeakerEnabled = (enabled) => {
+    setRoverSpeakerEnabledState(enabled);
+    try {
+      window.localStorage.setItem(ROVER_SPEAKER_STORAGE_KEY, enabled ? "true" : "false");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const setDashMicEnabled = (enabled) => {
+    setDashMicEnabledState(enabled);
+    try {
+      window.localStorage.setItem(DASH_MIC_STORAGE_KEY, enabled ? "true" : "false");
     } catch {
       /* ignore */
     }
@@ -940,6 +986,8 @@ export default function App() {
       <VideoStream
         onVideoReadyChange={setVideoStreamReady}
         controlChannelReady={piOnline}
+        roverSpeakerEnabled={roverSpeakerEnabled}
+        dashMicEnabled={dashMicEnabled}
         backupStreamUrl={BACKUP_STREAM_ENDPOINT}
         showBackupView={showBackupView}
         relayRoverPayload={relayRoverPayload}
@@ -970,8 +1018,6 @@ export default function App() {
           onDrive={handleDriveUpdate}
           onReset={handleCameraReset}
           onLookDown={handleLookDown}
-          onTurnLeft={() => handleQuickTurn("L")}
-          onTurnRight={() => handleQuickTurn("R")}
           onLaserToggle={handleLaserToggle}
           laserOn={stats.laserOn}
           onVoiceStart={startVoice}
@@ -1021,6 +1067,10 @@ export default function App() {
             onLidarMinimapChange={setShowLidarMinimap}
             metricsPanelEnabled={showMetricsPanel}
             onMetricsPanelChange={setShowMetricsPanel}
+            roverSpeakerEnabled={roverSpeakerEnabled}
+            onRoverSpeakerChange={setRoverSpeakerEnabled}
+            dashMicEnabled={dashMicEnabled}
+            onDashMicChange={setDashMicEnabled}
           />
 
           {showLidarMinimap && (
@@ -1050,8 +1100,6 @@ export default function App() {
             onDrive={handleDriveUpdate}
             onResetCamera={handleCameraReset}
             onLookDown={handleLookDown}
-            onTurnLeft={() => handleQuickTurn("L")}
-            onTurnRight={() => handleQuickTurn("R")}
             onLaserToggle={handleLaserToggle}
             laserOn={stats.laserOn}
             onVoiceStart={startVoice}
@@ -1127,6 +1175,10 @@ function HudHeader({
   onLidarMinimapChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
+  roverSpeakerEnabled = true,
+  onRoverSpeakerChange,
+  dashMicEnabled = false,
+  onDashMicChange,
 }) {
   const distanceLabel = formatRoverDistance(distanceMeters);
 
@@ -1134,7 +1186,10 @@ function HudHeader({
     <div className="hud-header">
       <div className="glass-card hud-header-brand">
         <div className="hud-brand-stack">
-          <div className="hud-brand-title">芒果探测器</div>
+          <div className="hud-brand-title" aria-label="芒果号 v2" title="芒果号 v2">
+            <BrandCatIcon size={18} />
+            <span className="hud-brand-version">v2</span>
+          </div>
           {distanceLabel ? (
             <div
               className="hud-brand-distance"
@@ -1144,7 +1199,6 @@ function HudHeader({
             </div>
           ) : null}
         </div>
-        {wifiSignal && <WifiSignal dbm={wifiSignal} />}
       </div>
       <div className="hud-header-center">
         <HudIndicatorStrip
@@ -1156,6 +1210,7 @@ function HudHeader({
           isCharging={isCharging}
           isLowBattery={isLowBattery}
           lowBatteryIndicatorArmed={lowBatteryIndicatorArmed}
+          wifiSignal={wifiSignal}
         />
       </div>
       <div className="glass-card hud-header-actions">
@@ -1183,6 +1238,10 @@ function HudHeader({
           onLidarMinimapChange={onLidarMinimapChange}
           metricsPanelEnabled={metricsPanelEnabled}
           onMetricsPanelChange={onMetricsPanelChange}
+          roverSpeakerEnabled={roverSpeakerEnabled}
+          onRoverSpeakerChange={onRoverSpeakerChange}
+          dashMicEnabled={dashMicEnabled}
+          onDashMicChange={onDashMicChange}
         />
         <FullscreenButton />
       </div>
@@ -1203,8 +1262,6 @@ function HudFooter({
   onDrive,
   onResetCamera,
   onLookDown,
-  onTurnLeft,
-  onTurnRight,
   onLaserToggle,
   laserOn,
   onVoiceStart,
@@ -1222,8 +1279,6 @@ function HudFooter({
     onDrive,
     onReset: onResetCamera,
     onLookDown,
-    onTurnLeft,
-    onTurnRight,
     onLaserToggle,
     laserOn,
     onVoiceStart,
