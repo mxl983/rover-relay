@@ -3,6 +3,12 @@ import { PI_SYSTEM_ENDPOINT } from "../config.js";
 
 const DRIVE_ASSIST_ENDPOINT = `${PI_SYSTEM_ENDPOINT}/drive-assist`;
 
+/**
+ * Drive-assist collision + maneuvering runs on the Pi rover
+ * (/api/system/drive-assist). This dashboard only toggles assist and shows HUD
+ * state from DRIVE_ASSIST_UPDATE — it does not throttle drive commands.
+ */
+
 /** POST /drive-assist — turn assist on or off. Returns the same shape as /info. */
 export async function postDriveAssist(enabled) {
   return apiPostJson(DRIVE_ASSIST_ENDPOINT, { enabled });

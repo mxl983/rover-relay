@@ -8,7 +8,8 @@ function piBaseUrl() {
   return raw.replace(/\/$/, "");
 }
 
-/** Turn Pi drive assist on/off (best-effort; navigation must not fight assist maneuvers). */
+/** Turn Pi drive assist on/off (best-effort; navigation must not fight assist maneuvers).
+ *  Maneuvering speed/braking is enforced on the Pi, not in this relay service. */
 export async function setPiDriveAssistEnabled(enabled) {
   const url = `${piBaseUrl()}/api/system/drive-assist`;
   const headers = { "Content-Type": "application/json" };

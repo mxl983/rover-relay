@@ -7,14 +7,18 @@ import base64
 import json
 import math
 import os
+import ssl
 import threading
 import time
+import urllib.error
+import urllib.request
 import zlib
 from typing import Any
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Imu
 from sensor_msgs.msg import LaserScan
 
 SLAM_MAP_FILE = os.environ.get("SLAM_MAP_FILE_PATH", "/app/lidar/slam_map.json")
@@ -33,6 +37,15 @@ SLAM_MATCH_MAX_DIST_M = float(os.environ.get("SLAM_MATCH_MAX_DIST_M", "0.28"))
 SLAM_SCAN_MATCH_MAX_FORWARD_M = float(os.environ.get("SLAM_SCAN_MATCH_MAX_FORWARD_M", "0.65"))
 SLAM_MIN_SCAN_INTERVAL_S = float(os.environ.get("SLAM_MIN_SCAN_INTERVAL_S", "0.08"))
 SLAM_PURGE_ON_START = os.environ.get("SLAM_PURGE_ON_START", "false").lower() in ("1", "true", "yes")
+SLAM_IMU_ENABLED = os.environ.get("SLAM_IMU_ENABLED", "true").lower() in ("1", "true", "yes")
+SLAM_IMU_TOPIC = os.environ.get("SLAM_IMU_TOPIC", "/imu/data")
+SLAM_IMU_HTTP_URL = os.environ.get("SLAM_IMU_HTTP_URL", "")
+SLAM_IMU_HTTP_POLL_S = float(os.environ.get("SLAM_IMU_HTTP_POLL_S", "0.05"))
+SLAM_IMU_HTTP_TIMEOUT_S = float(os.environ.get("SLAM_IMU_HTTP_TIMEOUT_S", "0.35"))
+SLAM_IMU_HTTP_INSECURE_TLS = os.environ.get("SLAM_IMU_HTTP_INSECURE_TLS", "true").lower() in ("1", "true", "yes")
+SLAM_IMU_MAX_STALE_S = float(os.environ.get("SLAM_IMU_MAX_STALE_S", "0.4"))
+SLAM_IMU_MAX_YAW_RATE_RAD_S = float(os.environ.get("SLAM_IMU_MAX_YAW_RATE_RAD_S", "5.5"))
+SLAM_IMU_MATCH_HINT_WEIGHT = float(os.environ.get("SLAM_IMU_MATCH_HINT_WEIGHT", "0.55"))
 
 CELL_UNKNOWN = 0
 CELL_FREE = 1
@@ -207,6 +220,48 @@ def normalize_angle(theta: float) -> float:
     return theta
 
 
+class ImuTracker:
+    """Tracks latest yaw-rate sample from ROS Imu or HTTP payload."""
+
+    def __init__(self) -> None:
+        self.yaw_rate_rad_s = 0.0
+        self.sample_stamp = 0.0
+        self.sample_monotonic = 0.0
+
+    def update_from_ros(self, msg: Imu) -> None:
+        rate = float(msg.angular_velocity.z)
+        if not math.isfinite(rate):
+            return
+        self.yaw_rate_rad_s = max(-SLAM_IMU_MAX_YAW_RATE_RAD_S, min(SLAM_IMU_MAX_YAW_RATE_RAD_S, rate))
+        self.sample_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        self.sample_monotonic = time.monotonic()
+
+    def update_from_http(self, payload: dict[str, Any]) -> None:
+        gyro = payload.get("gyro")
+        if not isinstance(gyro, dict):
+            return
+        rate = float(gyro.get("z", 0.0))
+        if not math.isfinite(rate):
+            return
+        self.yaw_rate_rad_s = max(-SLAM_IMU_MAX_YAW_RATE_RAD_S, min(SLAM_IMU_MAX_YAW_RATE_RAD_S, rate))
+        stamp = payload.get("stamp")
+        self.sample_stamp = float(stamp) if isinstance(stamp, (int, float)) else 0.0
+        self.sample_monotonic = time.monotonic()
+
+    def is_live(self) -> bool:
+        if self.sample_monotonic <= 0:
+            return False
+        return (time.monotonic() - self.sample_monotonic) <= SLAM_IMU_MAX_STALE_S
+
+    def dtheta_hint(self, from_stamp: float, to_stamp: float) -> float | None:
+        if not self.is_live():
+            return None
+        dt = to_stamp - from_stamp if to_stamp > from_stamp > 0 else 0.0
+        if dt <= 0:
+            return None
+        return self.yaw_rate_rad_s * dt
+
+
 def scan_match_score(
     reference: list[tuple[float, float]],
     current: list[tuple[float, float]],
@@ -249,7 +304,7 @@ def apply_robot_motion_to_pose(
 
 
 class SlamEngine:
-    def __init__(self) -> None:
+    def __init__(self, imu_tracker: ImuTracker | None = None) -> None:
         half = SLAM_GRID_SIZE_M / 2.0
         self.grid = OccupancyGrid(SLAM_GRID_SIZE_M, SLAM_RESOLUTION, -half, -half)
         self.pose_x = 0.0
@@ -261,6 +316,7 @@ class SlamEngine:
         self.scan_count = 0
         self.loaded_from_disk = False
         self.last_match_points: list[tuple[float, float]] = []
+        self.imu_tracker = imu_tracker
 
     def reset(self) -> None:
         half = SLAM_GRID_SIZE_M / 2.0
@@ -301,7 +357,11 @@ class SlamEngine:
                 hits += 1
         return hits / len(local_points)
 
-    def estimate_pose_scan_to_scan(self, local_points: list[tuple[float, float]]) -> None:
+    def estimate_pose_scan_to_scan(
+        self,
+        local_points: list[tuple[float, float]],
+        imu_dtheta_hint: float | None = None,
+    ) -> None:
         """Primary motion: match current scan to previous scan (no odometry)."""
         if len(self.last_match_points) < 8:
             return
@@ -317,7 +377,14 @@ class SlamEngine:
         ]
         lateral_steps = [-0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25]
 
-        for dtheta_deg in range(-14, 15, 2):
+        if imu_dtheta_hint is not None and math.isfinite(imu_dtheta_hint):
+            imu_deg = math.degrees(imu_dtheta_hint)
+            imu_deg = max(-20.0, min(20.0, imu_deg))
+            dtheta_candidates_deg = [imu_deg + step for step in (-8, -6, -4, -2, 0, 2, 4, 6, 8)]
+        else:
+            dtheta_candidates_deg = list(range(-14, 15, 2))
+
+        for dtheta_deg in dtheta_candidates_deg:
             dtheta = math.radians(dtheta_deg)
             for dx in forward_steps:
                 for dy in lateral_steps:
@@ -336,6 +403,10 @@ class SlamEngine:
         dx, dy, dtheta = best_motion
         if best_score < 0.12:
             return
+
+        if imu_dtheta_hint is not None and math.isfinite(imu_dtheta_hint):
+            weight = max(0.0, min(1.0, SLAM_IMU_MATCH_HINT_WEIGHT))
+            dtheta = (1.0 - weight) * dtheta + weight * imu_dtheta_hint
 
         self.pose_x, self.pose_y, self.pose_theta = apply_robot_motion_to_pose(
             self.pose_x,
@@ -404,8 +475,13 @@ class SlamEngine:
             return
 
         match_points = decimate_points(local_points, 90)
+        imu_dtheta_hint = (
+            self.imu_tracker.dtheta_hint(self.last_stamp, stamp)
+            if self.imu_tracker is not None
+            else None
+        )
         if self.scan_count >= 1:
-            self.estimate_pose_scan_to_scan(match_points)
+            self.estimate_pose_scan_to_scan(match_points, imu_dtheta_hint=imu_dtheta_hint)
             self.estimate_pose_scan_to_map(match_points)
 
         self.grid.update_scan_live(self.pose_x, self.pose_y, local_points, self.pose_theta)
@@ -504,7 +580,8 @@ class SlamEngine:
 
 
 _engine_lock = threading.Lock()
-_engine = SlamEngine()
+_imu_tracker = ImuTracker()
+_engine = SlamEngine(imu_tracker=_imu_tracker)
 
 
 class SlamMapperNode(Node):
@@ -520,11 +597,58 @@ class SlamMapperNode(Node):
             else:
                 self.get_logger().info("Starting new SLAM map")
         self.create_subscription(LaserScan, SLAM_TOPIC, self._on_scan, qos_profile_sensor_data)
-        self.get_logger().info(f"SLAM scan-to-scan + map on {SLAM_TOPIC} (no odometry)")
+        self._imu_ros_sub = None
+        self._imu_http_timer = None
+        if SLAM_IMU_ENABLED:
+            if SLAM_IMU_TOPIC:
+                self._imu_ros_sub = self.create_subscription(
+                    Imu,
+                    SLAM_IMU_TOPIC,
+                    self._on_imu,
+                    qos_profile_sensor_data,
+                )
+            if SLAM_IMU_HTTP_URL:
+                self._imu_http_timer = self.create_timer(SLAM_IMU_HTTP_POLL_S, self._poll_imu_http)
+
+        imu_sources: list[str] = []
+        if SLAM_IMU_ENABLED and SLAM_IMU_TOPIC:
+            imu_sources.append(f"ROS:{SLAM_IMU_TOPIC}")
+        if SLAM_IMU_ENABLED and SLAM_IMU_HTTP_URL:
+            imu_sources.append(f"HTTP:{SLAM_IMU_HTTP_URL}")
+        imu_note = ", ".join(imu_sources) if imu_sources else "disabled"
+        self.get_logger().info(f"SLAM scan-to-scan + map on {SLAM_TOPIC}; IMU sources: {imu_note}")
 
     def _on_scan(self, msg: LaserScan) -> None:
         with _engine_lock:
             _engine.process_scan(msg)
+
+    def _on_imu(self, msg: Imu) -> None:
+        with _engine_lock:
+            _imu_tracker.update_from_ros(msg)
+
+    def _poll_imu_http(self) -> None:
+        if not SLAM_IMU_HTTP_URL:
+            return
+        context = None
+        if SLAM_IMU_HTTP_INSECURE_TLS:
+            context = ssl._create_unverified_context()
+
+        try:
+            request = urllib.request.Request(SLAM_IMU_HTTP_URL, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(
+                request,
+                timeout=SLAM_IMU_HTTP_TIMEOUT_S,
+                context=context,
+            ) as response:
+                body = response.read().decode("utf-8")
+            parsed = json.loads(body)
+            payload = parsed.get("data") if isinstance(parsed, dict) else None
+            if isinstance(payload, dict):
+                with _engine_lock:
+                    _imu_tracker.update_from_http(payload)
+        except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            # Best-effort source, keep SLAM running even if endpoint is down.
+            return
 
     def destroy_node(self) -> bool:
         with _engine_lock:

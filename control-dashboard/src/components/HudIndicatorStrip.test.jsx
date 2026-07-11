@@ -171,7 +171,7 @@ describe("HudIndicatorStrip", () => {
         wifiSignal={-50}
       />,
     );
-    expect(screen.queryByLabelText(/weak wi-fi signal/i)).toBeNull();
+    expect(screen.queryByLabelText(/wi-fi signal cut/i)).toBeNull();
 
     rerender(
       <HudIndicatorStrip
@@ -180,8 +180,30 @@ describe("HudIndicatorStrip", () => {
         wifiSignal={-82}
       />,
     );
-    expect(screen.getByLabelText(/weak wi-fi signal/i)).toBeTruthy();
+    expect(screen.getByLabelText(/wi-fi signal cut/i)).toBeTruthy();
     expect(container.querySelector(".hud-indicator-slot--weak-wifi.hud-indicator-slot--active")).toBeTruthy();
     expect(container.querySelector(".hud-indicator-icon--weak-wifi")).toBeTruthy();
+  });
+
+  it("shows high latency ethernet icon only above 300ms", () => {
+    const { container, rerender } = render(
+      <HudIndicatorStrip
+        driveAssistEnabled={false}
+        driveAssistUpdate={null}
+        latencyMs={250}
+      />,
+    );
+    expect(screen.queryByLabelText(/high latency/i)).toBeNull();
+
+    rerender(
+      <HudIndicatorStrip
+        driveAssistEnabled={false}
+        driveAssistUpdate={null}
+        latencyMs={420}
+      />,
+    );
+    expect(screen.getByLabelText(/high latency — drive carefully/i)).toBeTruthy();
+    expect(container.querySelector(".hud-indicator-slot--high-latency.hud-indicator-slot--active")).toBeTruthy();
+    expect(container.querySelector(".hud-indicator-icon--high-latency")).toBeTruthy();
   });
 });

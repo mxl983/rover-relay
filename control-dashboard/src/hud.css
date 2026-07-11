@@ -224,6 +224,11 @@ html {
   animation: hud-indicator-warning-pulse 0.9s ease-in-out infinite;
 }
 
+.hud-indicator-slot--high-latency.hud-indicator-slot--active {
+  color: #f59e0b;
+  animation: hud-indicator-warning-pulse 0.9s ease-in-out infinite;
+}
+
 .hud-indicator-icon-wrap {
   display: inline-flex;
   align-items: center;
@@ -245,6 +250,10 @@ html {
 
 .hud-indicator-icon-wrap--weak-wifi {
   color: #ff9800;
+}
+
+.hud-indicator-icon-wrap--high-latency {
+  color: #f59e0b;
 }
 
 .hud-indicator-icon-wrap--sport {
@@ -288,6 +297,10 @@ html {
 
 .hud-indicator-icon--weak-wifi {
   color: #ff9800;
+}
+
+.hud-indicator-icon--high-latency {
+  color: #f59e0b;
 }
 
 .hud-indicator-icon--sport {

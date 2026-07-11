@@ -110,6 +110,13 @@ export const DRIVE_ASSIST_DEBUG =
 export const JOYSTICK_DRIVE_DEBUG =
   import.meta.env.VITE_JOYSTICK_DRIVE_DEBUG !== "false";
 
+/** Log IMU samples in the browser console (default on unless explicitly false). */
+export const IMU_DEBUG = import.meta.env.VITE_IMU_DEBUG !== "false";
+
+/** Latest IMU sample from the Pi (REST). */
+export const PI_IMU_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/sensors/imu`;
+export const PI_SENSORS_STATUS_ENDPOINT = `https://${PI_SERVER_IP}:3000/api/sensors/status`;
+
 /** Allowed origin for capture URL (same host as API). Used to validate redirects. */
 export function getAllowedCaptureOrigin() {
   try {

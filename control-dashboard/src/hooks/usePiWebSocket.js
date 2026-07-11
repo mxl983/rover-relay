@@ -3,21 +3,28 @@ import { PI_WEBSOCKET, DRIVE_ASSIST_DEBUG } from "../config";
 import { getBatteryPercentage } from "../utils/batteryFromVoltage.js";
 import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
 import { logDriveAssistInfoDetail } from "../utils/driveAssistApi.js";
+import { fetchImuSample } from "../utils/imuApi.js";
+import { isImuLive, normalizeImuSample } from "../utils/imuData.js";
+import { resetImuDebugLog } from "../utils/imuDebugLog.js";
 
 const PING_INTERVAL_MS = 3000;
 const HEARTBEAT_STALE_MS = 5000;
 const RECONNECT_BASE_MS = 600;
 const RECONNECT_MAX_MS = 8000;
+const IMU_STALE_CHECK_MS = 250;
 
 export function usePiWebSocket() {
   const socketRef = useRef(null);
   const [stats, setStats] = useState({});
   const [driveAssistUpdate, setDriveAssistUpdate] = useState(null);
+  const [imu, setImu] = useState(null);
+  const [imuLive, setImuLive] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [hasEverConnected, setHasEverConnected] = useState(false);
   const lastPingTime = useRef(0);
   const lastHeartBeat = useRef(0);
   const reconnectAttemptRef = useRef(0);
+  const imuRef = useRef(null);
 
   useEffect(() => {
     let socket;
@@ -42,6 +49,24 @@ export function usePiWebSocket() {
       );
     };
 
+    const applyImuSample = (sample) => {
+      if (!sample) return;
+      imuRef.current = sample;
+      setImu(sample);
+      setImuLive(isImuLive(sample));
+    };
+
+    const bootstrapImu = async () => {
+      try {
+        const sample = await fetchImuSample();
+        if (!isUnmounted && sample) {
+          applyImuSample(sample);
+        }
+      } catch {
+        // REST fallback is optional; WebSocket is primary.
+      }
+    };
+
     const connect = () => {
       socket = new WebSocket(PI_WEBSOCKET);
       socketRef.current = socket;
@@ -52,6 +77,7 @@ export function usePiWebSocket() {
         reconnectAttemptRef.current = 0;
         lastHeartBeat.current = Date.now();
         sendClientInfo(socket);
+        void bootstrapImu();
         if (navigator.geolocation?.getCurrentPosition) {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -93,6 +119,14 @@ export function usePiWebSocket() {
             return;
           }
 
+          if (data.type === "IMU_UPDATE") {
+            const sample = normalizeImuSample(data?.data);
+            if (sample) {
+              applyImuSample(sample);
+            }
+            return;
+          }
+
           const raw = data?.data && typeof data.data === "object" ? { ...data.data } : {};
             if (Number.isFinite(Number(raw.voltage))) {
               const pct = getBatteryPercentage(Number(raw.voltage));
@@ -112,6 +146,10 @@ export function usePiWebSocket() {
       socket.onclose = () => {
         if (isUnmounted) return;
         setDriveAssistUpdate(null);
+        imuRef.current = null;
+        setImu(null);
+        setImuLive(false);
+        resetImuDebugLog();
         setIsOnline(false);
         const attempt = reconnectAttemptRef.current;
         const base = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
@@ -142,9 +180,15 @@ export function usePiWebSocket() {
       }
     }, PING_INTERVAL_MS);
 
+    const imuStaleTimer = setInterval(() => {
+      const sample = imuRef.current;
+      setImuLive(Boolean(sample && isImuLive(sample)));
+    }, IMU_STALE_CHECK_MS);
+
     return () => {
       isUnmounted = true;
       clearInterval(pingInterval);
+      clearInterval(imuStaleTimer);
       clearTimeout(reconnectTimeout);
       socket?.close();
     };
@@ -162,5 +206,5 @@ export function usePiWebSocket() {
     socketRef.current.send(JSON.stringify(msg));
   };
 
-  return { stats, driveAssistUpdate, isOnline, hasEverConnected, socketRef, sendControl };
+  return { stats, driveAssistUpdate, imu, imuLive, isOnline, hasEverConnected, socketRef, sendControl };
 }

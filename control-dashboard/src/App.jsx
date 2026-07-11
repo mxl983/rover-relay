@@ -10,6 +10,7 @@ import {
   VOICE_DRIVE_DEBUG,
   DRIVE_ASSIST_DEBUG,
   JOYSTICK_DRIVE_DEBUG,
+  IMU_DEBUG,
   getRelayRoverHeartbeatWebSocketUrl,
   ROVER_CLIENT_DISTANCE_ENDPOINT,
   ROVER_CHARGING_ENDPOINT,
@@ -45,6 +46,8 @@ import {
   postDriveAssist,
   readDriveAssistEnabled,
 } from "./utils/driveAssistApi.js";
+import { logImuDebug } from "./utils/imuDebugLog.js";
+import { playRoverChime } from "./utils/chimeApi.js";
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -132,7 +135,7 @@ function formatRemainingTime(minutes) {
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login } = useRoverSession();
-  const { stats, driveAssistUpdate, isOnline: piOnline, hasEverConnected, sendControl } =
+  const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl } =
     usePiWebSocket();
   const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
   const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
@@ -153,6 +156,18 @@ export default function App() {
     );
   }, [isAuthenticated, driveAssistEnabled]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !IMU_DEBUG) return;
+    if (!imu) return;
+    logImuDebug(imu);
+  }, [isAuthenticated, imu]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !IMU_DEBUG) return;
+    // eslint-disable-next-line no-console
+    console.log(imuLive ? "[imu] stream live" : "[imu] stream stale / offline");
+  }, [isAuthenticated, imuLive]);
+
   const { isEspOnline, mqttClientRef } = useMqtt(
     isAuthenticated ? sessionCreds : null,
   );
@@ -164,10 +179,15 @@ export default function App() {
   const [focusMode, setFocusMode] = useState("far");
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
-  const [showLidarMinimap, setShowLidarMinimap] = useState(false);
+  const [showLidarMinimap, setShowLidarMinimapState] = useState(false);
   const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
   const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
   const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
+
+  const setShowLidarMinimap = (enabled) => {
+    setShowLidarMinimapState(enabled);
+    void playRoverChime();
+  };
 
   const setShowMetricsPanel = (enabled) => {
     setShowMetricsPanelState(enabled);
@@ -176,6 +196,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    void playRoverChime();
   };
 
   const setRoverSpeakerEnabled = (enabled) => {
@@ -185,6 +206,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    void playRoverChime();
   };
 
   const setDashMicEnabled = (enabled) => {
@@ -194,6 +216,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    void playRoverChime();
   };
 
   const setControlMode = (mode) => {
@@ -204,6 +227,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    void playRoverChime();
   };
   const [actionError, setActionError] = useState(null);
   const [actionToast, setActionToast] = useState(null);
@@ -626,6 +650,7 @@ export default function App() {
       });
       setNvActive(requestedState);
       showActionToast(`Night mode ${requestedState ? "enabled" : "disabled"}`);
+      void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Night vision toggle failed");
     } finally {
@@ -643,6 +668,7 @@ export default function App() {
       });
       setResMode(newMode);
       showActionToast(`Resolution set to ${newMode.toUpperCase()}`);
+      void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Resolution change failed");
     } finally {
@@ -659,6 +685,7 @@ export default function App() {
         ...(CAMERA_SECRET ? { secret: CAMERA_SECRET } : {}),
       });
       setFocusMode(newMode);
+      void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Focus change failed");
     } finally {
@@ -681,6 +708,7 @@ export default function App() {
     try {
       await apiPostJson(`${PI_SYSTEM_ENDPOINT}/quiet-mode`, { enabled });
       showActionToast(`Drive mode: ${enabled ? "ECO" : "Sport"}`);
+      void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Drive mode update failed");
     }
@@ -695,6 +723,7 @@ export default function App() {
       const nextEnabled = readDriveAssistEnabled(info);
       if (nextEnabled != null) setDriveAssistEnabled(nextEnabled);
       showActionToast(`Drive assist ${enabled ? "enabled" : "disabled"}`);
+      void playRoverChime();
     } catch (err) {
       setDriveAssistEnabled(previousEnabled);
       setActionError(err.message ?? "Drive assist update failed");
@@ -718,6 +747,7 @@ export default function App() {
       await apiPostJson(`${PI_SYSTEM_ENDPOINT}/power-saving`, { enabled });
       setPowerSavingEnabled(enabled);
       showActionToast(`Power saving ${enabled ? "enabled" : "disabled"}`);
+      void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Power-saving update failed");
     }
@@ -958,6 +988,7 @@ export default function App() {
         <div className={`hud-overlay${controlMode === "immersive" ? " hud-overlay--immersive" : ""}`}>
           <HudHeader
             wifiSignal={stats?.wifiSignal}
+            latencyMs={stats?.latency}
             distanceMeters={relayDistanceMeters}
             isPowered={isPowered}
             nvActive={nvActive}
@@ -1064,6 +1095,7 @@ function ActionToast({ message }) {
 
 function HudHeader({
   wifiSignal,
+  latencyMs,
   distanceMeters,
   isPowered,
   nvActive,
@@ -1125,6 +1157,7 @@ function HudHeader({
           isLowBattery={isLowBattery}
           lowBatteryIndicatorArmed={lowBatteryIndicatorArmed}
           wifiSignal={wifiSignal}
+          latencyMs={latencyMs}
         />
       </div>
       <div className="glass-card hud-header-actions">

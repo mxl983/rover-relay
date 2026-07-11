@@ -83,4 +83,31 @@ describe("usePiWebSocket", () => {
     });
     expect(result.current.driveAssistUpdate).toBeNull();
   });
+
+  it("handles IMU_UPDATE messages", async () => {
+    const { result } = renderHook(() => usePiWebSocket());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+
+    act(() => {
+      handlers.onmessage?.({
+        data: JSON.stringify({
+          type: "IMU_UPDATE",
+          data: {
+            stamp: 1783406393.87,
+            seq: 237,
+            connected: true,
+            accel: { x: 0.66, y: -0.004, z: -0.003, unit: "g" },
+            gyro: { x: -0.01, y: 0.003, z: 1.69, unit: "rad_s" },
+            aux: { x: -7, y: -20, z: 2056 },
+          },
+        }),
+      });
+    });
+
+    expect(result.current.imu?.seq).toBe(237);
+    expect(result.current.imu?.gyro.z).toBeCloseTo(1.69);
+    expect(result.current.imuLive).toBe(true);
+  });
 });

@@ -3,9 +3,10 @@ import {
   BatteryCharging,
   BatteryLow,
   Clock,
+  EthernetPort,
   Radar,
   TriangleAlert,
-  WifiLow,
+  WifiOff,
   Zap,
 } from "lucide-react";
 import {
@@ -13,6 +14,7 @@ import {
   readDriveAssistClosestRangeM,
 } from "../utils/driveAssistApi.js";
 import { isWifiWeak } from "../utils/wifiSignal.js";
+import { isHighLatency } from "../utils/latencySignal.js";
 
 const RESERVED_SLOT_COUNT = 0;
 const INDICATOR_ICON_SIZE = 12;
@@ -142,7 +144,7 @@ function WeakWifiIndicator({ dbm }) {
   const val = Number(dbm);
   if (!Number.isFinite(val) || !isWifiWeak(val)) return null;
 
-  const label = `Weak Wi-Fi signal (${Math.round(val)} dBm)`;
+  const label = `Wi-Fi signal cut (${Math.round(val)} dBm)`;
 
   return (
     <div
@@ -153,8 +155,32 @@ function WeakWifiIndicator({ dbm }) {
       title={label}
     >
       <IndicatorIcon toneClass="hud-indicator-icon-wrap--weak-wifi">
-        <WifiLow
+        <WifiOff
           className="hud-indicator-icon hud-indicator-icon--weak-wifi"
+          {...indicatorIconProps}
+        />
+      </IndicatorIcon>
+    </div>
+  );
+}
+
+function HighLatencyIndicator({ latencyMs }) {
+  const val = Number(latencyMs);
+  if (!Number.isFinite(val) || !isHighLatency(val)) return null;
+
+  const label = `High latency — drive carefully (${Math.round(val)} ms)`;
+
+  return (
+    <div
+      className="hud-indicator-slot hud-indicator-slot--high-latency hud-indicator-slot--active"
+      role="status"
+      aria-live="assertive"
+      aria-label={label}
+      title={label}
+    >
+      <IndicatorIcon toneClass="hud-indicator-icon-wrap--high-latency">
+        <EthernetPort
+          className="hud-indicator-icon hud-indicator-icon--high-latency"
           {...indicatorIconProps}
         />
       </IndicatorIcon>
@@ -201,6 +227,7 @@ export function HudIndicatorStrip({
   isLowBattery = false,
   lowBatteryIndicatorArmed = false,
   wifiSignal = null,
+  latencyMs = null,
 }) {
   const sportModeEnabled = quietMode === false;
   const showCharging = isCharging;
@@ -215,6 +242,7 @@ export function HudIndicatorStrip({
       <ChargingIndicator enabled={showCharging} />
       <LowBatteryIndicator enabled={showLowBattery} />
       <WeakWifiIndicator dbm={wifiSignal} />
+      <HighLatencyIndicator latencyMs={latencyMs} />
       {Array.from({ length: RESERVED_SLOT_COUNT }, (_, index) => (
         <div
           key={`reserved-${index}`}
