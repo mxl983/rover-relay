@@ -917,76 +917,34 @@ button:active {
   pointer-events: none;
 }
 
-.gamepad-activation-overlay {
+.gamepad-focus-hint {
   position: fixed;
-  inset: 0;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* Beat global `button { width/height: 45px }` — otherwise overlay is a corner chip */
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 100vw;
-  min-height: 100vh;
-  min-height: 100dvh;
-  max-width: none !important;
-  max-height: none !important;
-  z-index: 10050;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  background: rgba(4, 8, 16, 0.72);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  top: max(72px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1002;
+  width: auto !important;
+  height: auto !important;
+  min-width: unset !important;
+  min-height: unset !important;
+  max-width: 90vw;
+  padding: 10px 16px;
+  border-color: rgba(0, 242, 255, 0.45);
+  color: #a9f8ff;
+  text-align: center;
   cursor: pointer;
-  touch-action: manipulation;
-  box-sizing: border-box;
-  font-weight: normal;
   letter-spacing: normal;
   text-transform: none;
-  transform: none !important;
-}
-
-.gamepad-activation-overlay:hover,
-.gamepad-activation-overlay:active {
-  background: rgba(4, 8, 16, 0.72);
-  color: inherit;
-  box-shadow: none;
-  transform: none !important;
-}
-
-.gamepad-activation-card {
-  width: min(420px, calc(100vw - 48px));
-  max-width: 420px;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  text-align: center;
-  color: rgba(220, 245, 255, 0.95);
-  pointer-events: none;
-}
-
-.gamepad-activation-card strong {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(0, 242, 255, 0.95);
-}
-
-.gamepad-activation-card span {
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: normal;
   line-height: 1.4;
 }
 
-.gamepad-activation-sub {
-  font-size: 11px !important;
-  color: rgba(180, 210, 230, 0.75) !important;
+.gamepad-focus-hint:hover,
+.gamepad-focus-hint:active {
+  transform: translateX(-50%);
+  background: rgba(0, 242, 255, 0.12);
+  color: #d8fcff;
 }
 
 .hud-header-brand {

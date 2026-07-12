@@ -4,7 +4,6 @@ import nipplejs from "nipplejs";
 import { JOYSTICK_DRIVE_DEBUG } from "../config";
 import {
   anyPadButtonHeld,
-  anyGamepadPhysicalInput,
   readActiveGamepadState,
 } from "../utils/gamepadInput.js";
 
@@ -157,7 +156,6 @@ export const DualJoystickControls = ({
   onToggleFullscreen,
   onToggleMap,
   onToggleMetrics,
-  onGamepadReady,
   immersive = false,
   children,
 }) => {
@@ -194,7 +192,6 @@ export const DualJoystickControls = ({
   const onToggleFullscreenRef = useRef(onToggleFullscreen);
   const onToggleMapRef = useRef(onToggleMap);
   const onToggleMetricsRef = useRef(onToggleMetrics);
-  const onGamepadReadyRef = useRef(onGamepadReady);
   useEffect(() => {
     onResetRef.current = onReset;
     onLookDownRef.current = onLookDown;
@@ -205,7 +202,6 @@ export const DualJoystickControls = ({
     onToggleFullscreenRef.current = onToggleFullscreen;
     onToggleMapRef.current = onToggleMap;
     onToggleMetricsRef.current = onToggleMetrics;
-    onGamepadReadyRef.current = onGamepadReady;
   }, [
     onReset,
     onLookDown,
@@ -216,7 +212,6 @@ export const DualJoystickControls = ({
     onToggleFullscreen,
     onToggleMap,
     onToggleMetrics,
-    onGamepadReady,
   ]);
 
   const gamepadButtonsPrevRef = useRef({
@@ -459,10 +454,6 @@ export const DualJoystickControls = ({
     if (typeof navigator === "undefined" || !navigator.getGamepads) return undefined;
 
     const pump = () => {
-      if (anyGamepadPhysicalInput()) {
-        onGamepadReadyRef.current?.();
-      }
-
       syncMergedRef.current(false);
 
       const active = readActiveGamepadState();
@@ -907,7 +898,6 @@ DualJoystickControls.propTypes = {
   onToggleFullscreen: PropTypes.func,
   onToggleMap: PropTypes.func,
   onToggleMetrics: PropTypes.func,
-  onGamepadReady: PropTypes.func,
   immersive: PropTypes.bool,
   children: PropTypes.node,
 };

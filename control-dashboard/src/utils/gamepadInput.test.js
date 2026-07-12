@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   anyPadButtonHeld,
+  anyGamepadPhysicalInput,
   readActiveGamepadState,
   readDualHalfPadSticks,
   readGamepadSticks,
@@ -100,5 +101,17 @@ describe("gamepadInput", () => {
     const right = fakePad({ buttons: rightButtons });
     expect(anyPadButtonHeld([left, right], 3)).toBe(true);
     expect(anyPadButtonHeld([left, right], 6)).toBe(false);
+  });
+
+  it("detects stick deflection as physical input", () => {
+    vi.stubGlobal("navigator", {
+      getGamepads: () => [
+        fakePad({
+          axes: [0.2, 0, 0, 0],
+          buttons: [{ pressed: false, value: 0 }],
+        }),
+      ],
+    });
+    expect(anyGamepadPhysicalInput()).toBe(true);
   });
 });
