@@ -23,6 +23,7 @@ import { DriveAssistHUD } from "./components/DriveAssistHUD";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
+import { GamepadActivationOverlay } from "./components/GamepadActivationOverlay";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
@@ -36,6 +37,7 @@ import { useMqtt } from "./hooks/useMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useLidarScan } from "./hooks/useLidarScan";
 import { useSlamMap } from "./hooks/useSlamMap";
+import { useGamepadActivation } from "./hooks/useGamepadActivation";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
@@ -136,6 +138,7 @@ function formatRemainingTime(minutes) {
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login } = useRoverSession();
+  const { needsActivation, activate, markReady } = useGamepadActivation(isAuthenticated);
   const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl } =
     usePiWebSocket();
   const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
@@ -1020,7 +1023,12 @@ export default function App() {
           onToggleFullscreen={toggleDocumentFullscreen}
           onToggleMap={toggleLidarMinimap}
           onToggleMetrics={toggleMetricsPanel}
+          onGamepadReady={markReady}
         />
+      )}
+
+      {needsActivation && (
+        <GamepadActivationOverlay onActivate={activate} />
       )}
 
       {isAuthenticated && (
@@ -1102,6 +1110,7 @@ export default function App() {
             onToggleFullscreen={toggleDocumentFullscreen}
             onToggleMap={toggleLidarMinimap}
             onToggleMetrics={toggleMetricsPanel}
+            onGamepadReady={markReady}
           />
         </div>
       )}
@@ -1264,6 +1273,7 @@ function HudFooter({
   onToggleFullscreen,
   onToggleMap,
   onToggleMetrics,
+  onGamepadReady,
 }) {
   const joystickProps = {
     onDrive,
@@ -1286,6 +1296,7 @@ function HudFooter({
     onToggleFullscreen,
     onToggleMap,
     onToggleMetrics,
+    onGamepadReady,
   };
 
   const schematic = metricsPanelEnabled ? (

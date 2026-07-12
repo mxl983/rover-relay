@@ -4,6 +4,7 @@ import nipplejs from "nipplejs";
 import { JOYSTICK_DRIVE_DEBUG } from "../config";
 import {
   anyPadButtonHeld,
+  anyGamepadPhysicalInput,
   readActiveGamepadState,
 } from "../utils/gamepadInput.js";
 
@@ -156,6 +157,7 @@ export const DualJoystickControls = ({
   onToggleFullscreen,
   onToggleMap,
   onToggleMetrics,
+  onGamepadReady,
   immersive = false,
   children,
 }) => {
@@ -192,6 +194,7 @@ export const DualJoystickControls = ({
   const onToggleFullscreenRef = useRef(onToggleFullscreen);
   const onToggleMapRef = useRef(onToggleMap);
   const onToggleMetricsRef = useRef(onToggleMetrics);
+  const onGamepadReadyRef = useRef(onGamepadReady);
   useEffect(() => {
     onResetRef.current = onReset;
     onLookDownRef.current = onLookDown;
@@ -202,6 +205,7 @@ export const DualJoystickControls = ({
     onToggleFullscreenRef.current = onToggleFullscreen;
     onToggleMapRef.current = onToggleMap;
     onToggleMetricsRef.current = onToggleMetrics;
+    onGamepadReadyRef.current = onGamepadReady;
   }, [
     onReset,
     onLookDown,
@@ -212,6 +216,7 @@ export const DualJoystickControls = ({
     onToggleFullscreen,
     onToggleMap,
     onToggleMetrics,
+    onGamepadReady,
   ]);
 
   const gamepadButtonsPrevRef = useRef({
@@ -454,6 +459,10 @@ export const DualJoystickControls = ({
     if (typeof navigator === "undefined" || !navigator.getGamepads) return undefined;
 
     const pump = () => {
+      if (anyGamepadPhysicalInput()) {
+        onGamepadReadyRef.current?.();
+      }
+
       syncMergedRef.current(false);
 
       const active = readActiveGamepadState();
@@ -521,16 +530,20 @@ export const DualJoystickControls = ({
 
     window.addEventListener("gamepadconnected", kick);
     window.addEventListener("gamepaddisconnected", kick);
+    window.addEventListener("focus", kick);
     // Re-scan after any user gesture (needed for browsers that gate getGamepads()).
     window.addEventListener("pointerdown", kick);
     window.addEventListener("keydown", kick);
+    document.addEventListener("visibilitychange", kick);
     kick();
 
     return () => {
       window.removeEventListener("gamepadconnected", kick);
       window.removeEventListener("gamepaddisconnected", kick);
+      window.removeEventListener("focus", kick);
       window.removeEventListener("pointerdown", kick);
       window.removeEventListener("keydown", kick);
+      document.removeEventListener("visibilitychange", kick);
       if (gamepadRafRef.current != null) {
         cancelAnimationFrame(gamepadRafRef.current);
         gamepadRafRef.current = null;
@@ -894,6 +907,7 @@ DualJoystickControls.propTypes = {
   onToggleFullscreen: PropTypes.func,
   onToggleMap: PropTypes.func,
   onToggleMetrics: PropTypes.func,
+  onGamepadReady: PropTypes.func,
   immersive: PropTypes.bool,
   children: PropTypes.node,
 };

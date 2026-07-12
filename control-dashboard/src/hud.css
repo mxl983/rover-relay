@@ -917,6 +917,51 @@ button:active {
   pointer-events: none;
 }
 
+.gamepad-activation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  margin: 0;
+  border: none;
+  background: rgba(4, 8, 16, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.gamepad-activation-card {
+  max-width: 420px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+  color: rgba(220, 245, 255, 0.95);
+  pointer-events: none;
+}
+
+.gamepad-activation-card strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(0, 242, 255, 0.95);
+}
+
+.gamepad-activation-card span {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.gamepad-activation-sub {
+  font-size: 11px !important;
+  color: rgba(180, 210, 230, 0.75) !important;
+}
+
 .hud-header-brand {
   display: flex;
   align-items: center;

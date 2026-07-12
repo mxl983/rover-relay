@@ -198,3 +198,43 @@ export function anyPadButtonHeld(pads, index, triggerThreshold = 0.45) {
   }
   return false;
 }
+
+/** Any connected pad shows button press, trigger pull, or stick deflection. */
+export function anyGamepadPhysicalInput(threshold = 0.12) {
+  for (const gp of listConnectedGamepads()) {
+    for (const btn of gp.buttons ?? []) {
+      if (btn?.pressed) return true;
+      if ((btn?.value ?? 0) > threshold) return true;
+    }
+    for (const axis of gp.axes ?? []) {
+      if (Math.abs(Number(axis) || 0) > threshold) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Focus the window and request pointer lock so SteamOS / Gamescope routes
+ * controller hardware to Chromium (Gamepad API wake-up gesture).
+ * @param {Element} [target]
+ */
+export function wakeGamepadInput(target) {
+  if (typeof window !== "undefined") {
+    window.focus();
+  }
+  if (typeof document === "undefined") return;
+  const el = target ?? document.body;
+  const req = el.requestPointerLock || el.webkitRequestPointerLock;
+  if (req) {
+    Promise.resolve(req.call(el)).catch(() => {});
+  }
+}
+
+/** Release pointer lock after gamepad activation so HUD touch still works. */
+export function releasePointerLockIfHeld() {
+  if (typeof document === "undefined") return;
+  if (document.pointerLockElement || document.webkitPointerLockElement) {
+    document.exitPointerLock?.();
+    document.webkitExitPointerLock?.();
+  }
+}
