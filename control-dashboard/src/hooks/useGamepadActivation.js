@@ -7,6 +7,9 @@ import {
 } from "../utils/gamepadInput.js";
 import { isSteamOS } from "../utils/platform.js";
 
+/** TEMP: show activation overlay on every platform for layout debugging. */
+const FORCE_ACTIVATION_OVERLAY = true;
+
 /**
  * SteamOS / Chrome gate: Gamepad API stays empty until the tab is focused and
  * the user presses a controller button (or taps to request pointer lock).
@@ -14,7 +17,7 @@ import { isSteamOS } from "../utils/platform.js";
  * @param {boolean} enabled
  */
 export function useGamepadActivation(enabled) {
-  const needsGate = enabled && isSteamOS();
+  const needsGate = enabled && (FORCE_ACTIVATION_OVERLAY || isSteamOS());
   const [ready, setReady] = useState(() => !needsGate);
   const readyRef = useRef(ready);
   const rafRef = useRef(null);
