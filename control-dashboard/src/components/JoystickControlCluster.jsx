@@ -153,6 +153,9 @@ export const DualJoystickControls = ({
   onToggleBackupView,
   backupViewEnabled,
   onTreat,
+  onToggleFullscreen,
+  onToggleMap,
+  onToggleMetrics,
   immersive = false,
   children,
 }) => {
@@ -186,6 +189,9 @@ export const DualJoystickControls = ({
   const onHeadlightToggleRef = useRef(onHeadlightToggle);
   const onToggleBackupViewRef = useRef(onToggleBackupView);
   const onTreatRef = useRef(onTreat);
+  const onToggleFullscreenRef = useRef(onToggleFullscreen);
+  const onToggleMapRef = useRef(onToggleMap);
+  const onToggleMetricsRef = useRef(onToggleMetrics);
   useEffect(() => {
     onResetRef.current = onReset;
     onLookDownRef.current = onLookDown;
@@ -193,7 +199,20 @@ export const DualJoystickControls = ({
     onHeadlightToggleRef.current = onHeadlightToggle;
     onToggleBackupViewRef.current = onToggleBackupView;
     onTreatRef.current = onTreat;
-  }, [onReset, onLookDown, onLaserToggle, onHeadlightToggle, onToggleBackupView, onTreat]);
+    onToggleFullscreenRef.current = onToggleFullscreen;
+    onToggleMapRef.current = onToggleMap;
+    onToggleMetricsRef.current = onToggleMetrics;
+  }, [
+    onReset,
+    onLookDown,
+    onLaserToggle,
+    onHeadlightToggle,
+    onToggleBackupView,
+    onTreat,
+    onToggleFullscreen,
+    onToggleMap,
+    onToggleMetrics,
+  ]);
 
   const gamepadButtonsPrevRef = useRef({
     lt: false,
@@ -203,6 +222,10 @@ export const DualJoystickControls = ({
     l3: false,
     /** Xbox Y / north face (index 3) — treat shortcut */
     faceY: false,
+    /** Xbox A / south (0), B / east (1), X / west (2) */
+    faceA: false,
+    faceB: false,
+    faceX: false,
   });
 
   const driveStateChanged = (a, b) =>
@@ -443,16 +466,23 @@ export const DualJoystickControls = ({
           rb: false,
           l3: false,
           faceY: false,
+          faceA: false,
+          faceB: false,
+          faceX: false,
         };
       } else {
         const pads = active.buttonPads;
         // Xbox standard indices (same on Legion Go S XInput).
-        // LT=reset, RT=look down, LB=laser, RB=headlight, L3=backup, Y=treat
+        // A=fullscreen, B=map, X=metrics, Y=treat
+        // LT=reset, RT=look down, LB=laser, RB=headlight, L3=backup
         const lt = anyPadButtonHeld(pads, 6, TRIGGER_HELD_THRESHOLD);
         const rt = anyPadButtonHeld(pads, 7, TRIGGER_HELD_THRESHOLD);
         const lb = anyPadButtonHeld(pads, 4, TRIGGER_HELD_THRESHOLD);
         const rb = anyPadButtonHeld(pads, 5, TRIGGER_HELD_THRESHOLD);
         const l3 = anyPadButtonHeld(pads, 10, TRIGGER_HELD_THRESHOLD);
+        const faceA = anyPadButtonHeld(pads, 0, TRIGGER_HELD_THRESHOLD);
+        const faceB = anyPadButtonHeld(pads, 1, TRIGGER_HELD_THRESHOLD);
+        const faceX = anyPadButtonHeld(pads, 2, TRIGGER_HELD_THRESHOLD);
         const faceY = anyPadButtonHeld(pads, 3, TRIGGER_HELD_THRESHOLD);
         const allowActions = !ignoreGamepadRef.current;
         if (allowActions) {
@@ -461,9 +491,22 @@ export const DualJoystickControls = ({
           if (lb && !prev.lb) onLaserToggleRef.current?.();
           if (rb && !prev.rb) onHeadlightToggleRef.current?.();
           if (l3 && !prev.l3) onToggleBackupViewRef.current?.();
+          if (faceA && !prev.faceA) onToggleFullscreenRef.current?.();
+          if (faceB && !prev.faceB) onToggleMapRef.current?.();
+          if (faceX && !prev.faceX) onToggleMetricsRef.current?.();
           if (faceY && !prev.faceY) onTreatRef.current?.();
         }
-        gamepadButtonsPrevRef.current = { lt, rt, lb, rb, l3, faceY };
+        gamepadButtonsPrevRef.current = {
+          lt,
+          rt,
+          lb,
+          rb,
+          l3,
+          faceY,
+          faceA,
+          faceB,
+          faceX,
+        };
       }
 
       // Keep polling even with no pad yet — Chrome only exposes gamepads after a button press,
@@ -848,6 +891,9 @@ DualJoystickControls.propTypes = {
   onToggleBackupView: PropTypes.func,
   backupViewEnabled: PropTypes.bool,
   onTreat: PropTypes.func,
+  onToggleFullscreen: PropTypes.func,
+  onToggleMap: PropTypes.func,
+  onToggleMetrics: PropTypes.func,
   immersive: PropTypes.bool,
   children: PropTypes.node,
 };

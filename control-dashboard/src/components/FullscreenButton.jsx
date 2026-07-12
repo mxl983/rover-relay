@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Maximize, Minimize, Smartphone } from "lucide-react";
+import { toggleDocumentFullscreen } from "../utils/fullscreen.js";
 
 const isIOS = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -38,16 +39,7 @@ export const FullscreenButton = () => {
   }, []);
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      const el = document.documentElement;
-      const requestFs = el.requestFullscreen || el.webkitRequestFullscreen;
-      if (requestFs) {
-        requestFs.call(el).catch((e) => console.error(e));
-      }
-    } else {
-      const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exitFs) exitFs.call(document);
-    }
+    toggleDocumentFullscreen();
   };
 
   // iOS in Safari: no Fullscreen API — show "Add to Home Screen" tip instead of button

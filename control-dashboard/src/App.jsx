@@ -48,6 +48,7 @@ import {
 } from "./utils/driveAssistApi.js";
 import { logImuDebug } from "./utils/imuDebugLog.js";
 import { playRoverChime } from "./utils/chimeApi.js";
+import { toggleDocumentFullscreen } from "./utils/fullscreen.js";
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -189,6 +190,14 @@ export default function App() {
     void playRoverChime();
   };
 
+  const toggleLidarMinimap = () => {
+    setShowLidarMinimapState((prev) => {
+      const next = !prev;
+      void playRoverChime();
+      return next;
+    });
+  };
+
   const setShowMetricsPanel = (enabled) => {
     setShowMetricsPanelState(enabled);
     try {
@@ -197,6 +206,19 @@ export default function App() {
       /* ignore */
     }
     void playRoverChime();
+  };
+
+  const toggleMetricsPanel = () => {
+    setShowMetricsPanelState((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(METRICS_PANEL_STORAGE_KEY, next ? "true" : "false");
+      } catch {
+        /* ignore */
+      }
+      void playRoverChime();
+      return next;
+    });
   };
 
   const setRoverSpeakerEnabled = (enabled) => {
@@ -995,6 +1017,9 @@ export default function App() {
           onToggleBackupView={handleToggleBackupView}
           backupViewEnabled={showBackupView}
           onTreat={handleFeederTreat}
+          onToggleFullscreen={toggleDocumentFullscreen}
+          onToggleMap={toggleLidarMinimap}
+          onToggleMetrics={toggleMetricsPanel}
         />
       )}
 
@@ -1074,6 +1099,9 @@ export default function App() {
             onToggleBackupView={handleToggleBackupView}
             backupViewEnabled={showBackupView}
             onFeederTreat={handleFeederTreat}
+            onToggleFullscreen={toggleDocumentFullscreen}
+            onToggleMap={toggleLidarMinimap}
+            onToggleMetrics={toggleMetricsPanel}
           />
         </div>
       )}
@@ -1233,6 +1261,9 @@ function HudFooter({
   onToggleBackupView,
   backupViewEnabled,
   onFeederTreat,
+  onToggleFullscreen,
+  onToggleMap,
+  onToggleMetrics,
 }) {
   const joystickProps = {
     onDrive,
@@ -1252,6 +1283,9 @@ function HudFooter({
     onToggleBackupView,
     backupViewEnabled,
     onTreat: onFeederTreat,
+    onToggleFullscreen,
+    onToggleMap,
+    onToggleMetrics,
   };
 
   const schematic = metricsPanelEnabled ? (
