@@ -920,6 +920,18 @@ button:active {
 .gamepad-activation-overlay {
   position: fixed;
   inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Beat global `button { width/height: 45px }` — otherwise overlay is a corner chip */
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: none !important;
+  max-height: none !important;
   z-index: 10050;
   display: flex;
   align-items: center;
@@ -927,14 +939,29 @@ button:active {
   padding: 24px;
   margin: 0;
   border: none;
+  border-radius: 0;
   background: rgba(4, 8, 16, 0.72);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   cursor: pointer;
   touch-action: manipulation;
+  box-sizing: border-box;
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  transform: none !important;
+}
+
+.gamepad-activation-overlay:hover,
+.gamepad-activation-overlay:active {
+  background: rgba(4, 8, 16, 0.72);
+  color: inherit;
+  box-shadow: none;
+  transform: none !important;
 }
 
 .gamepad-activation-card {
+  width: min(420px, calc(100vw - 48px));
   max-width: 420px;
   padding: 16px 18px;
   display: flex;
