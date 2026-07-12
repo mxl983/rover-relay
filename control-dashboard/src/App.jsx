@@ -961,7 +961,9 @@ export default function App() {
         />
       )}
 
-      {isAuthenticated && controlMode === "immersive" && (
+      {/* Gamepad bridge when on-screen joysticks are not mounted (keyboard / immersive).
+          Supports Xbox-standard and Legion Go (XInput + dual half-pad) controllers. */}
+      {isAuthenticated && controlMode !== "joystick" && (
         <DualJoystickControls
           immersive
           onDrive={handleDriveUpdate}

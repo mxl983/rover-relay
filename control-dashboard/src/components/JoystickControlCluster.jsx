@@ -2,6 +2,10 @@ import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import nipplejs from "nipplejs";
 import { JOYSTICK_DRIVE_DEBUG } from "../config";
+import {
+  anyPadButtonHeld,
+  readActiveGamepadState,
+} from "../utils/gamepadInput.js";
 
 const ZONE_SIZE_PX = 100;
 const RESET_BTN_SIZE = 20; 
@@ -82,61 +86,22 @@ export function prepareDriveVector(raw) {
   };
 }
 
-/** Standard mapping: LB 4, RB 5, LT 6, RT 7 (analog value 0–1 when supported). */
-function triggerHeld(button) {
-  if (!button) return false;
-  if (button.pressed) return true;
-  const v = typeof button.value === "number" ? button.value : 0;
-  return v >= TRIGGER_HELD_THRESHOLD;
-}
-
-function bumperHeld(button) {
-  return Boolean(button?.pressed);
-}
-
-function getFirstConnectedGamepad() {
-  const pads = typeof navigator !== "undefined" ? navigator.getGamepads?.() : null;
-  if (!pads) return null;
-  for (let i = 0; i < pads.length; i++) {
-    const g = pads[i];
-    if (g?.connected) return g;
-  }
-  return null;
-}
-
-function readGamepadSticks(gp) {
-  const a = gp.axes;
-  if (!a?.length) {
-    return { lx: 0, ly: 0, rx: 0, ry: 0 };
-  }
-  let lx = a[0] ?? 0;
-  let ly = a[1] ?? 0;
-  let rx = a[2] ?? 0;
-  let ry = a[3] ?? 0;
-  // Firefox / some mappings expose the right stick on axes 4–5 when 2–3 are triggers.
-  if (a.length >= 6 && (Math.abs(rx) < 0.02 && Math.abs(ry) < 0.02)) {
-    rx = a[4] ?? 0;
-    ry = a[5] ?? 0;
-  }
-  return { lx, ly, rx, ry };
-}
-
-function sticksPhysicallyCentered(gp) {
-  if (!gp) return true;
-  const { lx, ly, rx, ry } = readGamepadSticks(gp);
-  const left = deadzone2d(lx, ly, GAMEPAD_DEAD_ZONE);
-  const right = deadzone2d(rx, ry, GAMEPAD_DEAD_ZONE);
+function sticksPhysicallyCentered(sticks) {
+  if (!sticks) return true;
+  const left = deadzone2d(sticks.lx, sticks.ly, GAMEPAD_DEAD_ZONE);
+  const right = deadzone2d(sticks.rx, sticks.ry, GAMEPAD_DEAD_ZONE);
   return Math.hypot(left.x, left.y) < 0.001 && Math.hypot(right.x, right.y) < 0.001;
 }
 
 /**
- * Touch + first connected gamepad. Gamepad stick outside the dead zone overrides that axis pair.
+ * Touch + connected gamepad (Xbox / Legion Go XInput / dual half-pad).
+ * Gamepad stick outside the dead zone overrides that axis pair.
  * When ignoreGamepadRef is true (tab blur / safety), gamepad is ignored until both sticks are centered.
  */
 function mergeTouchAndGamepad(touch, ignoreGamepadRef) {
-  const gp = getFirstConnectedGamepad();
+  const active = readActiveGamepadState();
   if (ignoreGamepadRef.current) {
-    if (sticksPhysicallyCentered(gp)) {
+    if (sticksPhysicallyCentered(active?.sticks)) {
       ignoreGamepadRef.current = false;
     }
     return {
@@ -144,13 +109,13 @@ function mergeTouchAndGamepad(touch, ignoreGamepadRef) {
       gimbal: { ...touch.gimbal },
     };
   }
-  if (!gp) {
+  if (!active) {
     return {
       drive: { ...touch.drive },
       gimbal: { ...touch.gimbal },
     };
   }
-  const { lx, ly, rx, ry } = readGamepadSticks(gp);
+  const { lx, ly, rx, ry } = active.sticks;
   const leftRaw = deadzone2d(lx, ly, GAMEPAD_DEAD_ZONE);
   const rightRaw = deadzone2d(rx, ry, GAMEPAD_DEAD_ZONE);
   const leftMag = Math.hypot(leftRaw.x, leftRaw.y);
@@ -467,9 +432,9 @@ export const DualJoystickControls = ({
     const pump = () => {
       syncMergedRef.current(false);
 
-      const gp = getFirstConnectedGamepad();
+      const active = readActiveGamepadState();
       const prev = gamepadButtonsPrevRef.current;
-      if (!gp) {
+      if (!active) {
         gamepadButtonsPrevRef.current = {
           lt: false,
           rt: false,
@@ -479,13 +444,14 @@ export const DualJoystickControls = ({
           faceY: false,
         };
       } else {
-        const lt = triggerHeld(gp.buttons?.[6]);
-        const rt = triggerHeld(gp.buttons?.[7]);
-        const lb = bumperHeld(gp.buttons?.[4]);
-        const rb = bumperHeld(gp.buttons?.[5]);
-        // Xbox L3 / left stick click (standard mapping button index 10).
-        const l3 = bumperHeld(gp.buttons?.[10]);
-        const faceY = bumperHeld(gp.buttons?.[3]);
+        const pads = active.buttonPads;
+        // Standard mapping indices (Xbox + Legion XInput). Check all half-pads for D-input.
+        const lt = anyPadButtonHeld(pads, 6, TRIGGER_HELD_THRESHOLD);
+        const rt = anyPadButtonHeld(pads, 7, TRIGGER_HELD_THRESHOLD);
+        const lb = anyPadButtonHeld(pads, 4, TRIGGER_HELD_THRESHOLD);
+        const rb = anyPadButtonHeld(pads, 5, TRIGGER_HELD_THRESHOLD);
+        const l3 = anyPadButtonHeld(pads, 10, TRIGGER_HELD_THRESHOLD);
+        const faceY = anyPadButtonHeld(pads, 3, TRIGGER_HELD_THRESHOLD);
         const allowActions = !ignoreGamepadRef.current;
         if (allowActions) {
           if (lt && !prev.lt) onResetRef.current?.();
@@ -498,19 +464,9 @@ export const DualJoystickControls = ({
         gamepadButtonsPrevRef.current = { lt, rt, lb, rb, l3, faceY };
       }
 
-      const pads = navigator.getGamepads();
-      let anyConnected = false;
-      for (let i = 0; i < pads.length; i++) {
-        if (pads[i]?.connected) {
-          anyConnected = true;
-          break;
-        }
-      }
-      if (anyConnected) {
-        gamepadRafRef.current = requestAnimationFrame(pump);
-      } else {
-        gamepadRafRef.current = null;
-      }
+      // Keep polling even with no pad yet — Chrome only exposes gamepads after a button press,
+      // and some handhelds (Legion Go) skip reliable gamepadconnected events.
+      gamepadRafRef.current = requestAnimationFrame(pump);
     };
 
     const kick = () => {
@@ -520,11 +476,16 @@ export const DualJoystickControls = ({
 
     window.addEventListener("gamepadconnected", kick);
     window.addEventListener("gamepaddisconnected", kick);
+    // Re-scan after any user gesture (needed for browsers that gate getGamepads()).
+    window.addEventListener("pointerdown", kick);
+    window.addEventListener("keydown", kick);
     kick();
 
     return () => {
       window.removeEventListener("gamepadconnected", kick);
       window.removeEventListener("gamepaddisconnected", kick);
+      window.removeEventListener("pointerdown", kick);
+      window.removeEventListener("keydown", kick);
       if (gamepadRafRef.current != null) {
         cancelAnimationFrame(gamepadRafRef.current);
         gamepadRafRef.current = null;
