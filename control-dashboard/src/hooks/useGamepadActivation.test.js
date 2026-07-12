@@ -12,15 +12,14 @@ describe("useGamepadActivation", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows activation gate on non-Linux while FORCE_ACTIVATION_OVERLAY is on", () => {
-    // FORCE_ACTIVATION_OVERLAY is on for layout debugging — overlay shows everywhere.
+  it("skips activation gate on non-Linux platforms", () => {
     vi.spyOn(navigator, "userAgent", "get").mockReturnValue(WINDOWS_UA);
     vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
 
     const { result } = renderHook(() => useGamepadActivation(true));
 
-    expect(result.current.needsActivation).toBe(true);
-    expect(result.current.ready).toBe(false);
+    expect(result.current.needsActivation).toBe(false);
+    expect(result.current.ready).toBe(true);
   });
 
   it("requires activation on Linux when enabled", () => {
