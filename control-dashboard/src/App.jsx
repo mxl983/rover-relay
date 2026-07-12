@@ -24,6 +24,7 @@ import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
+import { HandheldStickMouseLayer } from "./components/HandheldStickMouseLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { LidarMinimap } from "./components/LidarMinimap";
@@ -468,6 +469,7 @@ export default function App() {
   const isFullscreen = useFullscreen();
   const viewportRef = useRef(null);
   const lastDriveRef = useRef({ x: 0, y: 0 });
+  const lastGimbalRef = useRef({ x: 0, y: 0 });
   const pendingControlRef = useRef(null);
   const controlTimerRef = useRef(null);
   const lastKeyboardKeysRef = useRef([]);
@@ -558,6 +560,9 @@ export default function App() {
     if (typeof payload === "object" && payload?.drive != null) {
       lastDriveRef.current = payload.drive;
     }
+    if (typeof payload === "object" && payload?.gimbal != null) {
+      lastGimbalRef.current = payload.gimbal;
+    }
     if (typeof payload === "object" && payload) {
       queueControl(payload);
     }
@@ -565,6 +570,7 @@ export default function App() {
 
   const handleGimbalUpdate = (gimbal) => {
     clearErrorIfAny();
+    lastGimbalRef.current = gimbal;
     queueControl({ gimbal });
   };
 
@@ -947,6 +953,16 @@ export default function App() {
       {isAuthenticated && isMobile && controlMode !== "immersive" && (
         <MobileTouchGimbalLayer
           onGimbal={handleGimbalUpdate}
+        />
+      )}
+
+      {/* Legion Go / handheld: sticks remapped to mouse — tap video, then left stick drives. */}
+      {isAuthenticated && (
+        <HandheldStickMouseLayer
+          enabled
+          viewportRef={viewportRef}
+          onDrive={handleDriveUpdate}
+          lastGimbalRef={lastGimbalRef}
         />
       )}
 
