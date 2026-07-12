@@ -45,8 +45,9 @@ describe("gamepadInput", () => {
     expect(selectBestGamepad([ghost, xbox])).toBe(xbox);
   });
 
-  it("reads right stick from axes 4–5 when 2–3 are idle", () => {
+  it("reads right stick from axes 4–5 when non-standard and 2–3 are idle", () => {
     const gp = fakePad({
+      mapping: "",
       axes: [0.1, -0.2, 0, 0, 0.5, -0.6],
     });
     expect(readGamepadSticks(gp)).toEqual({
@@ -54,6 +55,19 @@ describe("gamepadInput", () => {
       ly: -0.2,
       rx: 0.5,
       ry: -0.6,
+    });
+  });
+
+  it("keeps Xbox standard left/right stick indices", () => {
+    const gp = fakePad({
+      mapping: "standard",
+      axes: [0.2, -0.4, -0.3, 0.5, 0.9, 0.9],
+    });
+    expect(readGamepadSticks(gp)).toEqual({
+      lx: 0.2,
+      ly: -0.4,
+      rx: -0.3,
+      ry: 0.5,
     });
   });
 

@@ -24,7 +24,6 @@ import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
-import { HandheldStickMouseLayer } from "./components/HandheldStickMouseLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { LidarMinimap } from "./components/LidarMinimap";
@@ -912,6 +911,13 @@ export default function App() {
     sendText: sendVoiceText,
   } = useVoiceAssistant({ onAction: runAssistantAction });
 
+  useEffect(() => {
+    // Release any leftover pointer lock from older handheld mouse-bridge builds.
+    if (typeof document !== "undefined" && document.pointerLockElement) {
+      document.exitPointerLock?.();
+    }
+  }, []);
+
   return (
     <div
       className={`viewport${isPointerLocked ? " viewport-mouse-look" : ""}`}
@@ -953,16 +959,6 @@ export default function App() {
       {isAuthenticated && isMobile && controlMode !== "immersive" && (
         <MobileTouchGimbalLayer
           onGimbal={handleGimbalUpdate}
-        />
-      )}
-
-      {/* Legion Go / handheld: sticks remapped to mouse — tap video, then left stick drives. */}
-      {isAuthenticated && (
-        <HandheldStickMouseLayer
-          enabled
-          viewportRef={viewportRef}
-          onDrive={handleDriveUpdate}
-          lastGimbalRef={lastGimbalRef}
         />
       )}
 

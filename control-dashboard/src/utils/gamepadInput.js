@@ -76,6 +76,12 @@ export function selectBestGamepad(pads = listConnectedGamepads()) {
 }
 
 /**
+ * Xbox Standard Gamepad mapping (also Legion Go S in XInput mode):
+ *   Left stick  axes[0], axes[1]  → drive
+ *   Right stick axes[2], axes[3]  → gimbal
+ *   buttons: A0 B1 X2 Y3 LB4 RB5 LT6 RT7 View8 Menu9 L3=10 R3=11
+ *
+ * Prefer `mapping === "standard"` pads and never swap sticks.
  * @param {Gamepad} gp
  * @returns {{ lx: number; ly: number; rx: number; ry: number }}
  */
@@ -84,12 +90,18 @@ export function readGamepadSticks(gp) {
   if (!a?.length) {
     return { lx: 0, ly: 0, rx: 0, ry: 0 };
   }
+
   let lx = Number(a[0]) || 0;
   let ly = Number(a[1]) || 0;
   let rx = Number(a[2]) || 0;
   let ry = Number(a[3]) || 0;
 
-  // Firefox / some mappings expose the right stick on axes 4–5 when 2–3 are triggers.
+  if (gp.mapping === "standard") {
+    return { lx, ly, rx, ry };
+  }
+
+  // Firefox / some non-standard mappings expose the right stick on axes 4–5
+  // when 2–3 are analog triggers (do not steal left-stick axes).
   if (a.length >= 6 && Math.abs(rx) < ACTIVITY_EPS && Math.abs(ry) < ACTIVITY_EPS) {
     const rx4 = Number(a[4]) || 0;
     const ry5 = Number(a[5]) || 0;
@@ -97,17 +109,6 @@ export function readGamepadSticks(gp) {
       rx = rx4;
       ry = ry5;
     }
-  }
-
-  // Some D-input pads put the right stick at axes 3–4 (axis 2 is a trigger).
-  if (
-    a.length >= 5 &&
-    Math.abs(rx) < ACTIVITY_EPS &&
-    Math.abs(ry) < ACTIVITY_EPS &&
-    (Math.abs(Number(a[3]) || 0) > ACTIVITY_EPS || Math.abs(Number(a[4]) || 0) > ACTIVITY_EPS)
-  ) {
-    rx = Number(a[3]) || 0;
-    ry = Number(a[4]) || 0;
   }
 
   return { lx, ly, rx, ry };

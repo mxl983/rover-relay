@@ -94,8 +94,9 @@ function sticksPhysicallyCentered(sticks) {
 }
 
 /**
- * Touch + connected gamepad (Xbox / Legion Go XInput / dual half-pad).
- * Gamepad stick outside the dead zone overrides that axis pair.
+ * Touch + connected gamepad (Xbox / Legion Go XInput).
+ * Left stick → drive, right stick → gimbal (never swapped).
+ * Touch nipples still work; gamepad overrides an axis only while that stick is deflected.
  * When ignoreGamepadRef is true (tab blur / safety), gamepad is ignored until both sticks are centered.
  */
 function mergeTouchAndGamepad(touch, ignoreGamepadRef) {
@@ -445,7 +446,8 @@ export const DualJoystickControls = ({
         };
       } else {
         const pads = active.buttonPads;
-        // Standard mapping indices (Xbox + Legion XInput). Check all half-pads for D-input.
+        // Xbox standard indices (same on Legion Go S XInput).
+        // LT=reset, RT=look down, LB=laser, RB=headlight, L3=backup, Y=treat
         const lt = anyPadButtonHeld(pads, 6, TRIGGER_HELD_THRESHOLD);
         const rt = anyPadButtonHeld(pads, 7, TRIGGER_HELD_THRESHOLD);
         const lb = anyPadButtonHeld(pads, 4, TRIGGER_HELD_THRESHOLD);
@@ -521,7 +523,8 @@ export const DualJoystickControls = ({
           user-select: none;
           -webkit-touch-callout: none;
           -webkit-tap-highlight-color: transparent;
-          touch-action: none;
+          /* Do not set touch-action on the full bar — it blocks HUD/settings touches
+             that pass through pointer-events:none on some browsers. */
         }
 
         .joystick-hud-container * {
