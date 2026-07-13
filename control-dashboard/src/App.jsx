@@ -23,7 +23,6 @@ import { DriveAssistHUD } from "./components/DriveAssistHUD";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/JoystickControlCluster";
-import { GamepadFocusHint } from "./components/GamepadFocusHint";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
@@ -37,7 +36,6 @@ import { useMqtt } from "./hooks/useMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useLidarScan } from "./hooks/useLidarScan";
 import { useSlamMap } from "./hooks/useSlamMap";
-import { useGamepadWindowFocus } from "./hooks/useGamepadWindowFocus";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/capture";
@@ -138,8 +136,6 @@ function formatRemainingTime(minutes) {
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login } = useRoverSession();
-  const { needsFocus: needsGamepadFocus, claimFocus: claimGamepadFocus } =
-    useGamepadWindowFocus(isAuthenticated);
   const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl } =
     usePiWebSocket();
   const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
@@ -951,9 +947,6 @@ export default function App() {
     >
       <ActionErrorBanner message={actionError} onDismiss={clearError} />
       <ActionToast message={actionToast} />
-      {isAuthenticated && needsGamepadFocus && (
-        <GamepadFocusHint onClaimFocus={claimGamepadFocus} />
-      )}
       {SHOW_ASSISTANT_AGENT_UI && (
         <AssistantPanel
           videoStreamReady={videoStreamReady}

@@ -917,36 +917,6 @@ button:active {
   pointer-events: none;
 }
 
-.gamepad-focus-hint {
-  position: fixed;
-  top: max(72px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1002;
-  width: auto !important;
-  height: auto !important;
-  min-width: unset !important;
-  min-height: unset !important;
-  max-width: 90vw;
-  padding: 10px 16px;
-  border-color: rgba(0, 242, 255, 0.45);
-  color: #a9f8ff;
-  text-align: center;
-  cursor: pointer;
-  letter-spacing: normal;
-  text-transform: none;
-  font-size: 13px;
-  font-weight: normal;
-  line-height: 1.4;
-}
-
-.gamepad-focus-hint:hover,
-.gamepad-focus-hint:active {
-  transform: translateX(-50%);
-  background: rgba(0, 242, 255, 0.12);
-  color: #d8fcff;
-}
-
 .hud-header-brand {
   display: flex;
   align-items: center;
