@@ -36,15 +36,40 @@ export function touchStickToDriveRaw(data) {
 const STICK_IDLE = 0.04;
 
 /**
+ * Angular margin around pure left/right (3 / 9 o'clock). Within this band,
+ * forward/back is zeroed so slight pull past the horizon (e.g. 3.2 o'clock)
+ * stays a pure turn instead of creeping reverse/forward.
+ * 0.2 clock-hours ≈ 6°.
+ */
+export const LATERAL_TURN_SNAP_DEG = 6;
+
+/**
  * Linear polar drive mapping: direction from stick angle, speed from pull force.
  * 12 o'clock → {x:0,y:-1}, 6 → {x:0,y:1}, 3 → {x:1,y:0}, 9 → {x:-1,y:0}.
  */
 export function applyDriveCurve(raw) {
-  const x = Number(raw?.x) || 0;
-  const y = Number(raw?.y) || 0;
-  const mag = Math.hypot(x, y);
+  const x0 = Number(raw?.x) || 0;
+  const y0 = Number(raw?.y) || 0;
+  let mag = Math.hypot(x0, y0);
   if (mag < STICK_IDLE) return { x: 0, y: 0 };
-  if (mag > 1) return { x: x / mag, y: y / mag };
+
+  let x = x0;
+  let y = y0;
+  if (mag > 1) {
+    x /= mag;
+    y /= mag;
+    mag = 1;
+  }
+
+  // Near-horizontal: snap to pure left/right turn (shared by touch + gamepad).
+  if (Math.abs(x) > 1e-6) {
+    const fromHorizontalDeg = (Math.atan2(Math.abs(y), Math.abs(x)) * 180) / Math.PI;
+    // Tiny epsilon so exact ±snapDeg boundaries still catch (float noise).
+    if (fromHorizontalDeg <= LATERAL_TURN_SNAP_DEG + 1e-6) {
+      return { x: (x < 0 ? -1 : 1) * mag, y: 0 };
+    }
+  }
+
   return { x, y };
 }
 

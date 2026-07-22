@@ -41,6 +41,31 @@ describe("joystick drive curve", () => {
     expect(towardSix.y).toBeCloseTo(0.5, 5);
   });
 
+  it("snaps slight reverse past 3 o'clock to pure right turn", () => {
+    // 3.2 o'clock ≈ 6° past east toward south (reverse).
+    const rad = (6 * Math.PI) / 180;
+    const v = applyDriveCurve({ x: Math.cos(rad), y: Math.sin(rad) });
+    expect(v.y).toBe(0);
+    expect(v.x).toBeCloseTo(1, 5);
+  });
+
+  it("snaps slight reverse past 9 o'clock to pure left turn", () => {
+    // 8.8 o'clock ≈ 6° before west from the south side.
+    const rad = Math.PI - (6 * Math.PI) / 180;
+    const v = applyDriveCurve({ x: Math.cos(rad), y: Math.sin(rad) });
+    expect(v.y).toBe(0);
+    expect(v.x).toBeCloseTo(-1, 5);
+  });
+
+  it("does not snap diagonals or forward/back arcs", () => {
+    const diag = applyDriveCurve({ x: 0.5, y: 0.5 });
+    expect(diag.y).not.toBe(0);
+
+    const fwd = applyDriveCurve({ x: 0.05, y: -0.9 });
+    expect(fwd.y).toBeLessThan(0);
+    expect(Math.abs(fwd.x)).toBeGreaterThan(0);
+  });
+
   it("scales speed with partial pull force", () => {
     expect(applyDriveCurve({ x: 0, y: -0.3 })).toEqual({ x: 0, y: -0.3 });
     expect(applyDriveCurve({ x: 0.4, y: 0 })).toEqual({ x: 0.4, y: 0 });
