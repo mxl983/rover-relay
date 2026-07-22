@@ -260,6 +260,7 @@ export default function App() {
   const [relayCharging, setRelayCharging] = useState(null);
   const [relayBatteryPct, setRelayBatteryPct] = useState(null);
   const [relayTemperatureC, setRelayTemperatureC] = useState(null);
+  const [relayPressureHpa, setRelayPressureHpa] = useState(null);
   const [relayBatteryMinutesRemaining, setRelayBatteryMinutesRemaining] = useState(null);
   /** Same shape as GET /api/rover/state `data` for VideoStream boot loader (from relay WS). */
   const [relayRoverPayload, setRelayRoverPayload] = useState(null);
@@ -303,6 +304,8 @@ export default function App() {
           setRelayBatteryMinutesRemaining(Number.isFinite(minsRemaining) ? minsRemaining : null);
           const tempC = Number(rover?.environment?.temperatureC);
           setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
+          const pressureHpa = Number(rover?.environment?.pressureHpa);
+          setRelayPressureHpa(Number.isFinite(pressureHpa) ? pressureHpa : null);
           const dist = Number(rover?.clientLocation?.distanceMeters);
           setRelayDistanceMeters(Number.isFinite(dist) ? dist : null);
           setRelayRoverPayload({ rover });
@@ -323,6 +326,7 @@ export default function App() {
         if (cancelled) return;
         setRelayRoverPayload(null);
         setRelayDistanceMeters(null);
+        setRelayPressureHpa(null);
         reconnectTimer = setTimeout(connect, 2500);
       };
     };
@@ -1082,6 +1086,8 @@ export default function App() {
             batteryPct={batteryPct}
             isCharging={effectiveIsCharging}
             ambientTemperatureC={relayTemperatureC}
+            pressureHpa={relayPressureHpa}
+            distanceMeters={relayDistanceMeters}
             piOnline={piOnline}
             isEspOnline={isEspOnline}
             onDrive={handleDriveUpdate}
@@ -1244,6 +1250,8 @@ function HudFooter({
   batteryPct,
   isCharging,
   ambientTemperatureC,
+  pressureHpa = null,
+  distanceMeters = null,
   piOnline,
   isEspOnline,
   onDrive,
@@ -1295,6 +1303,11 @@ function HudFooter({
       cpuTemp={stats.cpuTemp}
       latencyMs={stats.latency}
       throttle={stats.throttle}
+      voltage={stats.voltage}
+      wifiSignal={stats.wifiSignal}
+      distanceMeters={distanceMeters ?? stats.distance}
+      pressureHpa={pressureHpa}
+      cpuLoad={stats.cpuLoad}
       isOffline={!piOnline}
       isCharging={isCharging}
       ambientTempC={ambientTemperatureC}
