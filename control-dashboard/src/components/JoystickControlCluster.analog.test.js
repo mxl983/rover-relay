@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyDriveCurve,
   prepareDriveVector,
+  prepareOutboundDriveVector,
   quantizeAnalog,
   snapAnalogPair,
   touchStickToDriveRaw,
@@ -85,6 +86,13 @@ describe("joystick drive curve", () => {
       x: 0.123,
       y: -0.456,
     });
+  });
+
+  it("snaps outbound drive so stick noise collapses to one command", () => {
+    const a = prepareOutboundDriveVector({ x: 0.48, y: -0.01 });
+    const b = prepareOutboundDriveVector({ x: 0.52, y: 0.01 });
+    expect(a).toEqual(b);
+    expect(a).toEqual({ x: 0.5, y: 0 });
   });
 });
 

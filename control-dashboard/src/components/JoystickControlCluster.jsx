@@ -83,14 +83,19 @@ function deadzone2d(x, y, dead) {
 const GAMEPAD_DEAD_ZONE = 0.14;
 const GIMBAL_LINEAR_SCALE = 0.58;
 const TRIGGER_HELD_THRESHOLD = 0.45;
-/** Cap drive/gimbal WS updates while sticks are held (~25 Hz). Stops are always immediate. */
-const ANALOG_SEND_MIN_INTERVAL_MS = 40;
-/** Gimbal only — drive is continuous for fine steering. */
+/** Max WS rate while the stick is *changing* (~20 Hz). Identical held commands are not resent. */
+const ANALOG_SEND_MIN_INTERVAL_MS = 50;
+/** Gimbal outbound snap step. */
 const GIMBAL_ANALOG_STEP = 0.03;
-const DRIVE_CHANGE_THRESHOLD = 0.015;
+/**
+ * Drive outbound snap step. Absorbs stick noise so a held stick settles on one
+ * vector and stops re-sending (keyboard-like steady command).
+ */
+export const DRIVE_ANALOG_STEP = 0.05;
+/** After snap, only real step changes count (noise already quantized away). */
+const DRIVE_CHANGE_THRESHOLD = 1e-4;
 const GIMBAL_CHANGE_THRESHOLD = 0.02;
 
-/** @deprecated kept for tests; drive path no longer quantizes. */
 export function quantizeAnalog(v, step = 0.05) {
   if (!Number.isFinite(v) || Math.abs(v) < step * 0.45) return 0;
   const q = Math.round(v / step) * step;
@@ -101,7 +106,7 @@ export function snapAnalogPair({ x = 0, y = 0 }, step = GIMBAL_ANALOG_STEP) {
   return { x: quantizeAnalog(x, step), y: quantizeAnalog(y, step) };
 }
 
-/** Continuous drive vector (no step quantization on turn or throttle). */
+/** Clamp raw drive axes (continuous; used before outbound snap). */
 export function prepareDriveVector(raw) {
   const x = clamp1(Number(raw?.x) || 0);
   const y = clamp1(Number(raw?.y) || 0);
@@ -109,6 +114,11 @@ export function prepareDriveVector(raw) {
     x: Math.abs(x) < 1e-4 ? 0 : x,
     y: Math.abs(y) < 1e-4 ? 0 : y,
   };
+}
+
+/** Drive vector actually sent over WS — snapped so constant stick → constant command. */
+export function prepareOutboundDriveVector(raw) {
+  return snapAnalogPair(prepareDriveVector(raw), DRIVE_ANALOG_STEP);
 }
 
 function sticksPhysicallyCentered(sticks) {
@@ -200,6 +210,8 @@ export const DualJoystickControls = ({
   const ignoreGamepadRef = useRef(false);
   const lastSentRef = useRef({ drive: null, gimbal: null });
   const lastSendAtRef = useRef(0);
+  const analogSendTimerRef = useRef(null);
+  const sendIfChangedRef = useRef(() => {});
   const gimbalRafRef = useRef(null);
   const syncMergedRef = useRef(() => {});
   const gamepadRafRef = useRef(null);
@@ -275,7 +287,15 @@ export const DualJoystickControls = ({
     if (onDriveRef.current) onDriveRef.current({ drive, gimbal });
   };
 
+  const clearAnalogSendTimer = () => {
+    if (analogSendTimerRef.current) {
+      clearTimeout(analogSendTimerRef.current);
+      analogSendTimerRef.current = null;
+    }
+  };
+
   const sendDriveStopWithRetries = () => {
+    clearAnalogSendTimer();
     touchAnalogRef.current.drive = { x: 0, y: 0 };
     const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
     analogState.current = merged;
@@ -290,6 +310,7 @@ export const DualJoystickControls = ({
   };
 
   const sendGimbalStopWithRetries = () => {
+    clearAnalogSendTimer();
     touchAnalogRef.current.gimbal = { x: 0, y: 0 };
     const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
     analogState.current = merged;
@@ -304,6 +325,7 @@ export const DualJoystickControls = ({
   };
 
   const sendAllStopWithRetries = () => {
+    clearAnalogSendTimer();
     ignoreGamepadRef.current = true;
     touchAnalogRef.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
     analogState.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
@@ -318,7 +340,8 @@ export const DualJoystickControls = ({
   };
 
   const sendIfChanged = (isStop = false) => {
-    const drive = prepareDriveVector(analogState.current.drive);
+    // Snap before compare/send so stick noise doesn't look like a new command.
+    const drive = prepareOutboundDriveVector(analogState.current.drive);
     const gimbal = snapAnalogPair(analogState.current.gimbal, GIMBAL_ANALOG_STEP);
     const last = lastSentRef.current;
     const driveChanged = isStop || driveStateChanged(drive, last.drive);
@@ -327,12 +350,27 @@ export const DualJoystickControls = ({
       last.gimbal === null ||
       Math.abs((gimbal.x ?? 0) - (last.gimbal.x ?? 0)) > GIMBAL_CHANGE_THRESHOLD ||
       Math.abs((gimbal.y ?? 0) - (last.gimbal.y ?? 0)) > GIMBAL_CHANGE_THRESHOLD;
-    if (!driveChanged && !gimbalChanged) return;
+    if (!driveChanged && !gimbalChanged) {
+      clearAnalogSendTimer();
+      return;
+    }
     const now = performance.now();
-    if (!isStop && now - lastSendAtRef.current < ANALOG_SEND_MIN_INTERVAL_MS) return;
+    const wait = ANALOG_SEND_MIN_INTERVAL_MS - (now - lastSendAtRef.current);
+    if (!isStop && wait > 0) {
+      // Defer latest distinct value; do not spam while rate-limited.
+      if (!analogSendTimerRef.current) {
+        analogSendTimerRef.current = setTimeout(() => {
+          analogSendTimerRef.current = null;
+          sendIfChangedRef.current(false);
+        }, wait);
+      }
+      return;
+    }
+    clearAnalogSendTimer();
     lastSendAtRef.current = now;
     sendState(drive, gimbal);
   };
+  sendIfChangedRef.current = sendIfChanged;
 
   const syncMergedAndSend = (isStop = false) => {
     const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
@@ -446,6 +484,10 @@ export const DualJoystickControls = ({
       if (gimbalRafRef.current) {
         cancelAnimationFrame(gimbalRafRef.current);
         gimbalRafRef.current = null;
+      }
+      if (analogSendTimerRef.current) {
+        clearTimeout(analogSendTimerRef.current);
+        analogSendTimerRef.current = null;
       }
       window.removeEventListener("blur", handleSafetyStop);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -563,6 +605,10 @@ export const DualJoystickControls = ({
       if (gamepadRafRef.current != null) {
         cancelAnimationFrame(gamepadRafRef.current);
         gamepadRafRef.current = null;
+      }
+      if (analogSendTimerRef.current) {
+        clearTimeout(analogSendTimerRef.current);
+        analogSendTimerRef.current = null;
       }
     };
   }, []);
