@@ -393,7 +393,7 @@ export default function App() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated || !navigator.geolocation?.watchPosition) return;
+    if (!isAuthenticated || !navigator.geolocation?.watchPosition) return undefined;
     let watchId = null;
 
     const reportLocation = (pos) => {
@@ -401,9 +401,14 @@ export default function App() {
       void apiPostJson(ROVER_CLIENT_DISTANCE_ENDPOINT, { latitude, longitude, accuracy }, {
         timeout: 8000,
         retries: 0,
-      }).catch(() => {
-        /* ignore — distance optional */
-      });
+      })
+        .then((data) => {
+          const dist = Number(data?.distanceMeters);
+          if (Number.isFinite(dist)) setRelayDistanceMeters(dist);
+        })
+        .catch(() => {
+          /* ignore — distance optional until rover site / permission ready */
+        });
     };
 
     watchId = navigator.geolocation.watchPosition(
@@ -1305,7 +1310,7 @@ function HudFooter({
       throttle={stats.throttle}
       voltage={stats.voltage}
       wifiSignal={stats.wifiSignal}
-      distanceMeters={distanceMeters ?? stats.distance}
+      distanceMeters={distanceMeters}
       pressureHpa={pressureHpa}
       cpuLoad={stats.cpuLoad}
       isOffline={!piOnline}

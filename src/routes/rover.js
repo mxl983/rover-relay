@@ -4,6 +4,7 @@ import { readEnvironmentFromBackupCam } from "../services/roverEnvironmentServic
 import {
   recordClientLocation,
   computeClientDistance,
+  isRoverSiteConfigured,
 } from "../services/clientRoverDistanceService.js";
 import { requireToken } from "../middleware/auth.js";
 import { success, error } from "../utils/apiResponse.js";
@@ -24,6 +25,13 @@ router.post("/heartbeat", requireToken, (req, res) => {
  * POST updates the cached location included in /state and WebSocket heartbeats.
  */
 router.post("/client-distance", (req, res) => {
+  if (!isRoverSiteConfigured()) {
+    return error(
+      res,
+      "rover site not configured (set ROVER_LATITUDE and ROVER_LONGITUDE)",
+      503,
+    );
+  }
   const { latitude, longitude, accuracy } = req.body || {};
   const result = recordClientLocation({ latitude, longitude, accuracy });
   if (!result) {
@@ -33,6 +41,13 @@ router.post("/client-distance", (req, res) => {
 });
 
 router.get("/client-distance", (req, res) => {
+  if (!isRoverSiteConfigured()) {
+    return error(
+      res,
+      "rover site not configured (set ROVER_LATITUDE and ROVER_LONGITUDE)",
+      503,
+    );
+  }
   const { latitude, longitude } = req.query || {};
   const result = computeClientDistance({ latitude, longitude });
   if (!result) {

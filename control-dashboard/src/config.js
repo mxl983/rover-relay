@@ -58,7 +58,7 @@ function relayWebSocketOrigin() {
 /** POST client geolocation; distance to fixed rover site (meters). */
 export const ROVER_CLIENT_DISTANCE_ENDPOINT =
   import.meta.env.VITE_ROVER_CLIENT_DISTANCE_URL ||
-  `${RELAY_BASE_URL.replace(/\/$/, "")}/api/rover/client-distance`;
+  `${getRelayHttpOrigin()}/api/rover/client-distance`;
 
 /** Fast charging-only path (webcam LED); avoids backup-cam latency on `/api/rover/state`. */
 export const ROVER_CHARGING_ENDPOINT =

@@ -15,6 +15,10 @@ function roverCoordinates() {
   return { latitude: lat, longitude: lon };
 }
 
+export function isRoverSiteConfigured() {
+  return roverCoordinates() != null;
+}
+
 /**
  * @param {{ latitude: number, longitude: number, accuracy?: number|null }} coords
  * @returns {{ distanceMeters: number, updatedAt: string } | null}
