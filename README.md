@@ -1,8 +1,21 @@
-# Mango Mate
+# Mango Rover
 
 **A home rover, vibe-coded end to end.**
 
-Aluminum chassis, live cockpit, and remote drive from across the city — a personal build that grew into a full rover system.
+Steer it from across the city — or the other side of the Earth. Live cockpit, real latency, and a full stack that grew out of a floor build.
+
+- **Mission HUD** over live video — battery, temps, latency, Wi‑Fi, distance, charging, and more
+- **Drive your way** — keyboard, on-screen sticks, or Xbox (USB / Bluetooth)
+- **Pan-tilt gimbal** look, night vision, focus, resolution, and hi-res still capture
+- **Two-way audio** — hear the rover, talk back
+- **Backup camera** — ESP32 MJPEG through the relay
+- **LiDAR minimap**
+- **Drive assist** — obstacle-aware braking with a live collision HUD
+- **Headlight, laser, treat feeder, meow** — one-tap from the cockpit
+- **Quiet / Sport**, power-saving idle shutdown, hard power On/Off
+- **Tailscale HTTPS relay** — telemetry, WebRTC video/audio, long-haul reach
+- **Client distance** — how far you are from the rover site, in the HUD
+- Proven remote: **~380 ms** latency from the other side of the planet
 
 <p align="center">
   <img src="assets/rover-front.png" alt="Mango Mate rover — front view on a tiled floor" width="520" />
@@ -12,7 +25,16 @@ Aluminum chassis, live cockpit, and remote drive from across the city — a pers
 
 ## Built on the floor. Wired by hand.
 
-Stacked aluminum decks, brass standoffs, pan-tilt camera, front ranging, and a Pi tucked in the middle — the hardware is as much the project as the software.
+Stacked aluminum decks, brass standoffs, and a Pi in the middle — every deck is part of the product.
+
+- **Aluminum chassis** with stacked decks and brass standoffs
+- **Raspberry Pi** onboard — drive, camera, voice, sensors, WebSocket control
+- **Pan-tilt camera gimbal** up front
+- **LiDAR** scan path + ROS 2 stack over the tailnet
+- **ESP32 edge cam** — backup stream plus ambient temp / pressure
+- **Headlight** (USB power), **laser pointer**, **pet feeder**, rover **meow**
+- **IMU** on the link (yaw hints for mapping)
+- Telemetry offloaded to the relay (less SD wear on the Pi)
 
 <p align="center">
   <img src="assets/rover-angle.png" alt="Mango Mate rover — three-quarter view showing camera gimbal and chassis" width="480" />
@@ -22,10 +44,10 @@ Stacked aluminum decks, brass standoffs, pan-tilt camera, front ranging, and a P
 
 ## A cockpit that feels present
 
-Keyboard, on-screen sticks, or Xbox. Live video, gimbal look, battery and link health, backup camera, and LiDAR when you need a map — all from a mission-style HUD.
+Same HUD, controlled at the other side of the Earth — nose-to-nose with the house cat at **~380 ms** latency.
 
 <p align="center">
-  <img src="assets/cockpit.png" alt="Mango Mate control dashboard with live video and joysticks" width="720" />
+  <img src="assets/cockpit.png" alt="Mango Mate cockpit — close-up of a sleeping cat over live video at ~380 ms latency from the other side of the Earth" width="720" />
 </p>
 
 ---
@@ -47,5 +69,3 @@ Repos: [mxl983/rover](https://github.com/mxl983/rover) (onboard) · [relay setup
 Started as a weekend toy for the house. Turned into a remoteable rover you can steer from far away — messy wires, real latency, and all.
 
 ---
-
-<sub>Mango Mate · a personal vibe-coding project</sub>
