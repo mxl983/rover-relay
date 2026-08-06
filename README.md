@@ -15,7 +15,8 @@ Steer it from across the city — or the other side of the Earth. Live cockpit, 
 - **Quiet / Sport**, power-saving idle shutdown, hard power On/Off
 - **Tailscale HTTPS relay** — telemetry, WebRTC video/audio, long-haul reach
 - **Client distance** — how far you are from the rover site, in the HUD
-- Proven remote: **~380 ms** latency from the other side of the planet
+- **Remote docking** — manual drive onto the charger from abroad so it can run for months before the pack itself wears out
+- Same-city drive under ideal Wi‑Fi: **sub‑20 ms** latency; long-haul proven at **~380 ms** from the other side of the planet
 
 <p align="center">
   <img src="assets/rover-front.png" alt="Mango Mate rover — front view on a tiled floor" width="520" />
@@ -44,7 +45,7 @@ Stacked aluminum decks, brass standoffs, and a Pi in the middle — every deck i
 
 ## A cockpit that feels present
 
-Same HUD, controlled at the other side of the Earth — nose-to-nose with the house cat at **~380 ms** latency.
+Same HUD, controlled from the other side of the Earth — **~10,000 km** out, **~380 ms** on the link, nose-to-nose with the house cat over live video. Drive, look, check in, and **dock for a charge** from abroad so service cycles stretch for months before the battery itself degrades.
 
 <p align="center">
   <img src="assets/cockpit.png" alt="Mango Mate cockpit — close-up of a sleeping cat over live video at ~380 ms latency from the other side of the Earth" width="720" />
