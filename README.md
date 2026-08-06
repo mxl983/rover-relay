@@ -52,6 +52,16 @@ Same HUD, controlled at the other side of the Earth — nose-to-nose with the ho
 
 ---
 
+## Out of the country. Still on duty.
+
+Controlled from abroad — roll into the living room, drop treats, and watch from the rover’s eye.
+
+<p align="center">
+  <img src="assets/operation.gif" alt="Mango rover in the living room — remote treat drop and watch while controlled from out of the country" width="720" />
+</p>
+
+---
+
 ## One system, three layers
 
 | Layer | What it does |
