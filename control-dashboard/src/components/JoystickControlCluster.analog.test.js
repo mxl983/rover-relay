@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANALOG_KEEPALIVE_MS,
   applyDriveCurve,
   prepareDriveVector,
   prepareOutboundDriveVector,
   quantizeAnalog,
   snapAnalogPair,
+  sticksPhysicallyCentered,
   touchStickToDriveRaw,
 } from "./JoystickControlCluster.jsx";
 
@@ -93,6 +95,20 @@ describe("joystick drive curve", () => {
     const b = prepareOutboundDriveVector({ x: 0.52, y: 0.01 });
     expect(a).toEqual(b);
     expect(a).toEqual({ x: 0.5, y: 0 });
+  });
+
+  it("keepalives held analog well under a typical Pi command stale window", () => {
+    expect(ANALOG_KEEPALIVE_MS).toBeGreaterThan(0);
+    expect(ANALOG_KEEPALIVE_MS).toBeLessThanOrEqual(250);
+  });
+
+  it("treats Bluetooth-level stick drift as centered for re-arm", () => {
+    expect(
+      sticksPhysicallyCentered({ lx: 0.2, ly: -0.18, rx: 0.1, ry: 0.05 }),
+    ).toBe(true);
+    expect(
+      sticksPhysicallyCentered({ lx: 0.9, ly: 0, rx: 0, ry: 0 }),
+    ).toBe(false);
   });
 });
 

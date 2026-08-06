@@ -1005,7 +1005,7 @@ export default function App() {
       )}
 
       {/* Gamepad bridge when on-screen joysticks are not mounted (keyboard / immersive).
-          Supports Xbox-standard and Legion Go (XInput + dual half-pad) controllers. */}
+          Xbox controller via USB or Bluetooth (Standard Gamepad mapping). */}
       {isAuthenticated && controlMode !== "joystick" && (
         <DualJoystickControls
           immersive
