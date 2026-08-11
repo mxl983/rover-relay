@@ -22,6 +22,7 @@ import {
   Gauge,
   Volume2,
   Mic,
+  Cat,
 } from "lucide-react";
 
 const CONTROL_MODE_OPTIONS = [
@@ -116,6 +117,8 @@ export const SystemControls = ({
   onRoverSpeakerChange,
   dashMicEnabled = false,
   onDashMicChange,
+  catVisionEnabled = false,
+  onCatVisionChange,
 }) => {
   if (!isPowered) return null;
 
@@ -330,6 +333,22 @@ export const SystemControls = ({
                 { label: "ON", value: "on" },
               ]}
               onChange={(mode) => onLidarMinimapChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow
+            icon={<Cat size={12} />}
+            label="Cat"
+            title="Live cat detect + posture; gimbal auto-centers on the cat while ON"
+          >
+            <SegmentedToggle
+              ariaLabel="Cat vision"
+              value={catVisionEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onCatVisionChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 

@@ -42,6 +42,11 @@ export const ROVER_STATE_ENDPOINT =
   import.meta.env.VITE_ROVER_STATE_URL ||
   "https://jjcloud.tail9d0237.ts.net:8787/api/rover/state";
 
+/** Vision box (cat detect / posture + depth). Override with VITE_VISION_BASE_URL. */
+export const VISION_HTTP_BASE = (
+  import.meta.env.VITE_VISION_BASE_URL || "http://jjcloud.tail9d0237.ts.net:8010"
+).replace(/\/$/, "");
+
 /** Relay HTTP origin (host + port) aligned with ROVER_STATE_ENDPOINT. */
 export function getRelayHttpOrigin() {
   try {
