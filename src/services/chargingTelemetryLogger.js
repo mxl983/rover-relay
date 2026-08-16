@@ -1,7 +1,7 @@
 import config from "../config.js";
 import { inferChargingFromLedWebcam } from "./ledWebcamChargingService.js";
 import { recordTelemetryEvent } from "./telemetryService.js";
-import { setChargingLedSnapshot } from "./chargingSnapshot.js";
+import { setChargingLedSnapshot } from "./chargingLedSnapshot.js";
 
 let timer = null;
 /** @type {boolean | null} last definite charging state for edge detection */

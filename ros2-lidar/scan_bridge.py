@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live 2D LiDAR radar viewer over HTTP."""
+"""LiDAR scan bridge: LaserScan → scan.json (+ optional HTTP viewer)."""
 
 from __future__ import annotations
 
@@ -281,7 +281,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
 
 class ScanViewer(Node):
     def __init__(self) -> None:
-        super().__init__("scan_viewer")
+        super().__init__("scan_bridge")
         topic = os.environ.get("LIDAR_VIEW_TOPIC", VIEW_TOPIC)
         self.create_subscription(LaserScan, topic, self._on_scan, qos_profile_sensor_data)
         self.get_logger().info(f"Viewer listening on {topic}")

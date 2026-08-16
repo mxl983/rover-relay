@@ -8,7 +8,7 @@ import {
   snapAnalogPair,
   sticksPhysicallyCentered,
   touchStickToDriveRaw,
-} from "./JoystickControlCluster.jsx";
+} from "./DualJoystickControls.jsx";
 
 describe("touch stick mapping", () => {
   it("maps nipple 12 o'clock to forward (negative y)", () => {

@@ -1,6 +1,6 @@
 import React from "react";
 
-export const DriveAssistHUD = ({ tilt = 90 }) => {
+export const GimbalTiltHud = ({ tilt = 90 }) => {
   const green = "rgba(0, 242, 255, 0.72)";
   const deviation = tilt - 90;
 

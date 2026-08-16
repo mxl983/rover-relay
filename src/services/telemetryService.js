@@ -1,6 +1,6 @@
 import config from "../config.js";
 import { getDb } from "./db.js";
-import { getChargingLedSnapshot } from "./chargingSnapshot.js";
+import { getChargingLedSnapshot } from "./chargingLedSnapshot.js";
 import { stampTelemetrySession, warmTelemetrySessionStamp } from "./telemetrySessionStamp.js";
 import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
 

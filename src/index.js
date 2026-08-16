@@ -10,10 +10,9 @@ import {
   startChargingTelemetryLogger,
   stopChargingTelemetryLogger,
 } from "./services/chargingTelemetryLogger.js";
-import { attachRoverChargingWss } from "./ws/roverChargingWss.js";
+import { attachRoverStateWss } from "./ws/roverStateWss.js";
 import { attachLidarWss } from "./ws/lidarWss.js";
 import { attachVisionWss } from "./ws/visionWss.js";
-import { closeNavigationDriveBridge } from "./services/navigationDriveBridge.js";
 
 initTelemetry();
 startChargingTelemetryLogger();
@@ -38,14 +37,13 @@ if (config.ssl.enabled) {
   server = http.createServer(app);
 }
 
-attachRoverChargingWss(server);
+attachRoverStateWss(server);
 attachLidarWss(server);
 attachVisionWss(server);
 
 function shutdown() {
   stopChargingTelemetryLogger();
   mqttBootService.stop();
-  closeNavigationDriveBridge();
   closeTelemetry();
   closeDb();
   if (redirectServer) {

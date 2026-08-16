@@ -3,7 +3,7 @@ import { remapReportedBatteryPctRounded } from "../utils/batteryPctScale.js";
 import { getDb } from "./db.js";
 import { getLatestTelemetryEvent } from "./telemetryService.js";
 import { inferChargingFromLedWebcam } from "./ledWebcamChargingService.js";
-import { getChargingLedSnapshot } from "./chargingSnapshot.js";
+import { getChargingLedSnapshot } from "./chargingLedSnapshot.js";
 import { getClientLocationSnapshot } from "./clientRoverDistanceService.js";
 
 function parseTs(row) {

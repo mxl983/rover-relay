@@ -264,10 +264,6 @@ html {
   color: #4dabf7;
 }
 
-.hud-indicator-icon-wrap--navigation {
-  color: rgba(120, 220, 160, 0.9);
-}
-
 .hud-indicator-icon-wrap--drive-assist {
   color: #6ee7a0;
 }
@@ -311,11 +307,6 @@ html {
 .hud-indicator-icon--power-saving {
   color: #4dabf7;
   filter: drop-shadow(0 0 4px rgba(77, 171, 247, 0.28));
-}
-
-.hud-indicator-icon--navigation {
-  color: rgba(120, 220, 160, 0.9);
-  filter: drop-shadow(0 0 4px rgba(120, 220, 160, 0.25));
 }
 
 .hud-indicator-icon--drive-assist {

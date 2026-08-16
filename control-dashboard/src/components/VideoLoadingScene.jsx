@@ -469,7 +469,7 @@ function drawRoverGroundShadowWorld(g, roverX, roverY, bodyLenPx, chassisY, whee
  * PixiJS: stars, flat ground, multi-layer triangle mountains (parallax + depth), rover.
  * Skipped in Vitest.
  */
-export function VideoLoadingPhysics() {
+export function VideoLoadingScene() {
   const hostRef = useRef(null);
 
   useEffect(() => {

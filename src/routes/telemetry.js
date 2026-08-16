@@ -7,7 +7,7 @@ import {
 } from "../services/telemetryService.js";
 import { getTelemetrySessionSnapshot } from "../services/telemetrySessionStamp.js";
 import { getDashboardCharts } from "../services/telemetryChartsService.js";
-import { getLatestSessionBatteryCharts } from "../services/telemetrySessionsService.js";
+import { getLatestSessionBatteryCharts } from "../services/sessionBatteryChartsService.js";
 import { requireToken } from "../middleware/auth.js";
 import { success, error } from "../utils/apiResponse.js";
 

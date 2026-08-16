@@ -1,6 +1,6 @@
 import { WebSocketServer } from "ws";
 import { getRoverState } from "../services/roverStateService.js";
-import { readEnvironmentFromBackupCam } from "../services/roverEnvironmentService.js";
+import { readEnvironmentFromBackupCam } from "../services/backupCamEnvironmentService.js";
 
 const PATH = "/ws/rover";
 
@@ -8,7 +8,7 @@ const PATH = "/ws/rover";
  * Browser clients subscribe here for relay rover snapshots including webcam charging state.
  * Query: ?backup=1 → push every 1s (backup camera UI); otherwise every 5s.
  */
-export function attachRoverChargingWss(httpServer) {
+export function attachRoverStateWss(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
   httpServer.on("upgrade", (request, socket, head) => {

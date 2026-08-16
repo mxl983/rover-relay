@@ -76,7 +76,7 @@ echo "ros2-lidar: cyclonedds=${CYCLONEDDS_URI}"
 case "${1:-viewer}" in
   viewer|viewer-only)
     export LIDAR_VIEW_TOPIC="${LIDAR_TOPIC:-/scan}"
-    exec python3 /opt/ros2-lidar/scan_viewer.py
+    exec python3 /opt/ros2-lidar/scan_bridge.py
     ;;
   echo)
     shift

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAllowedCaptureUrl } from "./capture";
+import { isAllowedCaptureUrl } from "./captureUrl.js";
 import { getAllowedCaptureOrigin } from "../config.js";
 
 describe("isAllowedCaptureUrl", () => {

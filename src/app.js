@@ -8,10 +8,7 @@ import telemetryRoutes from "./routes/telemetry.js";
 import roverRoutes from "./routes/rover.js";
 import backupCamRoutes from "./routes/backupCam.js";
 import lidarRoutes from "./routes/lidar.js";
-import navigationRoutes, {
-  systemNavigationRouter,
-} from "./routes/navigation.js";
-import pulseRoutes from "./routes/pulse.js";
+import roverPulseRoutes from "./routes/roverPulse.js";
 import visionRoutes from "./routes/vision.js";
 import { success, error } from "./utils/apiResponse.js";
 
@@ -93,12 +90,10 @@ export function createApp() {
   }
 
   app.use("/api/telemetry", telemetryRoutes);
-  app.use("/api/rover/pulse", pulseRoutes);
+  app.use("/api/rover/pulse", roverPulseRoutes);
   app.use("/api/rover", roverRoutes);
   app.use("/api/cams/backup", backupCamRoutes);
   app.use("/api/lidar", lidarRoutes);
-  app.use("/api/navigation", navigationRoutes);
-  app.use("/api/system/navigation", systemNavigationRouter);
   app.use("/api/vision", visionRoutes);
 
   app.use((req, res) => {

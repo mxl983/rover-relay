@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
-import { DriveAssistHUD } from "./DriveAssistHUD.jsx";
+import { GimbalTiltHud } from "./GimbalTiltHud.jsx";
 
-describe("DriveAssistHUD", () => {
+describe("GimbalTiltHud", () => {
   it("renders tilt readout", () => {
-    const { container } = render(<DriveAssistHUD tilt={95} />);
+    const { container } = render(<GimbalTiltHud tilt={95} />);
     expect(container.textContent).toMatch(/°/);
   });
 });

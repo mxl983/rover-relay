@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
-import { DualJoystickControls } from "./JoystickControlCluster.jsx";
+import { DualJoystickControls } from "./DualJoystickControls.jsx";
 
 vi.mock("nipplejs", () => ({
   default: {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import mqtt from "mqtt";
 import PropTypes from "prop-types";
-import { MQTT_HOST } from "../constants";
+import { MQTT_HOST } from "../config";
 
 const DASHBOARD_BASE_PATH = import.meta.env.BASE_URL || "/";
 
@@ -59,7 +59,7 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
         client.publish("rover/power/pi", "On", { qos: 1 });
       }
 
-      // Close this temporary client shortly after; App will create its own via useMqtt.
+      // Close this temporary client shortly after; App will create its own via useEspMqtt.
       setTimeout(() => client.end(), 500);
     });
 

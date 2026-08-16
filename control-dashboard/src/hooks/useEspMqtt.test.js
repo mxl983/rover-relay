@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useMqtt } from "./useMqtt.js";
+import { useEspMqtt } from "./useEspMqtt.js";
 
 const connectMock = vi.fn();
 
@@ -10,7 +10,7 @@ vi.mock("mqtt", () => ({
   },
 }));
 
-describe("useMqtt", () => {
+describe("useEspMqtt", () => {
   beforeEach(() => {
     connectMock.mockReset();
     connectMock.mockReturnValue({
@@ -23,12 +23,12 @@ describe("useMqtt", () => {
   });
 
   it("does not connect without creds", () => {
-    renderHook(() => useMqtt(null));
+    renderHook(() => useEspMqtt(null));
     expect(connectMock).not.toHaveBeenCalled();
   });
 
   it("connects when creds provided", () => {
-    renderHook(() => useMqtt({ username: "u", password: "p" }));
+    renderHook(() => useEspMqtt({ username: "u", password: "p" }));
     expect(connectMock).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { recordHeartbeat, getRoverState } from "../services/roverStateService.js";
-import { readEnvironmentFromBackupCam } from "../services/roverEnvironmentService.js";
+import { readEnvironmentFromBackupCam } from "../services/backupCamEnvironmentService.js";
 import {
   recordClientLocation,
   computeClientDistance,

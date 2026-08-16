@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
-import { ControlCluster } from "./ControlCluster.jsx";
+import { KeyboardControlCluster } from "./KeyboardControlCluster.jsx";
 
 const noop = () => {};
 
-describe("ControlCluster", () => {
+describe("KeyboardControlCluster", () => {
   it("renders without crashing", () => {
     const { container } = render(
-      <ControlCluster
+      <KeyboardControlCluster
         onDrive={noop}
         onLightToggle={noop}
         onLaserToggle={noop}

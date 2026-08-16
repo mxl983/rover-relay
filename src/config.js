@@ -175,22 +175,6 @@ const config = {
     /** LiDAR WebSocket push interval for dashboard clients (ms). */
     wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 50),
   },
-  navigation: {
-    statusFilePath:
-      process.env.NAV_STATUS_FILE_PATH || "/app/lidar/navigation_status.json",
-    modeFilePath:
-      process.env.NAV_MODE_FILE_PATH || "/app/lidar/navigation_mode.json",
-    piWebSocketUrl:
-      process.env.NAV_PI_WS_URL ||
-      (process.env.NAV_PI_BASE_URL
-        ? process.env.NAV_PI_BASE_URL.replace(/^http/, "ws")
-        : "wss://rover.tail9d0237.ts.net:3000"),
-    piWsTlsInsecure: parseBoolean(process.env.NAV_PI_WS_TLS_INSECURE, true),
-    driveBaseUrl:
-      process.env.NAV_DRIVE_BASE_URL ||
-      process.env.RELAY_PUBLIC_BASE_URL ||
-      "https://jjcloud.tail9d0237.ts.net",
-  },
   controlDashboard: {
     /** If true, relay proxies the UI under basePath (e.g. /mangomate). */
     proxyEnabled: parseBoolean(process.env.CONTROL_DASHBOARD_PROXY_ENABLED, true),

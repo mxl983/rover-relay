@@ -20,7 +20,7 @@ function isDashboardPath(pathname) {
  * @param {{ username: string; password: string } | null} sessionCreds
  * @returns {{ isEspOnline: boolean; mqttClientRef: React.MutableRefObject<mqtt.MqttClient | null> }}
  */
-export function useMqtt(sessionCreds) {
+export function useEspMqtt(sessionCreds) {
   const [isEspOnline, setIsEspOnline] = useState(false);
   const mqttClientRef = useRef(null);
   const didWakeRef = useRef(false);

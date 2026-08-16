@@ -10,9 +10,9 @@ RUN apt-get update \
 WORKDIR /opt/ros2-lidar
 
 COPY ros2-lidar/entrypoint.sh /entrypoint.sh
-COPY ros2-lidar/scan_viewer.py /opt/ros2-lidar/scan_viewer.py
+COPY ros2-lidar/scan_bridge.py /opt/ros2-lidar/scan_bridge.py
 
-RUN chmod +x /entrypoint.sh /opt/ros2-lidar/scan_viewer.py
+RUN chmod +x /entrypoint.sh /opt/ros2-lidar/scan_bridge.py
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["viewer"]

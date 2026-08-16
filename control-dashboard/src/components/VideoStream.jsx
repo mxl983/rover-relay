@@ -4,9 +4,9 @@ import {
   AUDIO_STREAM_HOST,
   AUDIO_TALK_HOST,
   ROVER_STATE_ENDPOINT,
-} from "../constants";
+} from "../config";
 import { apiFetch } from "../api/client";
-import { VideoLoadingPhysics } from "./VideoLoadingPhysics.jsx";
+import { VideoLoadingScene } from "./VideoLoadingScene.jsx";
 
 export const VideoStream = ({
   onVideoReadyChange,
@@ -454,7 +454,7 @@ export const VideoStream = ({
 
       {loaderOverlayVisible && (
         <div style={loaderWrapper}>
-          <VideoLoadingPhysics />
+          <VideoLoadingScene />
           <div style={loaderForeground}>
             <div style={loaderTextStyle}>
               COSMIC PIT STOP IN PROGRESS

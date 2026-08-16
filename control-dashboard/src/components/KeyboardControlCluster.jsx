@@ -18,7 +18,7 @@ const CONTROL_CONFIG = [
   { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
 ];
 
-export const ControlCluster = ({
+export const KeyboardControlCluster = ({
   onDrive,
   onLightToggle,
   onLaserToggle,

@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import config from "../config.js";
-import { enforceConservativeChargingDecision } from "./chargingDetectionService.js";
+import { enforceConservativeChargingDecision } from "./chargingConfidenceGate.js";
 
 /** Append operator hints for common V4L2 failures (missing device, Docker, busy). */
 function formatWebcamCaptureErrorHint(raw, device) {

@@ -184,9 +184,8 @@ export function LidarMinimap({ scan, isLive, error, pan }) {
   const nearest = nearestPointWithAngle(visiblePoints);
   const nearestLabel =
     nearest && Number.isFinite(nearest.range)
-      ? `near ${nearest.range.toFixed(2)}m${
-          Number.isFinite(nearest.angleDeg) ? ` @ ${nearest.angleDeg.toFixed(0)}°` : ""
-        }`
+      ? `near ${nearest.range.toFixed(2)}m${Number.isFinite(nearest.angleDeg) ? ` @ ${nearest.angleDeg.toFixed(0)}°` : ""
+      }`
       : "near —";
 
   const atMinZoom = rangeM <= MIN_RANGE_M + 0.01;

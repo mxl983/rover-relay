@@ -1,9 +1,9 @@
 /**
- * Proximity label for HUD (distance to fixed rover site).
+ * Proximity label for HUD (browser distance to fixed rover site).
  * @param {number|null|undefined} meters
  * @returns {string|null}
  */
-export function formatRoverDistance(meters) {
+export function formatClientSiteDistance(meters) {
   if (meters === null || meters === undefined || meters === "") return null;
   const m = Number(meters);
   if (!Number.isFinite(m) || m < 0) return null;

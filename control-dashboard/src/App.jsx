@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { VideoStream } from "./components/VideoStream";
-import { ControlCluster } from "./components/ControlCluster";
+import { KeyboardControlCluster } from "./components/KeyboardControlCluster";
 import {
   PI_SYSTEM_ENDPOINT,
   PI_CAMERA_ENDPOINT,
@@ -18,10 +18,10 @@ import {
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
-import { DriveAssistHUD } from "./components/DriveAssistHUD";
+import { GimbalTiltHud } from "./components/GimbalTiltHud";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
-import { DualJoystickControls } from "./components/JoystickControlCluster";
+import { DualJoystickControls } from "./components/DualJoystickControls";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
@@ -32,15 +32,15 @@ import { CatVisionOverlay } from "./components/CatVisionOverlay";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
-import { useMqtt } from "./hooks/useMqtt";
+import { useEspMqtt } from "./hooks/useEspMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useLidarScan } from "./hooks/useLidarScan";
 import { useCatVision } from "./hooks/useCatVision";
 import { useCatGimbalTrack } from "./hooks/useCatGimbalTrack";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
-import { isAllowedCaptureUrl } from "./api/capture";
-import { formatRoverDistance } from "./utils/formatRoverDistance.js";
+import { isAllowedCaptureUrl } from "./api/captureUrl";
+import { formatClientSiteDistance } from "./utils/formatClientSiteDistance.js";
 import { deriveRoverCharging } from "./utils/deriveRoverCharging.js";
 import {
   fetchDriveAssistStatus,
@@ -178,7 +178,7 @@ export default function App() {
     console.log(imuLive ? "[imu] stream live" : "[imu] stream stale / offline");
   }, [isAuthenticated, imuLive]);
 
-  const { isEspOnline, mqttClientRef } = useMqtt(
+  const { isEspOnline, mqttClientRef } = useEspMqtt(
     isAuthenticated ? sessionCreds : null,
   );
 
@@ -1069,7 +1069,7 @@ export default function App() {
         onHardPowerOff={handleHardPowerOff}
       />
       <CatVisionOverlay cat={catVisionCat} enabled={catVisionEnabled} />
-      <DriveAssistHUD pan={stats.pan} tilt={stats.tilt} />
+      <GimbalTiltHud pan={stats.pan} tilt={stats.tilt} />
 
       {isAuthenticated && isMobile && controlMode !== "immersive" && (
         <MobileTouchGimbalLayer
@@ -1265,7 +1265,7 @@ function HudHeader({
   dashMicEnabled = false,
   onDashMicChange,
 }) {
-  const distanceLabel = formatRoverDistance(distanceMeters);
+  const distanceLabel = formatClientSiteDistance(distanceMeters);
 
   return (
     <div className="hud-header">
@@ -1408,8 +1408,8 @@ function HudFooter({
 
   const joystickCenter = metricsPanelEnabled ? schematic : null;
 
-  const renderControlCluster = () => (
-    <ControlCluster
+  const renderKeyboardControls = () => (
+    <KeyboardControlCluster
       onDrive={onDrive}
       usbPower={stats.usbPower}
       laserOn={laserOn}
@@ -1448,12 +1448,12 @@ function HudFooter({
       <div className="footer-controls">
         {piOnline ? (
           <>
-            {!isMobile && controlMode === "keyboard" && renderControlCluster()}
+            {!isMobile && controlMode === "keyboard" && renderKeyboardControls()}
             {!isMobile && controlMode === "joystick" && (
               <DualJoystickControls {...joystickProps}>{joystickCenter}</DualJoystickControls>
             )}
 
-            {isMobile && controlMode === "keyboard" && renderControlCluster()}
+            {isMobile && controlMode === "keyboard" && renderKeyboardControls()}
           </>
         ) : null}
       </div>
