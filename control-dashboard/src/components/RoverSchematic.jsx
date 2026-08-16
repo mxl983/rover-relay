@@ -127,6 +127,15 @@ function formatVoltageShort(voltage, isOffline) {
   return `${Number(voltage).toFixed(1)}V`;
 }
 
+/** Compact local clock for the pinned battery row (replaces "BAT"). */
+export function formatClockShort(date = new Date()) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "…";
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export const RoverSchematic = ({
   pan = 90,
   battery = null,
@@ -145,6 +154,21 @@ export const RoverSchematic = ({
 }) => {
   const hasBatteryData = battery !== null && battery !== undefined;
   const chargeLevel = hasBatteryData ? Math.min(Math.max(battery, 0), 100) : 0;
+  const [clockNow, setClockNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let intervalId = null;
+    const tick = () => setClockNow(new Date());
+    const msToNextMinute = 60_000 - (Date.now() % 60_000) + 50;
+    const timeoutId = setTimeout(() => {
+      tick();
+      intervalId = setInterval(tick, 60_000);
+    }, msToNextMinute);
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId != null) clearInterval(intervalId);
+    };
+  }, []);
 
   const batteryColor = isOffline
     ? palette.grey
@@ -183,6 +207,7 @@ export const RoverSchematic = ({
     : isOffline
       ? "--"
       : "…";
+  const clockLabel = formatClockShort(clockNow);
 
   const secondaryMetrics = useMemo(() => {
     /** @type {{ key: string; label: string; value: string; color: string }[]} */
@@ -396,6 +421,7 @@ export const RoverSchematic = ({
         <BatteryHero
           level={hasBatteryData ? chargeLevel : null}
           text={batteryText}
+          clockLabel={clockLabel}
           color={isCharging && !isOffline ? palette.greenCharging : batteryColor}
           isCharging={isCharging && !isOffline}
           isOffline={isOffline}
@@ -476,7 +502,7 @@ export const RoverSchematic = ({
   );
 };
 
-function BatteryHero({ level, text, color, isCharging, isOffline }) {
+function BatteryHero({ level, text, clockLabel, color, isCharging, isOffline }) {
   const fillPct = level == null ? 0 : Math.min(100, Math.max(0, level));
   const low = !isOffline && level != null && level < 20 && !isCharging;
   // iOS-like: green when healthy/charging, red when critically low, white/cyan otherwise.
@@ -510,34 +536,21 @@ function BatteryHero({ level, text, color, isCharging, isOffline }) {
         minWidth: 0,
         width: "100%",
       }}
-      title={text}
-      aria-label={`Battery ${text}${isCharging ? ", charging" : ""}`}
+      title={`Battery ${text}${isCharging ? " · charging" : ""} · ${clockLabel}`}
+      aria-label={`Battery ${text}${isCharging ? ", charging" : ""}, ${clockLabel}`}
     >
       <div
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
           color: palette.label,
           fontSize: 9,
-          letterSpacing: "0.08em",
+          letterSpacing: "0.04em",
           fontWeight: 600,
           flexShrink: 0,
           lineHeight: 1,
+          fontVariantNumeric: "tabular-nums",
         }}
       >
-        <span
-          className="rover-battery-hero__dot"
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 999,
-            background: fillColor,
-            boxShadow: `0 0 10px ${fillColor}66`,
-            flexShrink: 0,
-          }}
-        />
-        BAT
+        {clockLabel}
       </div>
 
       {/* iPhone status-bar battery — replaces the percentage numeral */}
