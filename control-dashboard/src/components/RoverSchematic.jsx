@@ -3,7 +3,8 @@ import PropTypes from "prop-types";
 import { getWifiLevel } from "../utils/wifiSignal.js";
 
 const TOUCH_TARGET_MIN = 44;
-const SIZE = 84;
+/** Fixed panel width — sized for longest metrics (e.g. 999ms, 12.6V, +12.3). */
+const SIZE = 104;
 const VISIBLE_SECONDARY = 3;
 /** Row box must clear 13px glyphs + antialiasing; was 13 and clipped values. */
 const ROW_H = 16;
@@ -331,6 +332,9 @@ export const RoverSchematic = ({
         flexDirection: "column",
         alignItems: "center",
         gap: 6,
+        width: SIZE + 8,
+        minWidth: SIZE + 8,
+        maxWidth: SIZE + 8,
         pointerEvents: "auto",
         zIndex: 10,
       }}
@@ -341,8 +345,9 @@ export const RoverSchematic = ({
         aria-label={`${labelParts.join(", ")}. Tap to expand.`}
         style={{
           width: SIZE,
-          height: SIZE,
-          minWidth: TOUCH_TARGET_MIN,
+          minWidth: SIZE,
+          maxWidth: SIZE,
+          height: "auto",
           minHeight: TOUCH_TARGET_MIN,
           boxSizing: "border-box",
           display: "flex",
@@ -365,7 +370,10 @@ export const RoverSchematic = ({
       <div
         style={{
           width: SIZE,
+          minWidth: SIZE,
+          maxWidth: SIZE,
           height: "auto",
+          boxSizing: "border-box",
           borderRadius: 8,
           border: "none",
           background: palette.panelBg,
@@ -381,14 +389,16 @@ export const RoverSchematic = ({
           pointerEvents: "none",
           fontFamily:
             "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
-          overflow: "visible",
+          overflow: "hidden",
         }}
         aria-hidden
       >
-        <MetricRow
-          label="BAT"
-          value={batteryText}
+        <BatteryHero
+          level={hasBatteryData ? chargeLevel : null}
+          text={batteryText}
           color={isCharging && !isOffline ? palette.greenCharging : batteryColor}
+          isCharging={isCharging && !isOffline}
+          isOffline={isOffline}
         />
         <div
           style={{
@@ -427,7 +437,7 @@ export const RoverSchematic = ({
       {/* Rev strip: dashes only (no track box); color left→right green→red */}
       <div
         style={{
-          width: SIZE + 8,
+          width: "100%",
           height: 6,
           opacity: throttlePct > 0 && !isOffline ? 1 : 0,
           transition: "opacity 0.12s ease-out",
@@ -466,6 +476,118 @@ export const RoverSchematic = ({
   );
 };
 
+function BatteryHero({ level, text, color, isCharging, isOffline }) {
+  const fillPct = level == null ? 0 : Math.min(100, Math.max(0, level));
+  const low = !isOffline && level != null && level < 20 && !isCharging;
+  // iOS-like: green when healthy/charging, red when critically low, white/cyan otherwise.
+  const fillColor = isOffline
+    ? palette.grey
+    : isCharging
+      ? "#34c759"
+      : low
+        ? "#ff3b30"
+        : color === palette.green || color === palette.greenCharging
+          ? "#34c759"
+          : color;
+
+  return (
+    <div
+      className={[
+        "rover-battery-hero",
+        isCharging ? "rover-battery-hero--charging" : "",
+        low ? "rover-battery-hero--low" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 6,
+        height: ROW_H,
+        minHeight: ROW_H,
+        maxHeight: ROW_H,
+        minWidth: 0,
+        width: "100%",
+      }}
+      title={text}
+      aria-label={`Battery ${text}${isCharging ? ", charging" : ""}`}
+    >
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          color: palette.label,
+          fontSize: 9,
+          letterSpacing: "0.08em",
+          fontWeight: 600,
+          flexShrink: 0,
+          lineHeight: 1,
+        }}
+      >
+        <span
+          className="rover-battery-hero__dot"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 999,
+            background: fillColor,
+            boxShadow: `0 0 10px ${fillColor}66`,
+            flexShrink: 0,
+          }}
+        />
+        BAT
+      </div>
+
+      {/* iPhone status-bar battery — replaces the percentage numeral */}
+      <svg
+        className="rover-battery-hero__icon"
+        width="27"
+        height="12"
+        viewBox="0 0 27 12"
+        aria-hidden
+        style={{ flexShrink: 0, display: "block" }}
+      >
+        <rect
+          x="0.5"
+          y="0.5"
+          width="22"
+          height="11"
+          rx="2.2"
+          ry="2.2"
+          fill="none"
+          stroke="rgba(255,255,255,0.55)"
+          strokeWidth="1"
+        />
+        <path
+          d="M24 3.8c.9.4 1.4 1.1 1.4 2.2s-.5 1.8-1.4 2.2V3.8z"
+          fill="rgba(255,255,255,0.45)"
+        />
+        <rect
+          className="rover-battery-hero__fill"
+          x="2"
+          y="2"
+          width={Math.max(0, (fillPct / 100) * 19)}
+          height="8"
+          rx="1.4"
+          ry="1.4"
+          fill={fillColor}
+          style={{ transition: "width 0.55s cubic-bezier(0.22, 1, 0.36, 1)" }}
+        />
+        {isCharging ? (
+          <path
+            className="rover-battery-hero__bolt"
+            d="M12.2 1.6L9.4 6.6h2.1l-.9 3.8 3.4-5.4h-2.2l1.4-3.4z"
+            fill="#0b1220"
+            stroke="none"
+          />
+        ) : null}
+      </svg>
+    </div>
+  );
+}
+
 function MetricRow({ label, value, color }) {
   return (
     <div
@@ -477,7 +599,9 @@ function MetricRow({ label, value, color }) {
         height: ROW_H,
         minHeight: ROW_H,
         maxHeight: ROW_H,
-        overflow: "visible",
+        minWidth: 0,
+        width: "100%",
+        overflow: "hidden",
       }}
     >
       <div
@@ -514,10 +638,12 @@ function MetricRow({ label, value, color }) {
           letterSpacing: "0.01em",
           flex: "1 1 auto",
           minWidth: 0,
+          maxWidth: "100%",
           textAlign: "right",
           fontVariantNumeric: "tabular-nums",
           whiteSpace: "nowrap",
-          overflow: "visible",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
         {value}

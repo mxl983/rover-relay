@@ -9,13 +9,14 @@ const CONTROL_CONFIG = [
   { key: "s", label: "S", grid: 6 },
   { key: "d", label: "D", grid: 7 },
   { key: "arrowup", label: "▲", grid: 10, python: "ArrowUp", hint: "UP" },
+  { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
+  { key: "p", label: "P", grid: 12, type: "action", hint: "PRK" },
   { key: "arrowleft", label: "◀", grid: 13, python: "ArrowLeft", hint: "L" },
   { key: "arrowdown", label: "▼", grid: 14, python: "ArrowDown", hint: "DN" },
   { key: "arrowright", label: "▶", grid: 15, python: "ArrowRight", hint: "R" },
   { key: "f", label: "💡", grid: 16, type: "action", hint: "F" },
   { key: "l", label: "🔴", grid: 8, type: "action", hint: "LZR" },
   { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
-  { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
 ];
 
 export const KeyboardControlCluster = ({
@@ -26,6 +27,7 @@ export const KeyboardControlCluster = ({
   onVoiceStop,
   onCapture,
   onReset,
+  onLookDown,
   usbPower,
   laserOn,
   voiceSupported,
@@ -56,6 +58,7 @@ export const KeyboardControlCluster = ({
         if (key === "l") onLaserToggle?.();
         if (key === "c") onCapture();
         if (key === "r") onReset();
+        if (key === "p") onLookDown?.();
         if (key === "b") onToggleBackupView?.();
         if (key === "t") onTreat?.();
         return;
@@ -87,6 +90,7 @@ export const KeyboardControlCluster = ({
       onVoiceStop,
       onCapture,
       onReset,
+      onLookDown,
       voiceSupported,
       onToggleBackupView,
       onTreat,

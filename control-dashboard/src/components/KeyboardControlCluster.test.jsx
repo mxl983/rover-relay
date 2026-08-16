@@ -15,6 +15,7 @@ describe("KeyboardControlCluster", () => {
         onVoiceStop={noop}
         onCapture={noop}
         onReset={noop}
+        onLookDown={noop}
         usbPower
         laserOn={false}
         voiceSupported={false}
@@ -23,5 +24,28 @@ describe("KeyboardControlCluster", () => {
       />,
     );
     expect(container.querySelector(".wasd-controls")).toBeTruthy();
+  });
+
+  it("fills the park slot next to reset", () => {
+    const { container } = render(
+      <KeyboardControlCluster
+        onDrive={noop}
+        onLightToggle={noop}
+        onLaserToggle={noop}
+        onVoiceStart={noop}
+        onVoiceStop={noop}
+        onCapture={noop}
+        onReset={noop}
+        onLookDown={noop}
+        usbPower
+        laserOn={false}
+        voiceSupported={false}
+        voiceListening={false}
+        isCapturing={false}
+      />,
+    );
+    const buttons = [...container.querySelectorAll(".wasd-controls .btn")];
+    expect(buttons).toHaveLength(16);
+    expect(buttons.some((btn) => btn.textContent.includes("PRK"))).toBe(true);
   });
 });

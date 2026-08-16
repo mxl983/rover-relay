@@ -29,7 +29,8 @@ describe("RoverSchematic", () => {
     );
 
     expect(screen.getByText("BAT")).toBeTruthy();
-    expect(screen.getByText("50%")).toBeTruthy();
+    expect(screen.getAllByLabelText(/Battery 50%/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText("50%")).toBeNull();
     expect(screen.getAllByText("TMP").length).toBeGreaterThan(0);
     expect(screen.getAllByText("VOL").length).toBeGreaterThan(0);
     expect(screen.getAllByText("WIFI").length).toBeGreaterThan(0);
@@ -50,7 +51,7 @@ describe("RoverSchematic", () => {
     });
 
     expect(screen.getByText("BAT")).toBeTruthy();
-    expect(screen.getByText("50%")).toBeTruthy();
+    expect(screen.getAllByLabelText(/Battery 50%/i).length).toBeGreaterThan(0);
     expect(track.getAttribute("style") || "").toMatch(/translateY\(-20px\)/);
   });
 });

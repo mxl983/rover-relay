@@ -349,6 +349,76 @@ html {
   }
 }
 
+/* Pinned metrics battery: iPhone-style icon (replaces % numeral) */
+.rover-battery-hero--charging .rover-battery-hero__dot {
+  animation: rover-battery-charge-dot 1.2s ease-in-out infinite;
+}
+
+.rover-battery-hero--charging .rover-battery-hero__fill {
+  animation: rover-battery-charge-glow 1.6s ease-in-out infinite;
+}
+
+.rover-battery-hero--charging .rover-battery-hero__bolt {
+  animation: rover-battery-bolt-pulse 1.2s ease-in-out infinite;
+}
+
+.rover-battery-hero--low .rover-battery-hero__dot,
+.rover-battery-hero--low .rover-battery-hero__fill {
+  animation: rover-battery-low-pulse 0.95s ease-in-out infinite;
+}
+
+@keyframes rover-battery-charge-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes rover-battery-charge-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
+}
+
+@keyframes rover-battery-bolt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes rover-battery-low-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rover-battery-hero--charging .rover-battery-hero__dot,
+  .rover-battery-hero--charging .rover-battery-hero__fill,
+  .rover-battery-hero--charging .rover-battery-hero__bolt,
+  .rover-battery-hero--low .rover-battery-hero__dot,
+  .rover-battery-hero--low .rover-battery-hero__fill {
+    animation: none;
+  }
+}
+
 .hud-footer {
   display: flex;
   justify-content: space-between;

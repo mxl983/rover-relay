@@ -1425,6 +1425,7 @@ function HudFooter({
       onCapture={onCapture}
       isCapturing={isCapturing}
       onReset={onResetCamera}
+      onLookDown={onLookDown}
       onToggleBackupView={onToggleBackupView}
       backupViewEnabled={backupViewEnabled}
       onTreat={onFeederTreat}
