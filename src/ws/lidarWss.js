@@ -81,7 +81,7 @@ export function attachLidarWss(httpServer) {
       socket.destroy();
       return;
     }
-    // Do not destroy here — other upgrade handlers (/ws/rover, /ws/slam) share this server.
+    // Do not destroy here — other upgrade handlers (/ws/rover) share this server.
     if (pathname !== PATH) {
       return;
     }

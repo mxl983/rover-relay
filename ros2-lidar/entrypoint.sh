@@ -74,25 +74,9 @@ echo "ros2-lidar: rover_peer=${ROVER_DDS_PEER} (${ROVER_DDS_PEER_RESOLVED}) loca
 echo "ros2-lidar: cyclonedds=${CYCLONEDDS_URI}"
 
 case "${1:-viewer}" in
-  viewer|viewer-slam)
-    export LIDAR_VIEW_TOPIC="${LIDAR_TOPIC:-/scan}"
-    exec python3 /opt/ros2-lidar/scan_slam_pipeline.py
-    ;;
-  viewer-only)
+  viewer|viewer-only)
     export LIDAR_VIEW_TOPIC="${LIDAR_TOPIC:-/scan}"
     exec python3 /opt/ros2-lidar/scan_viewer.py
-    ;;
-  viewer-stable)
-    exec python3 /opt/ros2-lidar/scan_pipeline.py
-    ;;
-  slam)
-    exec python3 /opt/ros2-lidar/slam_mapper.py
-    ;;
-  stabilizer)
-    exec python3 /opt/ros2-lidar/lidar_stabilizer.py
-    ;;
-  monitor)
-    exec python3 /opt/ros2-lidar/scan_monitor.py
     ;;
   echo)
     shift

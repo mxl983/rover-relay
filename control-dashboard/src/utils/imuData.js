@@ -5,13 +5,6 @@
  * - accel.x → lateral (left/right)
  * - accel.y → forward/back (chip reports negative when accelerating forward)
  * - accel.z → up/down (ignored for drive-plane G / collision heuristics)
- *
- * SLAM integration ideas (server-side or future dashboard fusion):
- * - gyro.z (yaw rate) → deskew LiDAR scans between stamps; integrate for short-term heading
- * - accel → detect bumps / tilt; pause map updates when motion is chaotic
- * - stamp + seq → align IMU samples with relay.lidar.scan frames for motion compensation
- * - aux magnetometer → long-term yaw drift correction when fused with gyro
- * - fuse IMU yaw delta with pan gimbal + wheel odometry for minimap view heading
  */
 
 const STALE_MS = 500;

@@ -15,7 +15,6 @@ import {
   ROVER_CLIENT_DISTANCE_ENDPOINT,
   ROVER_CHARGING_ENDPOINT,
   ROVER_STATE_ENDPOINT,
-  SLAM_ENABLED,
 } from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
@@ -36,7 +35,6 @@ import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useMqtt } from "./hooks/useMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useLidarScan } from "./hooks/useLidarScan";
-import { useSlamMap } from "./hooks/useSlamMap";
 import { useCatVision } from "./hooks/useCatVision";
 import { useCatGimbalTrack } from "./hooks/useCatGimbalTrack";
 import { useRoverSession } from "./context/RoverSessionContext";
@@ -282,11 +280,6 @@ export default function App() {
   const { scan: lidarScan, isLive: lidarLive, error: lidarError } = useLidarScan(
     lidarSubscribed,
   );
-  const {
-    map: slamMap,
-    isLive: slamLive,
-    error: slamError,
-  } = useSlamMap(SLAM_ENABLED && lidarSubscribed);
 
   useEffect(() => {
     let cancelled = false;
@@ -1168,9 +1161,6 @@ export default function App() {
                 scan={lidarScan}
                 isLive={lidarLive}
                 error={lidarError}
-                slamMap={slamMap}
-                slamLive={slamLive}
-                slamError={slamError}
                 pan={displayStats.pan}
               />
             </div>

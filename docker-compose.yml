@@ -50,15 +50,15 @@ services:
       CONTROL_DASHBOARD_PROXY_BASE_PATH: ${CONTROL_DASHBOARD_PROXY_BASE_PATH:-/mangomate}
       CONTROL_DASHBOARD_PROXY_TARGET: ${CONTROL_DASHBOARD_PROXY_TARGET:-http://control-dashboard:80}
       LIDAR_SCAN_FILE_PATH: ${LIDAR_SCAN_FILE_PATH:-/app/lidar/scan.json}
-      SLAM_MAP_FILE_PATH: ${SLAM_MAP_FILE_PATH:-/app/lidar/slam_map.json}
-      SLAM_LIVE_FILE_PATH: ${SLAM_LIVE_FILE_PATH:-/app/lidar/slam_live.json}
       LIDAR_SCAN_UPSTREAM_URL: ${LIDAR_SCAN_UPSTREAM_URL:-}
       NAV_STATUS_FILE_PATH: ${NAV_STATUS_FILE_PATH:-/app/lidar/navigation_status.json}
       NAV_MODE_FILE_PATH: ${NAV_MODE_FILE_PATH:-/app/lidar/navigation_mode.json}
       NAV_PI_WS_URL: ${NAV_PI_WS_URL:-wss://rover.tail9d0237.ts.net:3000}
       NAV_PI_WS_TLS_INSECURE: ${NAV_PI_WS_TLS_INSECURE:-true}
       LIDAR_WS_PUSH_MS: ${LIDAR_WS_PUSH_MS:-50}
-      SLAM_WS_PUSH_MS: ${SLAM_WS_PUSH_MS:-500}
+      # vision_server (usually in ../vision compose on network vision_default)
+      VISION_UPSTREAM_URL: ${VISION_UPSTREAM_URL:-http://vision_server:8010}
+      VISION_UPSTREAM_TIMEOUT_MS: ${VISION_UPSTREAM_TIMEOUT_MS:-4000}
     volumes:
       - relay-data:/app/data
       - lidar-data:/app/lidar
@@ -67,6 +67,9 @@ services:
     # comment out `devices` below or `docker compose up` may fail when /dev/video0 is missing.
     devices:
       - ${CHARGING_LED_WEBCAM_DEVICE:-/dev/video0}:${CHARGING_LED_WEBCAM_DEVICE:-/dev/video0}
+    networks:
+      - default
+      - vision_net
 
   ros2-lidar:
     build:
@@ -89,34 +92,10 @@ services:
       LIDAR_VIEWER_HOST: ${LIDAR_VIEWER_HOST:-0.0.0.0}
       LIDAR_SCAN_FILE_PATH: ${LIDAR_SCAN_FILE_PATH:-/app/lidar/scan.json}
       LIDAR_WS_MAX_POINTS: ${LIDAR_WS_MAX_POINTS:-0}
-      LIDAR_STABILIZED_TOPIC: ${LIDAR_STABILIZED_TOPIC:-/stabilized_scan}
       LIDAR_VIEW_TOPIC: ${LIDAR_VIEW_TOPIC:-/scan}
-      LIDAR_STABILIZER_FRAMES: ${LIDAR_STABILIZER_FRAMES:-8}
-      LIDAR_STABILIZER_DECAY: ${LIDAR_STABILIZER_DECAY:-0.75}
-      LIDAR_STABILIZER_HIT_BOOST: ${LIDAR_STABILIZER_HIT_BOOST:-0.35}
-      LIDAR_STABILIZER_MIN_CONFIDENCE: ${LIDAR_STABILIZER_MIN_CONFIDENCE:-0.25}
-      LIDAR_STABILIZER_BIN_DEG: ${LIDAR_STABILIZER_BIN_DEG:-2}
-      LIDAR_STABILIZER_TARGET_FRAME: ${LIDAR_STABILIZER_TARGET_FRAME:-base_link}
-      LIDAR_STABILIZER_LOG_INTERVAL_S: ${LIDAR_STABILIZER_LOG_INTERVAL_S:-2}
-      SLAM_MAP_FILE_PATH: ${SLAM_MAP_FILE_PATH:-/app/lidar/slam_map.json}
-      SLAM_LIVE_FILE_PATH: ${SLAM_LIVE_FILE_PATH:-/app/lidar/slam_live.json}
-      SLAM_SCAN_TOPIC: ${SLAM_SCAN_TOPIC:-/scan}
-      SLAM_RESOLUTION: ${SLAM_RESOLUTION:-0.08}
-      SLAM_GRID_SIZE_M: ${SLAM_GRID_SIZE_M:-48}
-      SLAM_SAVE_INTERVAL_S: ${SLAM_SAVE_INTERVAL_S:-3}
-      SLAM_PURGE_ON_START: ${SLAM_PURGE_ON_START:-false}
-      SLAM_IMU_ENABLED: ${SLAM_IMU_ENABLED:-true}
-      SLAM_IMU_TOPIC: ${SLAM_IMU_TOPIC:-/imu/data}
-      SLAM_IMU_HTTP_URL: ${SLAM_IMU_HTTP_URL:-https://rover.tail9d0237.ts.net:3000/api/sensors/imu}
-      SLAM_IMU_HTTP_POLL_S: ${SLAM_IMU_HTTP_POLL_S:-0.05}
-      SLAM_IMU_HTTP_TIMEOUT_S: ${SLAM_IMU_HTTP_TIMEOUT_S:-0.35}
-      SLAM_IMU_HTTP_INSECURE_TLS: ${SLAM_IMU_HTTP_INSECURE_TLS:-true}
-      SLAM_IMU_MAX_STALE_S: ${SLAM_IMU_MAX_STALE_S:-0.4}
-      SLAM_IMU_MAX_YAW_RATE_RAD_S: ${SLAM_IMU_MAX_YAW_RATE_RAD_S:-5.5}
-      SLAM_IMU_MATCH_HINT_WEIGHT: ${SLAM_IMU_MATCH_HINT_WEIGHT:-0.55}
     volumes:
       - lidar-data:/app/lidar
-    command: ["viewer-only"]
+    command: ["viewer"]
 
   ros2-navigation:
     build:
@@ -174,3 +153,8 @@ services:
 volumes:
   relay-data:
   lidar-data:
+
+networks:
+  vision_net:
+    name: vision_default
+    external: true

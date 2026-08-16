@@ -503,10 +503,6 @@ html {
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
 }
 
-.lidar-minimap-status--map {
-  margin-left: 0;
-}
-
 .lidar-minimap-status.live {
   background: rgba(140, 255, 200, 0.95);
   box-shadow: 0 0 10px rgba(140, 255, 200, 0.55);

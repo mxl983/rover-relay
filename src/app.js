@@ -8,9 +8,11 @@ import telemetryRoutes from "./routes/telemetry.js";
 import roverRoutes from "./routes/rover.js";
 import backupCamRoutes from "./routes/backupCam.js";
 import lidarRoutes from "./routes/lidar.js";
-import navigationRoutes from "./routes/navigation.js";
-import systemNavigationRoutes from "./routes/systemNavigation.js";
+import navigationRoutes, {
+  systemNavigationRouter,
+} from "./routes/navigation.js";
 import pulseRoutes from "./routes/pulse.js";
+import visionRoutes from "./routes/vision.js";
 import { success, error } from "./utils/apiResponse.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -96,7 +98,8 @@ export function createApp() {
   app.use("/api/cams/backup", backupCamRoutes);
   app.use("/api/lidar", lidarRoutes);
   app.use("/api/navigation", navigationRoutes);
-  app.use("/api/system/navigation", systemNavigationRoutes);
+  app.use("/api/system/navigation", systemNavigationRouter);
+  app.use("/api/vision", visionRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ success: false, error: "Not found" });

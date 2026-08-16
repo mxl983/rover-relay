@@ -12,9 +12,7 @@ import {
   roverBodyFootprintCornersM,
   viewHeadingFromPan,
 } from "../utils/lidarCoords";
-import { drawSlamMapPoints } from "../utils/slamMapDraw";
 import { drawLidarWallMerged } from "../utils/lidarWallDraw";
-import { SLAM_ENABLED } from "../config";
 
 const DEFAULT_RANGE_M = 4;
 const MIN_RANGE_M = 1.5;
@@ -98,7 +96,6 @@ function drawCarBody(ctx, cx, cy, maxR, rangeM, uiScale) {
  * @param {{ points?: { x?: number; y?: number; r?: number; a?: number; a_deg?: number }[] }} scan
  * @param {number} rangeM
  * @param {number} [viewHeadingDeg]
- * @param {object|null} [slamMap]
  */
 export function drawLidarMinimap(
   ctx,
@@ -107,7 +104,6 @@ export function drawLidarMinimap(
   scan,
   rangeM = DEFAULT_RANGE_M,
   viewHeadingDeg = LIDAR_FORWARD_DEG,
-  slamMap = null,
 ) {
   const cx = w / 2;
   const cy = h / 2;
@@ -116,22 +112,8 @@ export function drawLidarMinimap(
   const points = scan?.points ?? [];
 
   ctx.clearRect(0, 0, w, h);
-  if (SLAM_ENABLED) {
-    drawSlamMapPoints(ctx, cx, cy, maxR, rangeM, slamMap?.map_points, scale);
-  }
   drawForwardViewCone(ctx, cx, cy, maxR, rangeM, scale, viewHeadingDeg);
-
-  drawLidarWallMerged(
-    ctx,
-    cx,
-    cy,
-    maxR,
-    rangeM,
-    scale,
-    points,
-    isMinimapPointVisible,
-  );
-
+  drawLidarWallMerged(ctx, cx, cy, maxR, rangeM, scale, points, isMinimapPointVisible);
   drawCarBody(ctx, cx, cy, maxR, rangeM, scale);
 }
 
@@ -141,31 +123,18 @@ export function drawLidarMinimap(
  *   isLive: boolean;
  *   error: string | null;
  *   pan?: number | null;
- *   slamMap?: object | null;
- *   slamLive?: boolean;
- *   slamError?: string | null;
  * }} props
  */
-export function LidarMinimap({
-  scan,
-  isLive,
-  error,
-  pan,
-  slamMap,
-  slamLive,
-  slamError,
-}) {
+export function LidarMinimap({ scan, isLive, error, pan }) {
   const canvasRef = useRef(null);
   const scanRef = useRef(scan);
   const rangeRef = useRef(DEFAULT_RANGE_M);
   const panRef = useRef(viewHeadingFromPan(pan));
-  const slamMapRef = useRef(slamMap);
   const [rangeM, setRangeM] = useState(DEFAULT_RANGE_M);
 
   scanRef.current = scan;
   rangeRef.current = rangeM;
   panRef.current = viewHeadingFromPan(pan);
-  slamMapRef.current = slamMap;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -182,7 +151,6 @@ export function LidarMinimap({
           scanRef.current,
           rangeRef.current,
           panRef.current,
-          slamMapRef.current,
         );
       }
       frame = requestAnimationFrame(render);
@@ -209,7 +177,6 @@ export function LidarMinimap({
   };
 
   const statusClass = error ? "stale" : isLive ? "live" : "stale";
-  const mapStatusClass = slamError ? "stale" : slamLive ? "live" : "stale";
   const visiblePoints = (scan?.points ?? []).filter((point) => {
     const { angleDeg } = pointToLaserXY(point);
     return isMinimapPointVisible(angleDeg);
@@ -217,8 +184,9 @@ export function LidarMinimap({
   const nearest = nearestPointWithAngle(visiblePoints);
   const nearestLabel =
     nearest && Number.isFinite(nearest.range)
-      ? `near ${nearest.range.toFixed(2)}m${Number.isFinite(nearest.angleDeg) ? ` @ ${nearest.angleDeg.toFixed(0)}°` : ""
-      }`
+      ? `near ${nearest.range.toFixed(2)}m${
+          Number.isFinite(nearest.angleDeg) ? ` @ ${nearest.angleDeg.toFixed(0)}°` : ""
+        }`
       : "near —";
 
   const atMinZoom = rangeM <= MIN_RANGE_M + 0.01;
@@ -249,21 +217,11 @@ export function LidarMinimap({
           </button>
         </div>
         <span className={`lidar-minimap-status ${statusClass}`} aria-hidden="true" />
-        {SLAM_ENABLED ? (
-          <span
-            className={`lidar-minimap-status lidar-minimap-status--map ${mapStatusClass}`}
-            aria-hidden="true"
-            title={slamError || (slamLive ? "SLAM map live" : "SLAM map stale")}
-          />
-        ) : null}
       </div>
       <canvas ref={canvasRef} className="lidar-minimap-canvas" />
       <div className="lidar-minimap-stats">
         <span>{scan?.hz ? `${scan.hz} Hz` : "—"}</span>
         <span>{`${rangeM.toFixed(1)}m`}</span>
-        {SLAM_ENABLED ? (
-          <span>{slamMap?.map_points?.length ? `map ${slamMap.map_points.length}` : "map —"}</span>
-        ) : null}
         <span className="lidar-minimap-nearest">{nearestLabel}</span>
       </div>
     </div>

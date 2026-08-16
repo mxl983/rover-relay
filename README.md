@@ -34,7 +34,7 @@ Stacked aluminum decks, brass standoffs, and a Pi in the middle. Every deck is p
 - **LiDAR** scan path + ROS 2 stack over the tailnet
 - **ESP32 edge cam**: backup stream plus ambient temp / pressure
 - **Headlight** (USB power), **laser pointer**, **pet feeder**, rover **meow**
-- **IMU** on the link (yaw hints for mapping)
+- **IMU** on the link (drive / collision heuristics)
 - Telemetry offloaded to the relay (less SD wear on the Pi)
 
 <p align="center">

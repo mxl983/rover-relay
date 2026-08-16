@@ -20,7 +20,7 @@ VIEWER_PORT = int(os.environ.get("LIDAR_VIEWER_PORT", "8765"))
 VIEWER_HOST = os.environ.get("LIDAR_VIEWER_HOST", "0.0.0.0")
 SCAN_FILE_PATH = os.environ.get("LIDAR_SCAN_FILE_PATH", "/app/lidar/scan.json")
 MAX_POINTS = int(os.environ.get("LIDAR_WS_MAX_POINTS", "120"))
-VIEW_TOPIC = os.environ.get("LIDAR_VIEW_TOPIC", "/stabilized_scan")
+VIEW_TOPIC = os.environ.get("LIDAR_VIEW_TOPIC", "/scan")
 
 _latest: dict[str, Any] = {
     "stamp": 0.0,
@@ -59,7 +59,7 @@ def scan_to_payload(msg: LaserScan) -> dict[str, Any]:
         confidence = None
         if index < len(msg.intensities) and math.isfinite(msg.intensities[index]):
             intensity = msg.intensities[index]
-            # Stabilizer encodes 0–1 confidence in intensities; raw LD19 intensities are much larger.
+            # Some pipelines encode 0–1 confidence in intensities; raw LD19 values are larger.
             if 0 < intensity <= 1.0:
                 confidence = round(intensity, 3)
         point: dict[str, float] = {

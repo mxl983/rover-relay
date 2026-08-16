@@ -174,12 +174,6 @@ const config = {
     scanUrl: process.env.LIDAR_SCAN_UPSTREAM_URL || "",
     /** LiDAR WebSocket push interval for dashboard clients (ms). */
     wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 50),
-    /** Persistent SLAM occupancy grid written by ros2-lidar slam_mapper. */
-    slamMapFilePath: process.env.SLAM_MAP_FILE_PATH || "/app/lidar/slam_map.json",
-    /** Fast SLAM view for dashboard (pose + map_points), updated every scan. */
-    slamLiveFilePath: process.env.SLAM_LIVE_FILE_PATH || "/app/lidar/slam_live.json",
-    /** SLAM map WebSocket push interval (ms). */
-    slamWsPushMs: parseNumber(process.env.SLAM_WS_PUSH_MS, 500),
   },
   navigation: {
     statusFilePath:
@@ -204,6 +198,15 @@ const config = {
     basePath: process.env.CONTROL_DASHBOARD_PROXY_BASE_PATH || "/mangomate",
     /** Internal service URL reachable from relay container. */
     targetUrl: process.env.CONTROL_DASHBOARD_PROXY_TARGET || "http://control-dashboard:80",
+  },
+  vision: {
+    /**
+     * vision_server HTTP base reachable from the relay container.
+     * Default uses host-gateway so separate compose projects can still reach :8010.
+     */
+    upstreamUrl:
+      process.env.VISION_UPSTREAM_URL || "http://vision_server:8010",
+    timeoutMs: parseNumber(process.env.VISION_UPSTREAM_TIMEOUT_MS, 4000),
   },
 };
 

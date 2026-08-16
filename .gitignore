@@ -19,5 +19,9 @@ certs/
 # Vite build output — published via gh-pages branch only
 control-dashboard/dist/
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # Cert renew / local ops logs
 logs/

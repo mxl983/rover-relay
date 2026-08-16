@@ -324,6 +324,7 @@ export const SystemControls = ({
           <SettingsToggleRow
             icon={<Radar size={12} />}
             label="Map"
+            title="Live LiDAR minimap"
           >
             <SegmentedToggle
               ariaLabel="LiDAR map"

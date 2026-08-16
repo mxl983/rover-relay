@@ -42,11 +42,6 @@ export const ROVER_STATE_ENDPOINT =
   import.meta.env.VITE_ROVER_STATE_URL ||
   "https://jjcloud.tail9d0237.ts.net:8787/api/rover/state";
 
-/** Vision box (cat detect / posture + depth). Override with VITE_VISION_BASE_URL. */
-export const VISION_HTTP_BASE = (
-  import.meta.env.VITE_VISION_BASE_URL || "http://jjcloud.tail9d0237.ts.net:8010"
-).replace(/\/$/, "");
-
 /** Relay HTTP origin (host + port) aligned with ROVER_STATE_ENDPOINT. */
 export function getRelayHttpOrigin() {
   try {
@@ -55,6 +50,16 @@ export function getRelayHttpOrigin() {
     return RELAY_BASE_URL.replace(/\/$/, "");
   }
 }
+
+/**
+ * Vision box HTTP base.
+ * Default: HTTPS relay proxy `/api/vision` so github.io is not mixed-content blocked
+ * by plain `http://…:8010`. Override with VITE_VISION_BASE_URL for direct access
+ * (e.g. local `http://127.0.0.1:8010` or `http://127.0.0.1:8787/api/vision`).
+ */
+export const VISION_HTTP_BASE = (
+  import.meta.env.VITE_VISION_BASE_URL || `${getRelayHttpOrigin()}/api/vision`
+).replace(/\/$/, "");
 
 function relayWebSocketOrigin() {
   return getRelayHttpOrigin().replace(/^http/i, "ws");
@@ -75,26 +80,11 @@ export const LIDAR_SCAN_ENDPOINT =
   import.meta.env.VITE_LIDAR_SCAN_URL ||
   `${RELAY_BASE_URL.replace(/\/$/, "")}/api/lidar/scan`;
 
-/** Memorized SLAM map overlay on the LiDAR minimap (grey points). */
-export const SLAM_ENABLED = import.meta.env.VITE_SLAM_ENABLED === "true";
-
-/** Persistent SLAM map JSON proxied by relay. */
-export const SLAM_MAP_ENDPOINT =
-  import.meta.env.VITE_SLAM_MAP_URL ||
-  `${RELAY_BASE_URL.replace(/\/$/, "")}/api/lidar/map`;
-
 /** Live LiDAR scan WebSocket (relay pushes decimated scans). */
 export function getLidarWebSocketUrl() {
   const configured = import.meta.env.VITE_LIDAR_WS_URL;
   if (configured) return configured;
   return `${relayWebSocketOrigin()}/ws/lidar`;
-}
-
-/** Live SLAM map WebSocket (relay pushes map updates). */
-export function getSlamWebSocketUrl() {
-  const configured = import.meta.env.VITE_SLAM_WS_URL;
-  if (configured) return configured;
-  return `${relayWebSocketOrigin()}/ws/slam`;
 }
 
 /** Relay WebSocket: rover heartbeat incl. charging — 5s default, `?backup=1` for 1s (backup camera UI). */
