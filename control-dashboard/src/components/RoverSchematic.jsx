@@ -410,7 +410,7 @@ export const RoverSchematic = ({
           flexDirection: "column",
           justifyContent: "flex-start",
           gap: ROW_GAP,
-          padding: "8px 9px",
+          padding: "6px 0 8px",
           pointerEvents: "none",
           fontFamily:
             "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
@@ -431,6 +431,8 @@ export const RoverSchematic = ({
             height: VIEWPORT_H,
             overflow: "hidden",
             position: "relative",
+            padding: "0 9px",
+            boxSizing: "border-box",
             // Keep a hair of vertical room so glyph edges aren't clipped mid-roll.
             marginBlock: 1,
           }}
@@ -529,12 +531,14 @@ function BatteryHero({ level, text, clockLabel, color, isCharging, isOffline }) 
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 6,
-        height: ROW_H,
+        gap: 0,
         minHeight: ROW_H,
-        maxHeight: ROW_H,
         minWidth: 0,
         width: "100%",
+        boxSizing: "border-box",
+        padding: "1px 4px 6px",
+        marginBottom: 1,
+        borderBottom: "1px solid rgba(255,255,255,0.12)",
       }}
       title={`Battery ${text}${isCharging ? " · charging" : ""} · ${clockLabel}`}
       aria-label={`Battery ${text}${isCharging ? ", charging" : ""}, ${clockLabel}`}

@@ -111,6 +111,36 @@ export function formatDriveAssistDebugLines(update) {
   return lines;
 }
 
+/** Compact drive-assist snapshot for nav replication / stall logic. */
+export function compactDriveAssistSnapshot(enabled, update) {
+  if (!enabled) {
+    return { enabled: false, loaded: true };
+  }
+  const obstacle = update?.obstacle;
+  const closest = obstacle?.closest;
+  const prohibited = (update?.prohibitedDirections ?? [])
+    .map((entry) => entry?.direction)
+    .filter(Boolean);
+  return {
+    loaded: true,
+    enabled: true,
+    assistUiState: update?.assistUiState ?? null,
+    assistPhase: update?.assistPhase ?? null,
+    blocked: Boolean(update?.blocked),
+    forwardHold: Boolean(update?.forwardHold),
+    wheelsStopped: Boolean(update?.wheelsStopped),
+    obstacle: closest
+      ? {
+          closest: {
+            rangeM: closest.rangeM ?? obstacle?.minRangeM ?? null,
+            angleDeg: closest.angleDeg ?? null,
+          },
+        }
+      : undefined,
+    prohibitedDirections: prohibited.map((direction) => ({ direction })),
+  };
+}
+
 /** Log the full /info snapshot for debugging server-side decision making. */
 export function logDriveAssistInfoDetail(source, info) {
   if (!info || typeof info !== "object") return;

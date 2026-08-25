@@ -12,7 +12,7 @@ import {
 } from "./services/chargingTelemetryLogger.js";
 import { attachRoverStateWss } from "./ws/roverStateWss.js";
 import { attachLidarWss } from "./ws/lidarWss.js";
-import { attachVisionWss } from "./ws/visionWss.js";
+import { attachSlamWss } from "./ws/slamWss.js";
 
 initTelemetry();
 startChargingTelemetryLogger();
@@ -39,7 +39,7 @@ if (config.ssl.enabled) {
 
 attachRoverStateWss(server);
 attachLidarWss(server);
-attachVisionWss(server);
+attachSlamWss(server);
 
 function shutdown() {
   stopChargingTelemetryLogger();

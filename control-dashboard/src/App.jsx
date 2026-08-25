@@ -26,17 +26,16 @@ import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { LidarMinimap } from "./components/LidarMinimap";
+import { SlamMap } from "./components/SlamMap";
 import { BrandCatIcon } from "./components/BrandCatIcon";
 import { HudIndicatorStrip } from "./components/HudIndicatorStrip";
-import { CatVisionOverlay } from "./components/CatVisionOverlay";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useEspMqtt } from "./hooks/useEspMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
 import { useLidarScan } from "./hooks/useLidarScan";
-import { useCatVision } from "./hooks/useCatVision";
-import { useCatGimbalTrack } from "./hooks/useCatGimbalTrack";
+import { useSlamMap } from "./hooks/useSlamMap";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/captureUrl";
@@ -47,12 +46,6 @@ import {
   postDriveAssist,
   readDriveAssistEnabled,
 } from "./utils/driveAssistApi.js";
-import {
-  fetchCatVisionStatus,
-  postCatVisionEnabled,
-  readCatVisionEnabled,
-} from "./utils/catVisionApi.js";
-import { isGimbalActive } from "./utils/catGimbalTrack.js";
 import { logImuDebug } from "./utils/imuDebugLog.js";
 import { playRoverChime } from "./utils/chimeApi.js";
 import { toggleDocumentFullscreen } from "./utils/fullscreen.js";
@@ -146,9 +139,7 @@ export default function App() {
   const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl } =
     usePiWebSocket();
   const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
-  const [catVisionEnabled, setCatVisionEnabled] = useState(false);
   const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
-  const { cat: catVisionCat } = useCatVision(isAuthenticated && catVisionEnabled);
 
   useEffect(() => {
     if (typeof stats?.driveAssistEnabled === "boolean") {
@@ -190,6 +181,7 @@ export default function App() {
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
   const [showLidarMinimap, setShowLidarMinimapState] = useState(false);
+  const [showSlamMap, setShowSlamMapState] = useState(false);
   const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
   const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
   const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
@@ -205,6 +197,11 @@ export default function App() {
       void playRoverChime();
       return next;
     });
+  };
+
+  const setShowSlamMap = (enabled) => {
+    setShowSlamMapState(enabled);
+    void playRoverChime();
   };
 
   const setShowMetricsPanel = (enabled) => {
@@ -280,6 +277,8 @@ export default function App() {
   const { scan: lidarScan, isLive: lidarLive, error: lidarError } = useLidarScan(
     lidarSubscribed,
   );
+  const slamSubscribed = isAuthenticated && showSlamMap;
+  const { map: slamMap, isLive: slamLive, error: slamError } = useSlamMap(slamSubscribed);
 
   useEffect(() => {
     let cancelled = false;
@@ -480,28 +479,6 @@ export default function App() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    let cancelled = false;
-
-    const fetchCatVision = async () => {
-      try {
-        const status = await fetchCatVisionStatus();
-        if (!cancelled) {
-          const enabled = readCatVisionEnabled(status);
-          if (enabled != null) setCatVisionEnabled(enabled);
-        }
-      } catch {
-        // Keep local default when vision box is unreachable.
-      }
-    };
-
-    void fetchCatVision();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated]);
-
-  useEffect(() => {
     const timer = setTimeout(() => setLowBatteryGlowArmed(true), 5000);
     return () => clearTimeout(timer);
   }, []);
@@ -526,14 +503,9 @@ export default function App() {
   const viewportRef = useRef(null);
   const lastDriveRef = useRef({ x: 0, y: 0 });
   const lastGimbalRef = useRef({ x: 0, y: 0 });
-  const catTrackGimbalRef = useRef({ x: 0, y: 0 });
-  const humanGimbalUntilRef = useRef(0);
   const pendingControlRef = useRef(null);
   const controlTimerRef = useRef(null);
   const lastKeyboardKeysRef = useRef([]);
-
-  const HUMAN_GIMBAL_EPS = 0.08;
-  const CAT_HUMAN_PAUSE_MS = 1500;
 
   useEffect(() => {
     setIsPowered(piOnline);
@@ -625,51 +597,17 @@ export default function App() {
       lastDriveRef.current = payload.drive;
     }
     if (payload.gimbal != null) {
-      let g = payload.gimbal;
-      if (isGimbalActive(g, HUMAN_GIMBAL_EPS)) {
-        humanGimbalUntilRef.current = Date.now() + CAT_HUMAN_PAUSE_MS;
-      } else if (
-        Date.now() >= humanGimbalUntilRef.current &&
-        catVisionEnabled &&
-        isGimbalActive(catTrackGimbalRef.current)
-      ) {
-        g = { ...catTrackGimbalRef.current };
-      }
-      next.gimbal = g;
-      lastGimbalRef.current = g;
+      next.gimbal = payload.gimbal;
+      lastGimbalRef.current = payload.gimbal;
     }
     queueControl(next);
   };
 
   const handleGimbalUpdate = (gimbal) => {
     clearErrorIfAny();
-    let g = gimbal;
-    if (isGimbalActive(g, HUMAN_GIMBAL_EPS)) {
-      humanGimbalUntilRef.current = Date.now() + CAT_HUMAN_PAUSE_MS;
-    } else if (
-      Date.now() >= humanGimbalUntilRef.current &&
-      catVisionEnabled &&
-      isGimbalActive(catTrackGimbalRef.current)
-    ) {
-      g = { ...catTrackGimbalRef.current };
-    }
-    lastGimbalRef.current = g;
-    queueControl({ gimbal: g });
-  };
-
-  const pushCatGimbal = (gimbal) => {
-    if (Date.now() < humanGimbalUntilRef.current) return;
     lastGimbalRef.current = gimbal;
     queueControl({ gimbal });
   };
-
-  useCatGimbalTrack({
-    enabled: Boolean(isAuthenticated && catVisionEnabled && piOnline),
-    cat: catVisionCat,
-    gimbalRef: catTrackGimbalRef,
-    onGimbal: pushCatGimbal,
-    isPaused: () => Date.now() < humanGimbalUntilRef.current,
-  });
 
   const handleLoginSuccess = (_client, creds) => {
     setActionError(null);
@@ -833,22 +771,6 @@ export default function App() {
       if (DRIVE_ASSIST_DEBUG) {
         console.log("[drive-assist] toggle failed", err?.message ?? err);
       }
-    }
-  };
-
-  const setCatVision = async (enabled) => {
-    setActionError(null);
-    const previousEnabled = catVisionEnabled;
-    setCatVisionEnabled(enabled);
-    try {
-      const info = await postCatVisionEnabled(enabled);
-      const nextEnabled = readCatVisionEnabled(info);
-      if (nextEnabled != null) setCatVisionEnabled(nextEnabled);
-      showActionToast(`Cat vision ${enabled ? "on" : "off"}`);
-      void playRoverChime();
-    } catch (err) {
-      setCatVisionEnabled(previousEnabled);
-      setActionError(err.message ?? "Cat vision update failed");
     }
   };
 
@@ -1068,7 +990,6 @@ export default function App() {
         relayRoverPayload={relayRoverPayload}
         onHardPowerOff={handleHardPowerOff}
       />
-      <CatVisionOverlay cat={catVisionCat} enabled={catVisionEnabled} />
       <GimbalTiltHud pan={stats.pan} tilt={stats.tilt} />
 
       {isAuthenticated && isMobile && controlMode !== "immersive" && (
@@ -1130,14 +1051,12 @@ export default function App() {
             quietMode={stats?.quietMode}
             driveAssistEnabled={driveAssistEnabled}
             driveAssistUpdate={driveAssistHudUpdate}
-            catVisionEnabled={catVisionEnabled}
             powerSavingEnabled={powerSavingEnabled}
             isCharging={effectiveIsCharging}
             isLowBattery={isLowBattery}
             lowBatteryIndicatorArmed={lowBatteryGlowArmed}
             onQuietModeChange={setQuietMode}
             onDriveAssistChange={setDriveAssist}
-            onCatVisionChange={setCatVision}
             onPowerSavingChange={setPowerSaving}
             onNVToggle={handleNVToggle}
             onResChange={handleResChange}
@@ -1147,6 +1066,8 @@ export default function App() {
             onControlModeChange={setControlMode}
             lidarMinimapEnabled={showLidarMinimap}
             onLidarMinimapChange={setShowLidarMinimap}
+            slamMapEnabled={showSlamMap}
+            onSlamMapChange={setShowSlamMap}
             metricsPanelEnabled={showMetricsPanel}
             onMetricsPanelChange={setShowMetricsPanel}
             roverSpeakerEnabled={roverSpeakerEnabled}
@@ -1154,6 +1075,24 @@ export default function App() {
             dashMicEnabled={dashMicEnabled}
             onDashMicChange={setDashMicEnabled}
           />
+
+          {showSlamMap && (
+            <div
+              className={
+                showLidarMinimap
+                  ? "slam-map-float"
+                  : "slam-map-float slam-map-float--solo"
+              }
+            >
+              <SlamMap
+                map={slamMap}
+                isLive={slamLive}
+                error={slamError}
+                driveAssistEnabled={driveAssistEnabled}
+                driveAssistUpdate={driveAssistHudUpdate}
+              />
+            </div>
+          )}
 
           {showLidarMinimap && (
             <div className="lidar-minimap-float">
@@ -1241,14 +1180,12 @@ function HudHeader({
   quietMode,
   driveAssistEnabled,
   driveAssistUpdate,
-  catVisionEnabled,
   powerSavingEnabled,
   isCharging,
   isLowBattery,
   lowBatteryIndicatorArmed,
   onQuietModeChange,
   onDriveAssistChange,
-  onCatVisionChange,
   onPowerSavingChange,
   onNVToggle,
   onResChange,
@@ -1258,6 +1195,8 @@ function HudHeader({
   onControlModeChange,
   lidarMinimapEnabled,
   onLidarMinimapChange,
+  slamMapEnabled,
+  onSlamMapChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
   roverSpeakerEnabled = true,
@@ -1306,11 +1245,9 @@ function HudHeader({
           isCapturing={isCapturing}
           quietMode={quietMode}
           driveAssistEnabled={driveAssistEnabled}
-          catVisionEnabled={catVisionEnabled}
           powerSavingEnabled={powerSavingEnabled}
           onQuietModeChange={onQuietModeChange}
           onDriveAssistChange={onDriveAssistChange}
-          onCatVisionChange={onCatVisionChange}
           onPowerSavingChange={onPowerSavingChange}
           onNVToggle={onNVToggle}
           onResChange={onResChange}
@@ -1321,6 +1258,8 @@ function HudHeader({
           onControlModeChange={onControlModeChange}
           lidarMinimapEnabled={lidarMinimapEnabled}
           onLidarMinimapChange={onLidarMinimapChange}
+          slamMapEnabled={slamMapEnabled}
+          onSlamMapChange={onSlamMapChange}
           metricsPanelEnabled={metricsPanelEnabled}
           onMetricsPanelChange={onMetricsPanelChange}
           roverSpeakerEnabled={roverSpeakerEnabled}

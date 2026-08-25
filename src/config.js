@@ -175,6 +175,58 @@ const config = {
     /** LiDAR WebSocket push interval for dashboard clients (ms). */
     wsPushMs: parseNumber(process.env.LIDAR_WS_PUSH_MS, 50),
   },
+  slam: {
+    /** Occupancy + pose snapshot written by ros2-slam (Cartographer bridge). */
+    mapFilePath: process.env.SLAM_MAP_FILE_PATH || "/app/lidar/slam.json",
+    /** Optional HTTP fallback (ros2-slam viewer on the Docker host). */
+    mapUrl: process.env.SLAM_MAP_UPSTREAM_URL || "",
+    /** SLAM WebSocket push interval for dashboard clients (ms). */
+    wsPushMs: parseNumber(process.env.SLAM_WS_PUSH_MS, 50),
+    /** Named poses for nav-to-point (shared volume with ros2-slam). */
+    waypointsPath:
+      process.env.SLAM_WAYPOINTS_PATH || "/app/lidar/maps/waypoints.json",
+    /** Shared-volume marker consumed by ros2-slam to purge and restart. */
+    purgeRequestPath:
+      process.env.SLAM_PURGE_REQUEST_PATH || "/app/lidar/.purge_slam",
+    /** Shared-volume marker requesting a frozen Cartographer localization map. */
+    freezeRequestPath:
+      process.env.SLAM_FREEZE_REQUEST_PATH || "/app/lidar/.freeze_slam",
+    /** Shared-volume marker restoring the pose recorded in the frozen trajectory. */
+    repositionRequestPath:
+      process.env.SLAM_REPOSITION_REQUEST_PATH || "/app/lidar/.reposition_slam",
+    promoteRequestPath:
+      process.env.SLAM_PROMOTE_REQUEST_PATH || "/app/lidar/.promote_slam",
+    baselineGridPath:
+      process.env.SLAM_BASELINE_GRID_PATH || "/app/lidar/maps/baseline_grid.json",
+    /** Optional slam control HTTP (map save), e.g. http://host.docker.internal:8767 */
+    controlUrl: process.env.SLAM_CONTROL_URL || "",
+  },
+  navigation: {
+    /** Optional Nav2 goal HTTP (often blocked from Docker bridge → host). Prefer command file. */
+    goalUrl: process.env.NAV_GOAL_URL || "",
+    /** Shared-volume command file polled by ros2-nav goal_server. */
+    commandPath:
+      process.env.NAV_COMMAND_PATH || "/app/lidar/navigation_command.json",
+    /** Persistent autonomous-drive inhibit; only a new goto may clear it. */
+    killPath:
+      process.env.NAV_KILL_PATH || "/app/lidar/navigation_kill.json",
+    /** Pi HTTP drive endpoint (same shape as dashboard teleop). */
+    piDriveUrl:
+      process.env.NAV_PI_DRIVE_URL ||
+      process.env.PI_CONTROL_DRIVE_URL ||
+      "",
+    apiToken: process.env.NAVIGATION_API_TOKEN || process.env.ROVER_API_TOKEN || "",
+    statusPath:
+      process.env.NAV_STATUS_FILE_PATH || "/app/lidar/navigation_status.json",
+    goalStatusPath:
+      process.env.NAV_GOAL_STATUS_PATH || "/app/lidar/navigation_goal.json",
+    pathFilePath:
+      process.env.NAV_PATH_FILE_PATH || "/app/lidar/navigation_path.json",
+    driveAssistSnapshotPath:
+      process.env.NAV_DRIVE_ASSIST_SNAPSHOT_PATH ||
+      "/app/lidar/drive_assist_snapshot.json",
+    piDriveAssistInfoUrl: process.env.NAV_PI_DRIVE_ASSIST_INFO_URL || "",
+  },
   controlDashboard: {
     /** If true, relay proxies the UI under basePath (e.g. /mangomate). */
     proxyEnabled: parseBoolean(process.env.CONTROL_DASHBOARD_PROXY_ENABLED, true),
@@ -182,15 +234,6 @@ const config = {
     basePath: process.env.CONTROL_DASHBOARD_PROXY_BASE_PATH || "/mangomate",
     /** Internal service URL reachable from relay container. */
     targetUrl: process.env.CONTROL_DASHBOARD_PROXY_TARGET || "http://control-dashboard:80",
-  },
-  vision: {
-    /**
-     * vision_server HTTP base reachable from the relay container.
-     * Default uses host-gateway so separate compose projects can still reach :8010.
-     */
-    upstreamUrl:
-      process.env.VISION_UPSTREAM_URL || "http://vision_server:8010",
-    timeoutMs: parseNumber(process.env.VISION_UPSTREAM_TIMEOUT_MS, 4000),
   },
 };
 

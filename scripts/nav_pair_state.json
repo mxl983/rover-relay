@@ -1,0 +1,56 @@
+{
+  "updated_at": 1787523469.9819853,
+  "legs": [
+    {
+      "key": "83569044-9c96-4a2b-b115-30504069d237->da89c475-390c-4fa2-80fa-ff3336fcbb71",
+      "src_label": "mark-2",
+      "dst_label": "mark-3",
+      "successes": 2,
+      "failures": [],
+      "done": true
+    },
+    {
+      "key": "83569044-9c96-4a2b-b115-30504069d237->9d00eedd-87f7-49ca-a062-364ec0849e9f",
+      "src_label": "mark-2",
+      "dst_label": "mark-3",
+      "successes": 2,
+      "failures": [],
+      "done": true
+    },
+    {
+      "key": "da89c475-390c-4fa2-80fa-ff3336fcbb71->83569044-9c96-4a2b-b115-30504069d237",
+      "src_label": "mark-3",
+      "dst_label": "mark-2",
+      "successes": 2,
+      "failures": [],
+      "done": true
+    },
+    {
+      "key": "da89c475-390c-4fa2-80fa-ff3336fcbb71->9d00eedd-87f7-49ca-a062-364ec0849e9f",
+      "src_label": "mark-3",
+      "dst_label": "mark-3",
+      "successes": 2,
+      "failures": [],
+      "done": true
+    },
+    {
+      "key": "9d00eedd-87f7-49ca-a062-364ec0849e9f->83569044-9c96-4a2b-b115-30504069d237",
+      "src_label": "mark-3",
+      "dst_label": "mark-2",
+      "successes": 2,
+      "failures": [
+        "stalled:None \u2014 progress stalled \u2014 collision loop, drive-assist block, or bad localization; controller collision detection firing repeatedly",
+        "failed:docking_timeout \u2014 unknown \u2014 outcome=failed result=docking_timeout"
+      ],
+      "done": true
+    },
+    {
+      "key": "9d00eedd-87f7-49ca-a062-364ec0849e9f->da89c475-390c-4fa2-80fa-ff3336fcbb71",
+      "src_label": "mark-3",
+      "dst_label": "mark-3",
+      "successes": 2,
+      "failures": [],
+      "done": true
+    }
+  ]
+}

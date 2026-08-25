@@ -23,5 +23,8 @@ control-dashboard/dist/
 __pycache__/
 *.py[cod]
 
+# Large SLAM grid pulled from docker for the simulator
+sim/fixtures/
+
 # Cert renew / local ops logs
 logs/

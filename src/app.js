@@ -8,8 +8,9 @@ import telemetryRoutes from "./routes/telemetry.js";
 import roverRoutes from "./routes/rover.js";
 import backupCamRoutes from "./routes/backupCam.js";
 import lidarRoutes from "./routes/lidar.js";
+import slamRoutes from "./routes/slam.js";
+import navigationRoutes from "./routes/navigation.js";
 import roverPulseRoutes from "./routes/roverPulse.js";
-import visionRoutes from "./routes/vision.js";
 import { success, error } from "./utils/apiResponse.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,7 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createApp() {
   const corsOptions = {
     origin: config.cors.origins,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   };
@@ -94,7 +95,8 @@ export function createApp() {
   app.use("/api/rover", roverRoutes);
   app.use("/api/cams/backup", backupCamRoutes);
   app.use("/api/lidar", lidarRoutes);
-  app.use("/api/vision", visionRoutes);
+  app.use("/api/slam", slamRoutes);
+  app.use("/api/navigation", navigationRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ success: false, error: "Not found" });

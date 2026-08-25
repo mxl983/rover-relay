@@ -17,12 +17,12 @@ import {
   Gamepad2,
   BarChart3,
   Radar,
+  Map as MapIcon,
   ShieldAlert,
   Glasses,
   Gauge,
   Volume2,
   Mic,
-  Cat,
 } from "lucide-react";
 
 const CONTROL_MODE_OPTIONS = [
@@ -111,14 +111,14 @@ export const SystemControls = ({
   onControlModeChange,
   lidarMinimapEnabled = false,
   onLidarMinimapChange,
+  slamMapEnabled = false,
+  onSlamMapChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
   roverSpeakerEnabled = true,
   onRoverSpeakerChange,
   dashMicEnabled = false,
   onDashMicChange,
-  catVisionEnabled = false,
-  onCatVisionChange,
 }) => {
   if (!isPowered) return null;
 
@@ -338,18 +338,18 @@ export const SystemControls = ({
           </SettingsToggleRow>
 
           <SettingsToggleRow
-            icon={<Cat size={12} />}
-            label="Cat"
-            title="Live cat detect + posture; gimbal auto-centers on the cat while ON"
+            icon={<MapIcon size={12} />}
+            label="SLAM"
+            title="Cartographer occupancy map"
           >
             <SegmentedToggle
-              ariaLabel="Cat vision"
-              value={catVisionEnabled ? "on" : "off"}
+              ariaLabel="SLAM map"
+              value={slamMapEnabled ? "on" : "off"}
               options={[
                 { label: "OFF", value: "off" },
                 { label: "ON", value: "on" },
               ]}
-              onChange={(mode) => onCatVisionChange?.(mode === "on")}
+              onChange={(mode) => onSlamMapChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 

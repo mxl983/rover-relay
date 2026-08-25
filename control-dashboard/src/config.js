@@ -51,16 +51,6 @@ export function getRelayHttpOrigin() {
   }
 }
 
-/**
- * Vision box HTTP base.
- * Default: HTTPS relay proxy `/api/vision` so github.io is not mixed-content blocked
- * by plain `http://…:8010`. Override with VITE_VISION_BASE_URL for direct access
- * (e.g. local `http://127.0.0.1:8010` or `http://127.0.0.1:8787/api/vision`).
- */
-export const VISION_HTTP_BASE = (
-  import.meta.env.VITE_VISION_BASE_URL || `${getRelayHttpOrigin()}/api/vision`
-).replace(/\/$/, "");
-
 function relayWebSocketOrigin() {
   return getRelayHttpOrigin().replace(/^http/i, "ws");
 }
@@ -86,6 +76,19 @@ export function getLidarWebSocketUrl() {
   if (configured) return configured;
   return `${relayWebSocketOrigin()}/ws/lidar`;
 }
+
+/** Cartographer occupancy + pose WebSocket. */
+export function getSlamWebSocketUrl() {
+  const configured = import.meta.env.VITE_SLAM_WS_URL;
+  if (configured) return configured;
+  return `${relayWebSocketOrigin()}/ws/slam`;
+}
+
+/** Latest SLAM map JSON from relay. */
+export const SLAM_MAP_ENDPOINT =
+  import.meta.env.VITE_SLAM_MAP_URL ||
+  `${RELAY_BASE_URL.replace(/\/$/, "")}/api/slam/map`;
+
 
 /** Relay WebSocket: rover heartbeat incl. charging — 5s default, `?backup=1` for 1s (backup camera UI). */
 export function getRelayRoverHeartbeatWebSocketUrl(backupViewEnabled) {

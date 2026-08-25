@@ -1,0 +1,419 @@
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-2 (success 1/2) pose=(-0.26,-0.04)
+    nav_id=nav-20260823-214844-535cff ack={"success":true,"nav_id":"nav-20260823-214844-535cff","goal":{"x":3.761,"y":5.689,"yaw":-2.8114,"label":"mark-2","id":"83569044-9c96-4a2b-b115-30504069d237","fine_docking":true},"status":"navigating",
+    outcome=stalled elapsed=142.9s result=None
+    ANALYSIS: progress stalled — collision loop, drive-assist block, or bad localization; controller collision detection firing repeatedly
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2  fails=1
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+--- LEG 2 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2  fails=1
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-2 (success 1/2) pose=(0.54,-0.09)
+    nav_id=nav-20260823-215449-093676 ack={"success":true,"nav_id":"nav-20260823-215449-093676","goal":{"x":3.761,"y":5.689,"yaw":-2.8114,"label":"mark-2","id":"83569044-9c96-4a2b-b115-30504069d237","fine_docking":true},"status":"navigating",
+    outcome=failed elapsed=61.5s result=docking_timeout
+    ANALYSIS: unknown — outcome=failed result=docking_timeout
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2  fails=2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+--- LEG 3 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2  fails=2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-2 (success 1/2) pose=(0.54,-0.10)
+    nav_id=nav-20260823-220049-493460 ack={"success":true,"nav_id":"nav-20260823-220049-493460","goal":{"x":3.761,"y":5.689,"yaw":-2.8114,"label":"mark-2","id":"83569044-9c96-4a2b-b115-30504069d237","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=29.7s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 4 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 0/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-2 -> mark-3 (success 1/2) pose=(3.70,5.57)
+    nav_id=nav-20260823-220136-2b700c ack={"success":true,"nav_id":"nav-20260823-220136-2b700c","goal":{"x":-0.088,"y":0.005,"yaw":-0.0683,"label":"mark-3","id":"9d00eedd-87f7-49ca-a062-364ec0849e9f","fine_docking":true},"status":"navigating"
+    outcome=succeeded elapsed=73.6s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 5 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 0/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-3 (success 1/2) pose=(0.16,0.08)
+    nav_id=nav-20260823-220326-a5d383 ack={"success":true,"nav_id":"nav-20260823-220326-a5d383","goal":{"x":2.659,"y":-3.96,"yaw":-0.0606,"label":"mark-3","id":"da89c475-390c-4fa2-80fa-ff3336fcbb71","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=35.8s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 6 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 0/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-2 (success 1/2) pose=(2.67,-3.98)
+    nav_id=nav-20260823-220408-824d9d ack={"success":true,"nav_id":"nav-20260823-220408-824d9d","goal":{"x":3.761,"y":5.689,"yaw":-2.8114,"label":"mark-2","id":"83569044-9c96-4a2b-b115-30504069d237","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=97.0s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 7 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 0/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-2 -> mark-3 (success 1/2) pose=(3.59,5.58)
+    nav_id=nav-20260823-220552-4dd729 ack={"success":true,"nav_id":"nav-20260823-220552-4dd729","goal":{"x":2.659,"y":-3.96,"yaw":-0.0606,"label":"mark-3","id":"da89c475-390c-4fa2-80fa-ff3336fcbb71","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=86.8s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 8 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 0/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-3 (success 1/2) pose=(2.77,-3.87)
+    nav_id=nav-20260823-220725-f6e517 ack={"success":true,"nav_id":"nav-20260823-220725-f6e517","goal":{"x":-0.088,"y":0.005,"yaw":-0.0683,"label":"mark-3","id":"9d00eedd-87f7-49ca-a062-364ec0849e9f","fine_docking":true},"status":"navigating"
+    outcome=succeeded elapsed=84.7s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 9 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 0/6 legs complete
+
+
+>>> leg mark-3 -> mark-2 (success 2/2) pose=(0.13,0.05)
+    nav_id=nav-20260823-220856-7423f4 ack={"success":true,"nav_id":"nav-20260823-220856-7423f4","goal":{"x":3.761,"y":5.689,"yaw":-2.8114,"label":"mark-2","id":"83569044-9c96-4a2b-b115-30504069d237","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=76.7s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 1/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 10 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: 1/2
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 1/6 legs complete
+
+
+>>> leg mark-2 -> mark-3 (success 2/2) pose=(3.69,5.75)
+    nav_id=nav-20260823-221020-516e2c ack={"success":true,"nav_id":"nav-20260823-221020-516e2c","goal":{"x":-0.088,"y":0.005,"yaw":-0.0683,"label":"mark-3","id":"9d00eedd-87f7-49ca-a062-364ec0849e9f","fine_docking":true},"status":"navigating"
+    outcome=succeeded elapsed=76.9s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 2/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 11 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: 1/2
+  total: 2/6 legs complete
+
+
+>>> leg mark-3 -> mark-3 (success 2/2) pose=(0.11,-0.04)
+    nav_id=nav-20260823-221143-e0609e ack={"success":true,"nav_id":"nav-20260823-221143-e0609e","goal":{"x":2.659,"y":-3.96,"yaw":-0.0606,"label":"mark-3","id":"da89c475-390c-4fa2-80fa-ff3336fcbb71","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=57.4s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 3/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 12 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: 1/2
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 3/6 legs complete
+
+
+>>> leg mark-3 -> mark-2 (success 2/2) pose=(2.57,-3.87)
+    nav_id=nav-20260823-221247-4b9c24 ack={"success":true,"nav_id":"nav-20260823-221247-4b9c24","goal":{"x":3.761,"y":5.689,"yaw":-2.8114,"label":"mark-2","id":"83569044-9c96-4a2b-b115-30504069d237","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=114.8s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: DONE
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 4/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 13 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: 1/2
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: DONE
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 4/6 legs complete
+
+
+>>> leg mark-2 -> mark-3 (success 2/2) pose=(3.54,5.63)
+    nav_id=nav-20260823-221448-d6764d ack={"success":true,"nav_id":"nav-20260823-221448-d6764d","goal":{"x":2.659,"y":-3.96,"yaw":-0.0606,"label":"mark-3","id":"da89c475-390c-4fa2-80fa-ff3336fcbb71","fine_docking":true},"status":"navigating",
+    outcome=succeeded elapsed=89.1s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: DONE
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: DONE
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 5/6 legs complete
+
+stopped after 1 leg(s) (--legs 1)
+--- LEG 14 ---
+waypoints (3):
+  mark-2 83569044… (3.76,5.69)
+  mark-3 da89c475… (2.66,-3.96)
+  mark-3 9d00eedd… (-0.09,0.01)
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: DONE
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: DONE
+  mark-3 -> mark-3: 1/2
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 5/6 legs complete
+
+
+>>> leg mark-3 -> mark-3 (success 2/2) pose=(2.82,-3.86)
+    nav_id=nav-20260823-221624-79b97b ack={"success":true,"nav_id":"nav-20260823-221624-79b97b","goal":{"x":-0.088,"y":0.005,"yaw":-0.0683,"label":"mark-3","id":"9d00eedd-87f7-49ca-a062-364ec0849e9f","fine_docking":true},"status":"navigating"
+    outcome=succeeded elapsed=81.8s result=succeeded
+
+=== leg matrix (need 2 successes each) ===
+  mark-2 -> mark-3: DONE
+  mark-2 -> mark-3: DONE
+  mark-3 -> mark-2: DONE
+  mark-3 -> mark-3: DONE
+  mark-3 -> mark-2: DONE  fails=2
+  mark-3 -> mark-3: DONE
+  total: 6/6 legs complete
+
+ALL LEGS COMPLETE — stopping rover
