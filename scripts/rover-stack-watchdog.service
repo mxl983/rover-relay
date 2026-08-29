@@ -1,0 +1,16 @@
+[Unit]
+Description=Start rover LiDAR/SLAM/Nav only while rover is online
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/rover-stack-watchdog
+ExecStart=/usr/local/libexec/rover_stack_watchdog.sh
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target

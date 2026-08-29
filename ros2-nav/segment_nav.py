@@ -1,14 +1,13 @@
-"""Phase-2 navigation: follow a planned path as straight segments.
+"""DEPRECATED — do not use for autonomous navigation.
 
-Each segment is executed as rotate-then-drive (never simultaneously):
-  1. Align yaw to the segment bearing (small A/D pulses + settle).
-  2. Drive forward along that bearing until the segment length is covered.
-  3. While driving, fire tiny A/D taps if yaw drifts vs the frozen segment
-     heading — kills small errors before a long W rush amplifies them.
+Previously converted Nav2 global paths into rotate→WASD-pulse→3s-settle
+segments and cancelled the Nav2 controller. That fights standard Nav2 ownership.
 
-Small XY skid during rotation is ignored. Before starting a new segment, if the
-rover is farther than ``drift_replan_m`` from where the plan expected, signal
-``replan``. Forward motion stops with ``blocked`` when lidar sees an obstacle.
+Current stack: NavigateToPose → Regulated Pure Pursuit → continuous /cmd_vel
+→ Pi analog stick (see bridges.py + drive_interface.py).
+
+This module is retained only so historical unit tests / nav-run replay tools
+can import segmentize_path helpers. New code must not call next_segment_step.
 """
 
 from __future__ import annotations

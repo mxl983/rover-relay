@@ -55,6 +55,9 @@ services:
       # vision_server (usually in ../vision compose on network vision_default)
       VISION_UPSTREAM_URL: ${VISION_UPSTREAM_URL:-http://vision_server:8010}
       VISION_UPSTREAM_TIMEOUT_MS: ${VISION_UPSTREAM_TIMEOUT_MS:-4000}
+      # ros2-nav → relay /api/navigation/drive → Pi motor server (required for autonomous nav).
+      NAV_PI_DRIVE_URL: ${NAV_PI_DRIVE_URL:-https://rover.tail9d0237.ts.net:3000/api/control/drive}
+      NAVIGATION_API_TOKEN: ${NAVIGATION_API_TOKEN:-${ROVER_API_TOKEN:-}}
     volumes:
       - relay-data:/app/data
       - lidar-data:/app/lidar
@@ -91,7 +94,7 @@ services:
       LIDAR_VIEW_TOPIC: ${LIDAR_VIEW_TOPIC:-/scan}
     volumes:
       - lidar-data:/app/lidar
-    command: ["viewer"]
+    command: ["viewer-only"]
 
   control-dashboard:
     build:

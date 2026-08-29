@@ -1,0 +1,12 @@
+[Unit]
+Description=Start always-on rover relay services
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+Environment="ROVER_ALWAYS_ON_CONTAINERS=relay-relay-1 relay-control-dashboard-1 control_server"
+ExecStart=/usr/bin/env bash /home/jjcloud/Documents/rover/relay/scripts/rover_always_on.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

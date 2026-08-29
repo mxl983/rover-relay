@@ -2,6 +2,10 @@
 
 Mirrors the real rover stack: LD19 lidar only (no wheel odometry), freeze-map
 localization, and Nav2-style plan/follow once a goal is set.
+
+Drive path matches production:
+  RPP-like Twist → ros2-nav/drive_interface → Pi stick → calibrated body rates
+with HTTP command latency and delayed lidar localize/map updates.
 """
 
 from __future__ import annotations
@@ -25,22 +29,42 @@ from lateral_maneuver import (  # noqa: E402
 )
 
 from .drive import (
+    AUTOPILOT_SETTLE_SEC,
+    CMD_LATENCY_SEC,
+    LOC_PROCESS_DELAY_SEC,
     NavDriveState,
     apply_nav_drive,
     cmd_vel_to_keys,
+    integrate_body,
     integrate_tank,
     keys_to_tracks,
+    nav_twist_to_body,
+    stick_to_body_twist,
     tracks_to_twist,
 )
 
+# Match ros2-nav/config/nav2_params.yaml Regulated Pure Pursuit.
+RPP_DESIRED_LINEAR_VEL = 0.30
+RPP_ROTATE_TO_HEADING_MIN_ANGLE = 0.20
+RPP_ROTATE_TO_HEADING_ANGULAR_VEL = 0.80
+RPP_MAX_ANGULAR_WHILE_TRANS = 0.45
+# Hysteresis so latency + decisive stick don't chatter across the align gate.
+RPP_ROTATE_ENTER_RAD = 0.35
+RPP_ROTATE_EXIT_RAD = 0.15
+# Below this, emit crawl+yaw (not vx=0) so drive_interface won't force
+# PURE_ROTATE_STICK and overshoot the heading.
+RPP_ROTATE_CRAWL_RAD = 0.50
+GOAL_ARRIVE_XY_M = 0.05
+GOAL_ARRIVE_YAW_RAD = 0.15
+
 GRID_RESOLUTION_M = 0.1
 ROVER_SIZE_M = 0.35
-ROVER_PADDING_M = 0.02
-# Circumscribed corner radius — too fat for AABB corridors on the saved map.
+ROVER_PADDING_M = 0.04  # match nav2 footprint_padding
+# Circumscribed corner radius — used for hard collision / LOS checks.
 ROVER_COLLISION_RADIUS_M = (
     math.hypot(ROVER_SIZE_M / 2, ROVER_SIZE_M / 2) + ROVER_PADDING_M
 )
-# In-plane half-width for nav probes / path checks (matches planner inflation).
+# In-plane half-width (axis-aligned squeeze through doorways).
 NAV_COLLISION_RADIUS_M = ROVER_SIZE_M / 2 + ROVER_PADDING_M
 # LD19 / D500 lidar model (TOF, UART). Specs mirrored for sim fidelity.
 LIDAR_MODEL = "LD19/D500"
@@ -67,6 +91,9 @@ SCAN_MATCH_YAW_RAD = math.radians(12.0)
 SCAN_MATCH_XY_STEP_M = 0.06
 SCAN_MATCH_YAW_STEP_RAD = math.radians(4.0)
 SCAN_MATCH_HIT_SAMPLES = 40
+# Continuity prior: favor poses near recent history (rover cannot teleport).
+SCAN_MATCH_CONTINUITY_WEIGHT = 10.0
+SCAN_MATCH_CONTINUITY_SIGMA_M = 0.35
 # Relative scan-to-scan window (motion between 10 Hz scans is small).
 SCAN_MATCH_REL_XY_M = 0.14
 SCAN_MATCH_REL_YAW_RAD = math.radians(10.0)
@@ -83,6 +110,9 @@ GLOBAL_RELOC_FINE_XY_M = 0.10
 GLOBAL_RELOC_FINE_YAW_RAD = math.radians(5.0)
 GLOBAL_RELOC_FINE_RADIUS_M = 0.55
 GLOBAL_RELOC_TOP_K = 6
+# Kidnap accept: distant match must clearly beat staying put.
+GLOBAL_RELOC_MIN_SCORE = 8.0
+GLOBAL_RELOC_MARGIN = 6.0
 
 UNKNOWN = -1
 FREE = 0
@@ -93,8 +123,13 @@ TAU = math.pi * 2.0
 # Floor UNKNOWN pockets → FREE via fill_map_holes(); never grow walls from hole-fill.
 MAP_HIT_DILATE_CELLS = 0
 MAP_HOLE_FILL_MAX_CELLS = 28
-# Planner inflation ≈ nav half-width. Full circumscribed (~0.27 m) sealed doorways.
-PLAN_INFLATION_M = NAV_COLLISION_RADIUS_M * 0.92  # ~0.18 m
+# Planner inflation: must clear the square footprint around corners.
+# Real Nav2 local inflation_radius=0.40 / global=0.55. Sim uses a slightly
+# tighter disk so apartment doorways stay open, but never the old ~0.10–0.18
+# values that hugged walls and stuck the body on corners.
+PLAN_INFLATION_M = 0.30
+# Soft preference to stay in corridor centers (higher = wider berth).
+PLAN_CLEARANCE_WEIGHT = 32.0
 # Occupancy evidence (log-odds): later free rays demote shifted walls; soft clamp
 # so thickness cannot grow indefinitely under pose jitter.
 LOG_ODDS_HIT = 0.90
@@ -815,6 +850,9 @@ class SlamNavSimulation:
         self.mode = "mapping"
         self.autopilot = False
         self.manual = {"linear": 0.0, "angular": 0.0}
+        # When True, step() applies Pi stick from bridges (real Nav2 co-sim path).
+        self.pi_drive_enabled = False
+        self._pi_stick = {"x": 0.0, "y": 0.0}
         self._drive = NavDriveState()
         self.dynamic_obstacle_enabled = True
         self.elapsed_sec = 0.0
@@ -838,6 +876,7 @@ class SlamNavSimulation:
         self.goal_yaw: float | None = None
         self._fine_dock_started: float | None = None
         self._gap_close_state: GapCloseState | None = None
+        self._rotate_to_heading = False
         self._scan_accumulator = 0.0
         self._replan_accumulator = 0.0
         self._prev_body_hits: list[tuple[float, float]] = []
@@ -845,6 +884,8 @@ class SlamNavSimulation:
         self._known_ratio = 0.0
         self._map_from_reveal = False
         self._relocalizing = False
+        # Delayed lidar jobs: (ready_time, rays, do_localize, do_integrate)
+        self._pending_scan_jobs: list[tuple[float, list, bool, bool]] = []
         self._rng = random.Random(self.noise_seed)
         self._reset_explore_state()
         # Bootstrap lidar only — leave perceived map empty so construction can be tested.
@@ -925,7 +966,31 @@ class SlamNavSimulation:
             if self.exploring:
                 self.stop_auto_map(freeze=False)
             self.autopilot = False
+            self.pi_drive_enabled = False
             self.status = "mapping" if self.mode == "mapping" else "manual"
+
+    def set_pi_stick(
+        self,
+        x: float = 0.0,
+        y: float = 0.0,
+        *,
+        enabled: bool = True,
+    ) -> None:
+        """Apply Pi analog stick from ros2-nav bridges (co-sim / real motor path).
+
+        Bridges already convert Nav2 Twist → stick; do not run twist_to_pi again.
+        """
+        self.pi_drive_enabled = bool(enabled)
+        self._pi_stick = {
+            "x": clamp(float(x or 0.0), -1.0, 1.0),
+            "y": clamp(float(y or 0.0), -1.0, 1.0),
+        }
+        if self.pi_drive_enabled:
+            self.autopilot = False
+            self.exploring = False
+            self.manual = {"linear": 0.0, "angular": 0.0}
+            moving = abs(self._pi_stick["x"]) > 1e-3 or abs(self._pi_stick["y"]) > 1e-3
+            self.status = "cosim drive" if moving else "cosim idle"
 
     def reveal_map(self) -> None:
         self.slam_grid = [FREE] * len(self.slam_grid)
@@ -1347,10 +1412,11 @@ class SlamNavSimulation:
             return True
         return False
     def _plan_explore_to(self, x: float, y: float) -> bool:
-        self.goal = {
-            "x": clamp(x, 0.25, self.scenario.width - 0.25),
-            "y": clamp(y, 0.25, self.scenario.height - 0.25),
-        }
+        gx = clamp(x, 0.25, self.scenario.width - 0.25)
+        gy = clamp(y, 0.25, self.scenario.height - 0.25)
+        yaw = math.atan2(gy - self.estimated_pose["y"], gx - self.estimated_pose["x"])
+        self.goal = {"x": gx, "y": gy, "yaw": yaw}
+        self.goal_yaw = yaw
         # Treat UNKNOWN as traversable while exploring; light inflation only.
         result = plan_grid_path(
             self.slam_grid,
@@ -1807,17 +1873,35 @@ class SlamNavSimulation:
         use_map = known_ratio > 0.01
 
         if self._relocalizing and use_map:
-            px, py, pyaw, _ = self._global_relocalize(sample)
-            self.estimated_pose = {"x": px, "y": py, "yaw": pyaw}
-            self._relocalizing = False
-            err = distance(self.pose, self.estimated_pose)
-            self.status = f"relocalized · err {err:.2f}m"
-            use_scan = False
-        else:
-            use_scan = (
-                known_ratio < 0.08
-                and bool(self._prev_body_hits and self._prev_scan_pose)
+            old = dict(self.estimated_pose)
+            local_score = self._score_map_match_fast(
+                old["x"], old["y"], old["yaw"], sample
             )
+            px, py, pyaw, far_score = self._global_relocalize(sample)
+            jump = math.hypot(px - old["x"], py - old["y"])
+            # True kidnap: accept only a strong distant match; otherwise keep
+            # searching (weak lookalikes in sparse space must not teleport).
+            strong = (
+                far_score >= GLOBAL_RELOC_MIN_SCORE
+                and far_score >= local_score + GLOBAL_RELOC_MARGIN
+            )
+            if jump < 0.6 or strong:
+                self.estimated_pose = {"x": px, "y": py, "yaw": pyaw}
+                self._relocalizing = False
+                err = distance(self.pose, self.estimated_pose)
+                self.status = f"relocalized · err {err:.2f}m"
+                self._prev_body_hits = body_hits
+                self._prev_scan_pose = dict(self.estimated_pose)
+            else:
+                self.status = (
+                    f"reloc weak · jump {jump:.2f}m score {far_score:.1f}"
+                )
+            return
+
+        use_scan = (
+            known_ratio < 0.08
+            and bool(self._prev_body_hits and self._prev_scan_pose)
+        )
 
         prev_world: list[tuple[float, float]] = []
         if use_scan:
@@ -1834,6 +1918,15 @@ class SlamNavSimulation:
                 weight = 1.0 if known_ratio < 0.04 else 0.35
                 total += weight * self._score_scan_to_scan_fast(
                     x, y, yaw, sample, prev_world
+                )
+            # Continuity prior: prefer candidates near the last accepted pose.
+            if not self._relocalizing:
+                dx = x - prior["x"]
+                dy = y - prior["y"]
+                d2 = dx * dx + dy * dy
+                sigma = SCAN_MATCH_CONTINUITY_SIGMA_M
+                total += SCAN_MATCH_CONTINUITY_WEIGHT * math.exp(
+                    -d2 / (2.0 * sigma * sigma)
                 )
             return total
 
@@ -1959,6 +2052,34 @@ class SlamNavSimulation:
             )
         self.lidar = rays
         self.scan_count += 1
+        should_integrate = self.mode == "mapping" if integrate is None else integrate
+        # During live stepping, defer match/map updates to mimic Cartographer
+        # processing latency (~LOC_PROCESS_DELAY_SEC after each 10 Hz scan).
+        # Direct scan() calls (tests / one-shots) still apply immediately.
+        defer = bool(getattr(self, "_scan_defer", False)) and LOC_PROCESS_DELAY_SEC > 0
+        if defer and (localize or should_integrate):
+            self._pending_scan_jobs.append(
+                (
+                    self.elapsed_sec + LOC_PROCESS_DELAY_SEC,
+                    rays,
+                    bool(localize),
+                    bool(should_integrate),
+                )
+            )
+            if len(self._pending_scan_jobs) > 4:
+                self._pending_scan_jobs = self._pending_scan_jobs[-4:]
+        else:
+            self._apply_scan_result(rays, localize=localize, integrate=should_integrate)
+        return rays
+
+    def _flush_pending_scans(self) -> None:
+        while self._pending_scan_jobs and self._pending_scan_jobs[0][0] <= self.elapsed_sec:
+            _t, rays, do_loc, do_int = self._pending_scan_jobs.pop(0)
+            self._apply_scan_result(rays, localize=do_loc, integrate=do_int)
+
+    def _apply_scan_result(
+        self, rays: list[dict], *, localize: bool, integrate: bool
+    ) -> None:
         # Pose from lidar only (scan-to-map / scan-to-scan). Never cmd_vel odom.
         # Noise-free mapping/nav pins estimate to truth so path following stays
         # consistent. Localization-only (kidnap tests) still scan-matches.
@@ -1966,11 +2087,8 @@ class SlamNavSimulation:
             self.estimated_pose = dict(self.pose)
         elif localize:
             self.localize_from_lidar(rays)
-        should_integrate = self.mode == "mapping" if integrate is None else integrate
-        if should_integrate:
+        if integrate:
             self.integrate_scan(rays)
-        return rays
-
 
     def integrate_scan(self, rays: list[dict] | None = None) -> None:
         rays = rays if rays is not None else self.lidar
@@ -2043,14 +2161,20 @@ class SlamNavSimulation:
     ) -> bool:
         if self.exploring:
             self.stop_auto_map(freeze=False)
-        self.goal = {
-            "x": clamp(x, 0.25, self.scenario.width - 0.25),
-            "y": clamp(y, 0.25, self.scenario.height - 0.25),
-        }
+        gx = clamp(x, 0.25, self.scenario.width - 0.25)
+        gy = clamp(y, 0.25, self.scenario.height - 0.25)
+        # PoseStamped-style goal: always carry yaw (Nav2 does). Default = face
+        # the approach bearing from the current estimate/true pose.
+        if yaw is None:
+            ref = self.estimated_pose if self.mode == "localization" else self.pose
+            yaw = math.atan2(gy - ref["y"], gx - ref["x"])
+        gyaw = wrap_angle(float(yaw))
+        self.goal = {"x": gx, "y": gy, "yaw": gyaw}
         self.fine_docking = bool(fine_docking)
-        self.goal_yaw = float(yaw) if yaw is not None else None
+        self.goal_yaw = gyaw
         self._fine_dock_started = None
         self._gap_close_state = None
+        self._rotate_to_heading = False
         self.nav_complete = False
         self.goal_reachable = None
         self._nav_best_goal_dist = math.inf
@@ -2073,8 +2197,11 @@ class SlamNavSimulation:
         return self.plan_to_goal(is_replan=False)
 
     def set_default_goal(self) -> bool:
+        dg = self.scenario.default_goal
         return self.set_goal(
-            self.scenario.default_goal["x"], self.scenario.default_goal["y"]
+            dg["x"],
+            dg["y"],
+            None if dg.get("yaw") is None else float(dg["yaw"]),
         )
 
     def plan_to_goal(self, is_replan: bool = False) -> bool:
@@ -2086,12 +2213,12 @@ class SlamNavSimulation:
         prev_path = list(self.path) if is_replan else []
         prev_cursor = self.path_cursor if is_replan else 0
         result = {"path": [], "reason": "no_path"}
-        # Try safer inflation first, then thinner so narrow saved-map corridors
-        # stay solvable (footprint probe still prevents wall ramming).
+        # Prefer Nav2-like inflation; only thin slightly if a doorway seals.
+        # Never fall back to ~0.10 m — that cuts corners through the footprint.
         for infl, weight in (
-            (PLAN_INFLATION_M, 16.0),
-            (max(0.10, PLAN_INFLATION_M * 0.75), 12.0),
-            (0.10, 8.0),
+            (PLAN_INFLATION_M, PLAN_CLEARANCE_WEIGHT),
+            (max(0.22, PLAN_INFLATION_M * 0.85), PLAN_CLEARANCE_WEIGHT * 0.75),
+            (max(0.18, NAV_COLLISION_RADIUS_M), 18.0),
         ):
             candidate = plan_grid_path(
                 self.planning_grid(),
@@ -2127,9 +2254,7 @@ class SlamNavSimulation:
             self.replans += 1
             return True
         if self.autopilot:
-            # Nav-init settle: brief pause before first WASD (fresh lidar pose).
-            from .drive import AUTOPILOT_SETTLE_SEC
-
+            # Brief pause so first cmd_vel sees a fresh (possibly delayed) pose.
             if not is_replan and AUTOPILOT_SETTLE_SEC > 0:
                 self._drive.settle_until = self.elapsed_sec + AUTOPILOT_SETTLE_SEC
                 self._drive.last_moving_at = self.elapsed_sec
@@ -2209,10 +2334,12 @@ class SlamNavSimulation:
         return {"linear": linear, "angular": angular}
 
     def autopilot_command(self) -> dict:
-        """Discrete WASD-style cmds (same feel as teleop A/D + W), not slow vectors.
+        """Nav2 Regulated Pure Pursuit–style continuous Twist (not WASD pulses).
 
+        Emits the same class of commands as the real controller_server:
+        rotate-to-heading when yaw error is large, then forward + soft yaw trim.
+        Physics apply via ``drive_interface`` stick mapping in ``step()``.
         Controller uses lidar pose estimate (what Nav2 would see), not truth.
-        Probes a short forward step so we rotate clear instead of ramming walls.
         """
         if not self.autopilot or not self.path or not self.goal:
             return {"linear": 0.0, "angular": 0.0}
@@ -2220,6 +2347,8 @@ class SlamNavSimulation:
             self.status = "navigating · recovering"
             return {"linear": -0.40, "angular": getattr(self, "_nav_recovery_wz", 1.0)}
         est = self.estimated_pose
+        # Half-width for follow/LOS (circumscribed falsely blocks motion in
+        # corridors the planner already cleared with PLAN_INFLATION_M).
         footprint = NAV_COLLISION_RADIUS_M
         while (
             self.path_cursor < len(self.path) - 1
@@ -2247,7 +2376,9 @@ class SlamNavSimulation:
             look += 1
 
         def los_blocked(a: dict, b: dict) -> bool:
-            steps = max(2, int(distance(a, b) / 0.08))
+            # Fine step so thin slam-wall spikes cannot be skipped (0.08m
+            # sampling missed a finger that trapped the rover at ~0.8m to goal).
+            steps = max(2, int(distance(a, b) / 0.04))
             for i in range(1, steps + 1):
                 t = i / steps
                 sample = {
@@ -2272,12 +2403,25 @@ class SlamNavSimulation:
         )
         last_pose = getattr(self, "_nav_last_progress_pose", None) or est
         moved = distance(est, last_pose)
+        target_yaw = math.atan2(target["y"] - est["y"], target["x"] - est["x"])
+        error = wrap_angle(target_yaw - est["yaw"])
+
+        # Rotate-to-heading hysteresis (enter/exit) — avoids chatter from cmd latency.
+        if abs(error) >= RPP_ROTATE_ENTER_RAD:
+            self._rotate_to_heading = True
+        elif abs(error) <= RPP_ROTATE_EXIT_RAD:
+            self._rotate_to_heading = False
+
         if remaining + 0.08 < getattr(self, "_nav_best_goal_dist", math.inf) or moved > 0.15:
             if remaining + 0.08 < getattr(self, "_nav_best_goal_dist", math.inf):
                 self._nav_best_goal_dist = remaining
             self._nav_last_progress_pose = dict(est)
             self._nav_progress_at = self.elapsed_sec
             self._nav_fail_streak = 0
+        elif self._rotate_to_heading:
+            # In-place align is not a stall — pure rotate has no XY progress.
+            self._nav_progress_at = self.elapsed_sec
+            self._nav_recovery_until = 0.0
         elif (
             self.elapsed_sec - getattr(self, "_nav_progress_at", 0.0) > 8.0
             and getattr(self, "_nav_fail_streak", 0) < 3
@@ -2295,15 +2439,13 @@ class SlamNavSimulation:
             self.plan_to_goal(is_replan=True)
             self._nav_best_goal_dist = math.inf
             self.status = "navigating · unstuck replan"
-        target_yaw = math.atan2(target["y"] - est["y"], target["x"] - est["x"])
-        error = wrap_angle(target_yaw - est["yaw"])
         if self.fine_docking and self.goal:
-            target_heading = self.goal_yaw
+            target_heading = self.goal.get("yaw", self.goal_yaw)
             if target_heading is None:
                 target_heading = math.atan2(
                     self.goal["y"] - est["y"], self.goal["x"] - est["x"]
                 )
-            yaw_err = wrap_angle(target_heading - est["yaw"])
+            yaw_err = wrap_angle(float(target_heading) - est["yaw"])
             if goal_dist <= FINE_DOCK_XY_M and abs(yaw_err) <= FINE_DOCK_YAW_RAD:
                 self.autopilot = False
                 if not self.exploring:
@@ -2322,7 +2464,25 @@ class SlamNavSimulation:
                         self.status = "nav complete · dock timeout"
                     return {"linear": 0.0, "angular": 0.0}
                 return self._fine_dock_command(est, goal_dist, yaw_err)
-        elif goal_dist < 0.50:
+        elif goal_dist < GOAL_ARRIVE_XY_M:
+            # Final yaw to the goal pose (always set) before declaring arrived.
+            gyaw = self.goal.get("yaw", self.goal_yaw) if self.goal else None
+            if gyaw is not None:
+                yaw_err = wrap_angle(float(gyaw) - est["yaw"])
+                if abs(yaw_err) > GOAL_ARRIVE_YAW_RAD:
+                    self._nav_progress_at = self.elapsed_sec
+                    self._nav_recovery_until = 0.0
+                    self.status = "navigating · final heading"
+                    return {
+                        "linear": 0.0,
+                        "angular": math.copysign(
+                            min(
+                                RPP_ROTATE_TO_HEADING_ANGULAR_VEL,
+                                max(0.30, abs(yaw_err) * 1.6),
+                            ),
+                            yaw_err,
+                        ),
+                    }
             self.autopilot = False
             if not self.exploring:
                 self.nav_complete = True
@@ -2330,21 +2490,41 @@ class SlamNavSimulation:
                 self.status = "nav complete · arrived"
             return {"linear": 0.0, "angular": 0.0}
 
-        if abs(error) > 0.35:
-            # Rotate in place until roughly aimed (was 0.70 / ~40° — started
-            # driving too early and cut corners). Continuous A/D at ~7.5°/frame.
-            return {"linear": 0.0, "angular": math.copysign(1.25, error)}
+        # RPP rotate-to-heading with hysteresis — always in-place (no crawl into
+        # walls). Soft stick floor is applied in step() while aligning.
+        if self._rotate_to_heading:
+            self.status = "navigating · align heading"
+            return {
+                "linear": 0.0,
+                "angular": math.copysign(
+                    min(
+                        RPP_ROTATE_TO_HEADING_ANGULAR_VEL,
+                        max(0.20, abs(error) * 1.4),
+                    ),
+                    error,
+                ),
+            }
 
-        def forward_blocked(linear: float, angular: float, horizon: float = 0.20) -> bool:
-            keys = cmd_vel_to_keys(linear, angular)
-            # Keep reverse if we asked for it — probe only cares about W arcs.
-            v_l, v_r = keys_to_tracks(keys)
-            probe = integrate_tank(self.pose, v_l, v_r, horizon)
+        def forward_blocked(
+            linear: float, angular: float, horizon: float | None = None
+        ) -> bool:
+            # Shorter probes for slow terminal motion so we can creep closer to
+            # the goal instead of stopping ~0.4m out.
+            if horizon is None:
+                horizon = max(0.08, min(0.20, 0.08 + 0.45 * abs(linear)))
+            probe = integrate_body(self.pose, linear, angular, horizon)
             return self.is_pose_collision(probe, radius=footprint)
 
         def start_backup(sign: float) -> dict:
-            # Trigger the dedicated reverse+turn recovery (keeps S with A/D).
-            # Do not extend an already-active timer — that wedged reverse forever.
+            # Never reverse-wiggle while heading is still badly wrong.
+            if abs(error) > RPP_ROTATE_TO_HEADING_MIN_ANGLE:
+                self._rotate_to_heading = True
+                return {
+                    "linear": 0.0,
+                    "angular": math.copysign(
+                        RPP_ROTATE_TO_HEADING_ANGULAR_VEL, error
+                    ),
+                }
             if self.elapsed_sec >= getattr(self, "_nav_recovery_until", 0.0):
                 self._nav_recovery_until = self.elapsed_sec + 0.35
             self._nav_recovery_wz = float(sign)
@@ -2352,17 +2532,18 @@ class SlamNavSimulation:
             return {"linear": -0.40, "angular": sign}
 
         def clear_or_recover(cmd: dict, *, backup_sign: float) -> dict:
-            """Prefer forward arcs over in-place pivots when the nose is blocked.
-
-            A pure pivot always 'succeeds' the collision probe (xy unchanged) and
-            used to trap the rover spinning forever beside a wall it could arc past.
-            """
-            if not forward_blocked(cmd["linear"], cmd["angular"]):
-                return cmd
-            # Pure forward still open — path curves around an obstacle; crawl.
-            if cmd["linear"] > 0.05 and not forward_blocked(cmd["linear"], 0.0):
-                return {"linear": min(0.40, cmd["linear"]), "angular": 0.0}
-            # Mild forward arcs (keep W held) — these clear corners pivots cannot.
+            # Try commanded motion, then slower crawls — saved_slam corridors often
+            # clear at 0.15 m/s but not at the 0.30 cruise (half-width scrape).
+            candidates = [
+                cmd,
+                {"linear": cmd["linear"], "angular": 0.0},
+                {"linear": min(0.18, cmd["linear"] or 0.18), "angular": cmd["angular"] * 0.5},
+                {"linear": 0.15, "angular": 0.0},
+                {"linear": 0.12, "angular": math.copysign(0.25, error) if abs(error) > 1e-3 else 0.0},
+            ]
+            for cand in candidates:
+                if cand["linear"] > 0.02 and not forward_blocked(cand["linear"], cand["angular"]):
+                    return cand
             signs = []
             if abs(error) > 1e-3:
                 signs.append(math.copysign(1.0, error))
@@ -2370,39 +2551,114 @@ class SlamNavSimulation:
             else:
                 signs.extend((1.0, -1.0))
             for sign in signs:
-                arc = {
-                    "linear": max(0.28, min(0.45, cmd["linear"] if cmd["linear"] > 0 else 0.35)),
-                    "angular": sign * 0.42,
-                }
+                arc = {"linear": 0.14, "angular": sign * 0.35}
                 if not forward_blocked(arc["linear"], arc["angular"]):
                     return arc
-            # Heading meaningfully wrong — rotate in place toward the carrot.
-            if abs(error) > 0.15:
-                return {"linear": 0.0, "angular": math.copysign(1.15, error)}
-            for sign in signs:
-                nudge = {"linear": 0.22, "angular": sign * 0.55}
-                if not forward_blocked(nudge["linear"], nudge["angular"]):
-                    return nudge
-            return start_backup(backup_sign)
+            # Aimed at the carrot but the nose is in geometry — don't tank-spin
+            # in place (that chatters at ±PURE_ROTATE forever). Steer toward a
+            # deeper path point, or inch the cursor forward.
+            if abs(error) < 0.25:
+                deep = min(len(self.path) - 1, self.path_cursor + 6)
+                deep_tgt = self.path[deep]
+                deep_yaw = math.atan2(
+                    deep_tgt["y"] - est["y"], deep_tgt["x"] - est["x"]
+                )
+                deep_err = wrap_angle(deep_yaw - est["yaw"])
+                if abs(deep_err) > 0.12:
+                    self.status = "navigating · swing for clearance"
+                    return {
+                        "linear": 0.0,
+                        "angular": math.copysign(
+                            min(0.55, max(0.22, abs(deep_err) * 1.3)),
+                            deep_err,
+                        ),
+                    }
+                # Thin wall spike ahead of an otherwise-good heading: reverse
+                # clear then replan (forward crawls cannot cross the finger).
+                self.status = "navigating · reverse clear"
+                self._nav_progress_at = self.elapsed_sec
+                return {"linear": -0.22, "angular": 0.0}
+            self._rotate_to_heading = True
+            return {
+                "linear": 0.0,
+                "angular": math.copysign(
+                    min(0.65, max(0.25, abs(error) * 1.4)),
+                    error,
+                ),
+            }
 
-        if abs(error) > 0.25:
-            cmd = {"linear": 0.30, "angular": math.copysign(0.45, error)}
-            return clear_or_recover(
-                cmd, backup_sign=(-1.0 if error >= 0 else 1.0)
-            )
-        if abs(error) > 0.10:
-            cmd = {"linear": 0.50, "angular": math.copysign(0.32, error)}
-            return clear_or_recover(
-                cmd, backup_sign=(-1.0 if error >= 0 else 1.0)
-            )
-        cmd = {"linear": 0.55, "angular": 0.0}
-        return clear_or_recover(cmd, backup_sign=1.0)
+        # Soft yaw trim while translating (RPP approach).
+        yaw_cmd = clamp(
+            1.8 * error,
+            -RPP_MAX_ANGULAR_WHILE_TRANS,
+            RPP_MAX_ANGULAR_WHILE_TRANS,
+        )
+        speed = RPP_DESIRED_LINEAR_VEL
+        if goal_dist < 1.0:
+            speed = max(0.04, RPP_DESIRED_LINEAR_VEL * (goal_dist / 1.0))
+        # Terminal micro-approach: very small, smooth nudges for cm-level settle.
+        if goal_dist < 0.20:
+            speed = min(speed, 0.08)
+            yaw_cmd = clamp(1.2 * error, -0.20, 0.20)
+        cmd = {"linear": speed, "angular": yaw_cmd}
+        return clear_or_recover(cmd, backup_sign=(-1.0 if error >= 0 else 1.0))
 
     def step(self, dt_sec: float = 1 / 30) -> "SlamNavSimulation":
         dt = clamp(dt_sec, 0.001, 0.2) * self.speed_multiplier
         self.elapsed_sec += dt
         self._scan_accumulator += dt
         self._replan_accumulator += dt
+        self._flush_pending_scans()
+
+        # Real Nav2 co-sim: bridges POST Pi stick; plant integrates body rates only.
+        if self.pi_drive_enabled:
+            body_vx, body_wz = stick_to_body_twist(self._pi_stick)
+            self._drive.stick = dict(self._pi_stick)
+            self._drive.body_cmd = {"linear": body_vx, "angular": body_wz}
+            self._drive.applied_vx = body_vx
+            self._drive.applied_wz = body_wz
+            # Continuous vector path — do not invent WASD labels for the UI.
+            self._drive.keys = []
+            self._drive.desired_keys = []
+            self._drive.tracks = (
+                body_vx - 0.5 * body_wz * 0.25,
+                body_vx + 0.5 * body_wz * 0.25,
+            )
+            if abs(body_vx) < 1e-3 and abs(body_wz) < 1e-3:
+                self._drive.phase = "idle"
+            elif abs(body_vx) < 1e-3:
+                self._drive.phase = "align"
+            else:
+                self._drive.phase = "drive"
+            next_pose = integrate_body(self.pose, body_vx, body_wz, dt)
+            # In-place yaw always allowed. Translation uses half-width (not
+            # circumscribed) so Nav2 rotate/drive isn't frozen by padding.
+            pure_rotate = abs(body_vx) < 1e-3 and abs(body_wz) > 1e-3
+            blocked = (not pure_rotate) and self.is_pose_collision(
+                next_pose, radius=NAV_COLLISION_RADIUS_M
+            )
+            if blocked:
+                if abs(body_vx) > 0.01 or abs(body_wz) > 0.01:
+                    self.collisions += 1
+            else:
+                self.distance_m += math.hypot(
+                    next_pose["x"] - self.pose["x"], next_pose["y"] - self.pose["y"]
+                )
+                self.pose = next_pose
+                if self.mode == "mapping" and not self.noise_enabled:
+                    self.estimated_pose = dict(self.pose)
+                else:
+                    self.estimated_pose = integrate_body(
+                        self.estimated_pose, body_vx, body_wz, dt
+                    )
+            if self._scan_accumulator >= LIDAR_SCAN_PERIOD_SEC:
+                self._scan_accumulator = 0.0
+                self._scan_defer = True
+                try:
+                    self.scan()
+                finally:
+                    self._scan_defer = False
+            return self
 
         if self.autopilot and self._replan_accumulator >= 1.0:
             self._replan_accumulator = 0.0
@@ -2429,6 +2685,7 @@ class SlamNavSimulation:
         if (
             self.autopilot
             and self.elapsed_sec < getattr(self, "_nav_recovery_until", 0.0)
+            and not getattr(self, "_rotate_to_heading", False)
         ):
             turn = "a" if getattr(self, "_nav_recovery_wz", 1.0) >= 0 else "d"
             keys = ["s", turn]
@@ -2493,80 +2750,125 @@ class SlamNavSimulation:
                     self.plan_to_goal(is_replan=True)
             if self._scan_accumulator >= LIDAR_SCAN_PERIOD_SEC:
                 self._scan_accumulator = 0.0
-                self.scan()
+                self._scan_defer = True
+                try:
+                    self.scan()
+                finally:
+                    self._scan_defer = False
             return self
-        if self.exploring:
-            # Continuous tank tracks while mapping — pulsed A/D made 360° spins crawl.
-            keys = cmd_vel_to_keys(vx, wz)
-            v_left, v_right = keys_to_tracks(keys)
-            linear, angular = tracks_to_twist(v_left, v_right)
-            self._drive.keys = list(keys)
-            self._drive.desired_keys = list(keys)
-            self._drive.tracks = (v_left, v_right)
-            self._drive.body_cmd = {"linear": linear, "angular": angular}
-            self._drive.phase = "explore"
-            command = self._drive.body_cmd
-        elif abs(vx) < 0.05 and abs(wz) >= 0.55:
-            # Pure in-place align: continuous A/D. Finer A/D pulses are used for
-            # arc path following; continuous here stops within ~1 frame (~7.5°).
-            keys = cmd_vel_to_keys(vx, wz)
-            v_left, v_right = keys_to_tracks(keys)
-            linear, angular = tracks_to_twist(v_left, v_right)
-            self._drive.keys = list(keys)
-            self._drive.desired_keys = list(keys)
-            self._drive.tracks = (v_left, v_right)
-            self._drive.body_cmd = {"linear": linear, "angular": angular}
-            self._drive.phase = "align"
-            self._drive.turn_pulse_phase = "idle"
-            command = self._drive.body_cmd
-        else:
-            # Drive / teleop: cmd_vel → WASD → pulsed A/D (~11° pure / ~9° arc).
-            self._drive = apply_nav_drive(
-                self._drive,
-                vx=vx,
-                wz=wz,
-                now=self.elapsed_sec,
+
+        # Continuous path: Nav2 Twist → drive_interface stick → calibrated body rates.
+        # Explore / align: no HTTP latency (align latency + PURE_ROTATE_STICK = chatter).
+        aligning = bool(getattr(self, "_rotate_to_heading", False))
+        latency = 0.0 if (self.exploring or aligning) else CMD_LATENCY_SEC
+        # Soft pure-rotate stick while fine-aligning; decisive stick for big turns.
+        rotate_stick = 0.25 if aligning and abs(wz) < 0.55 else None
+        prev_phase = self._drive.phase
+        self._drive = apply_nav_drive(
+            self._drive,
+            vx=vx,
+            wz=wz,
+            now=self.elapsed_sec,
+            latency_sec=latency,
+            pure_rotate_stick=rotate_stick,
+        )
+        if prev_phase == "align" and self._drive.phase != "align":
+            self._drive.cmd_queue.clear()
+            body_vx, body_wz, stick = nav_twist_to_body(
+                vx, wz, pure_rotate_stick=rotate_stick
             )
-            v_left, v_right = self._drive.tracks
-            command = self._drive.body_cmd
+            self._drive.applied_vx = body_vx
+            self._drive.applied_wz = body_wz
+            self._drive.stick = stick
+            self._drive.body_cmd = {"linear": body_vx, "angular": body_wz}
+        body_vx = float(self._drive.applied_vx)
+        body_wz = float(self._drive.applied_wz)
+        # Recovery/reverse intents allow reverse via tank path only; continuous
+        # twist_to_pi blocks reverse — map reverse explore/manual via tracks.
+        if vx < -0.05 and abs(body_vx) < 1e-6:
+            keys = cmd_vel_to_keys(vx, wz)
+            v_left, v_right = keys_to_tracks(keys)
+            body_vx, body_wz = tracks_to_twist(v_left, v_right)
+            self._drive.tracks = (v_left, v_right)
+            self._drive.body_cmd = {"linear": body_vx, "angular": body_wz}
+            self._drive.applied_vx = body_vx
+            self._drive.applied_wz = body_wz
+        command = self._drive.body_cmd
+        next_pose = integrate_body(self.pose, body_vx, body_wz, dt)
 
-        next_pose = integrate_tank(self.pose, v_left, v_right, dt)
-
-        # Autopilot uses in-plane half-width; circumscribed corners false-trigger
-        # in saved-map corridors and caused endless recover/spin loops.
+        # Autopilot collision: half-width. Planner inflation (0.30 m) keeps the
+        # path off corners; circumscribed probes caused endless recover loops on
+        # saved_slam corridors (hundreds of collisions, zero progress).
         check_radius = None
         if self.autopilot and not self.exploring:
             check_radius = NAV_COLLISION_RADIUS_M
         elif self._drive.phase in ("align", "recover"):
             check_radius = NAV_COLLISION_RADIUS_M
+
         if self.is_pose_collision(next_pose, radius=check_radius):
-            if abs(command["linear"]) > 0.01 or abs(v_left) > 0.01 or abs(v_right) > 0.01:
-                self.collisions += 1
-            if self.exploring:
-                self._handle_explore_blocked()
-            elif self.autopilot:
-                # Let an active recovery finish — retriggering wedged the rover in
-                # an endless reverse/spin loop next to walls.
-                if self.elapsed_sec < getattr(self, "_nav_recovery_until", 0.0):
-                    pass
-                else:
-                    self._nav_stuck_count = getattr(self, "_nav_stuck_count", 0) + 1
-                    if self._nav_stuck_count >= 12:
-                        self._nav_recovery_until = self.elapsed_sec + 0.35
-                        if self.path and self.path_cursor < len(self.path):
-                            tgt = self.path[self.path_cursor]
-                            desire = math.atan2(
-                                tgt["y"] - self.pose["y"], tgt["x"] - self.pose["x"]
-                            )
-                            err = wrap_angle(desire - self.pose["yaw"])
-                            self._nav_recovery_wz = -1.0 if err >= 0 else 1.0
-                        else:
-                            self._nav_recovery_wz = 1.0
+            # Try slower crawl or yaw-only before counting a hard collision.
+            escaped = False
+            if self.autopilot and not self.exploring:
+                for slow_vx, slow_wz in (
+                    (0.12, body_wz * 0.5),
+                    (0.08, 0.0),
+                    (0.0, body_wz if abs(body_wz) > 0.05 else 0.45),
+                    (0.0, -0.45),
+                ):
+                    probe = integrate_body(self.pose, slow_vx, slow_wz, dt)
+                    if not self.is_pose_collision(probe, radius=check_radius):
+                        next_pose = probe
+                        body_vx, body_wz = slow_vx, slow_wz
+                        self._drive.applied_vx = slow_vx
+                        self._drive.applied_wz = slow_wz
+                        self._drive.body_cmd = {"linear": slow_vx, "angular": slow_wz}
+                        escaped = True
+                        if abs(slow_vx) < 1e-3:
+                            self._rotate_to_heading = True
+                        break
+            if not escaped:
+                if abs(command["linear"]) > 0.01 or abs(body_vx) > 0.01 or abs(body_wz) > 0.01:
+                    self.collisions += 1
+                if self.exploring:
+                    self._handle_explore_blocked()
+                elif self.autopilot:
+                    if self.elapsed_sec < getattr(self, "_nav_recovery_until", 0.0):
+                        pass
+                    elif getattr(self, "_rotate_to_heading", False):
                         self._nav_stuck_count = 0
-                        self.status = "blocked · recovering"
-                        self.plan_to_goal(is_replan=True)
-                    elif self._nav_stuck_count in (3, 6):
-                        self.plan_to_goal(is_replan=True)
+                    else:
+                        self._nav_stuck_count = getattr(self, "_nav_stuck_count", 0) + 1
+                        if self._nav_stuck_count >= 18:
+                            self._nav_stuck_count = 0
+                            self._nav_recovery_until = 0.0
+                            self._rotate_to_heading = True
+                            if self.path_cursor < len(self.path) - 1:
+                                self.path_cursor += 1
+                            self.plan_to_goal(is_replan=True)
+                            self.status = "blocked · replan"
+                        elif self._nav_stuck_count in (8, 14):
+                            self._rotate_to_heading = True
+                # hard collision — do not move
+                if self.exploring:
+                    pass
+                elif not self.autopilot:
+                    pass
+            else:
+                # escaped via crawl/yaw — apply motion below
+                self._nav_stuck_count = 0
+                moved = math.hypot(
+                    next_pose["x"] - self.pose["x"], next_pose["y"] - self.pose["y"]
+                )
+                self.distance_m += moved
+                self.pose = next_pose
+                if self.mode == "mapping" and not self.noise_enabled:
+                    self.estimated_pose = dict(self.pose)
+                elif not self.noise_enabled and self.autopilot:
+                    self.estimated_pose = dict(self.pose)
+                else:
+                    self.estimated_pose = integrate_body(
+                        self.estimated_pose, body_vx, body_wz, dt
+                    )
         else:
             self._nav_stuck_count = 0
             moved = math.hypot(
@@ -2575,19 +2877,15 @@ class SlamNavSimulation:
             self.distance_m += moved
             self.pose = next_pose
             # Short-horizon pose extrapolator (not wheel-odometry SLAM):
-            # advance the estimate with the same tank command between lidar
-            # updates so (1) yellow tracks green in the UI and (2) scan-match
-            # stays inside its search window at high speed_multiplier.
+            # advance the estimate with the same body rates between delayed
+            # lidar updates so scan-match stays inside its search window.
             if self.mode == "mapping" and not self.noise_enabled:
                 self.estimated_pose = dict(self.pose)
             elif not self.noise_enabled and self.autopilot:
-                # Noise-free nav: keep estimate glued to truth so probes and
-                # path following share one pose. Idle localization (kidnap
-                # tests) leaves the estimate free for scan-match recovery.
                 self.estimated_pose = dict(self.pose)
             else:
-                self.estimated_pose = integrate_tank(
-                    self.estimated_pose, v_left, v_right, dt
+                self.estimated_pose = integrate_body(
+                    self.estimated_pose, body_vx, body_wz, dt
                 )
 
         if self.exploring:
@@ -2595,13 +2893,19 @@ class SlamNavSimulation:
 
         if self._scan_accumulator >= LIDAR_SCAN_PERIOD_SEC:
             self._scan_accumulator = 0.0
-            self.scan()
+            self._scan_defer = True
+            try:
+                self.scan()
+            finally:
+                self._scan_defer = False
         return self
 
     def emergency_stop(self) -> None:
         if self.exploring:
             self.stop_auto_map(freeze=False)
         self.autopilot = False
+        self.pi_drive_enabled = False
+        self._pi_stick = {"x": 0.0, "y": 0.0}
         self.manual = {"linear": 0.0, "angular": 0.0}
         self._drive = NavDriveState()
         self.status = "stopped"
@@ -2660,7 +2964,10 @@ class SlamNavSimulation:
             "pose": dict(self.pose),
             "estimated_pose": dict(self.estimated_pose),
             "goal": dict(self.goal) if self.goal else None,
+            "goal_yaw": self.goal_yaw,
+            "fine_docking": self.fine_docking,
             "path": [dict(point) for point in self.path],
+            "path_cursor": self.path_cursor,
             "obstacles": [
                 {
                     "id": item.id,
@@ -2734,12 +3041,18 @@ class SlamNavSimulation:
                 "phase": self._drive.phase,
                 "keys": list(self._drive.keys),
                 "desired_keys": list(self._drive.desired_keys),
+                "stick": {
+                    "x": round(float(self._drive.stick.get("x", 0.0)), 3),
+                    "y": round(float(self._drive.stick.get("y", 0.0)), 3),
+                },
                 "tracks": {
                     "left": round(self._drive.tracks[0], 3),
                     "right": round(self._drive.tracks[1], 3),
                 },
                 "body": dict(self._drive.body_cmd),
                 "turn_pulse": self._drive.turn_pulse_phase,
+                "cmd_latency_sec": CMD_LATENCY_SEC,
+                "loc_delay_sec": LOC_PROCESS_DELAY_SEC,
             },
             "metrics": self.metrics(),
             "scenarios": [

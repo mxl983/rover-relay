@@ -2,6 +2,7 @@
 
 Usage:
   python3 -m sim              # open local GUI in browser
+  python3 -m sim --cosim      # ROS plant for real Nav2 (needs rclpy)
   python3 -m sim --test       # run deterministic regressions
   python3 -m sim --drift      # apartment_loop localization drift report
   python3 -m sim --map-quality  # map integrity + auto-map vs ground truth
@@ -38,6 +39,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run apartment_loop map integrity / auto-map benchmark and exit.",
     )
+    parser.add_argument(
+        "--cosim",
+        action="store_true",
+        help="Run ROS plant bridge for real Nav2 co-sim (requires rclpy).",
+    )
     parser.add_argument("--host", default="127.0.0.1", help="GUI bind host.")
     parser.add_argument("--port", type=int, default=8877, help="GUI bind port.")
     parser.add_argument(
@@ -57,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.map_quality:
         return run_map_quality_cli()
+
+    if args.cosim:
+        from .ros_bridge import main as cosim_main
+
+        return cosim_main()
 
     run_gui(host=args.host, port=args.port, open_browser=not args.headless)
     return 0

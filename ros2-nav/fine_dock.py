@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Fine docking: close XY/yaw gaps with skid-steer lateral combos (WASD keys).
+"""DEPRECATED — WASD map-pose fine docking (pre-marker).
 
-After Nav2 coarse navigation, reads SLAM pose + goal and executes:
-  turn 90° → drive lateral distance → turn back 90°
-one body axis at a time, tolerating small skid on the orthogonal axis.
+Marker-relative docking / Nav2 DockRobot is not ready yet. Autonomous arrival
+is handled entirely by Nav2 NavigateToPose + RPP (see bridges.py).
+
+Do not launch this loop alongside Nav2 — it steals motor ownership via /keys.
 """
 
 from __future__ import annotations

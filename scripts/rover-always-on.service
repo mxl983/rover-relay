@@ -1,0 +1,14 @@
+[Unit]
+Description=Start always-on rover relay services at host boot
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/rover-always-on
+ExecStart=/usr/local/libexec/rover_always_on.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

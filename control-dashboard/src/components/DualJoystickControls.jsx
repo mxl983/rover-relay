@@ -316,49 +316,28 @@ export const DualJoystickControls = ({
     }
   };
 
-  const sendDriveStopWithRetries = () => {
+  const sendDriveStop = () => {
     clearAnalogSendTimer();
     touchAnalogRef.current.drive = { x: 0, y: 0 };
     const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
     analogState.current = merged;
     sendState(merged.drive, merged.gimbal, true);
-    const retry = () => {
-      const m = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
-      analogState.current = m;
-      onDriveRef.current?.({ drive: m.drive, gimbal: m.gimbal });
-    };
-    setTimeout(retry, 45);
-    setTimeout(retry, 110);
   };
 
-  const sendGimbalStopWithRetries = () => {
+  const sendGimbalStop = () => {
     clearAnalogSendTimer();
     touchAnalogRef.current.gimbal = { x: 0, y: 0 };
     const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
     analogState.current = merged;
     sendState(merged.drive, merged.gimbal, true);
-    const retry = () => {
-      const m = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
-      analogState.current = m;
-      onDriveRef.current?.({ drive: m.drive, gimbal: m.gimbal });
-    };
-    setTimeout(retry, 45);
-    setTimeout(retry, 110);
   };
 
-  const sendAllStopWithRetries = () => {
+  const sendAllStop = () => {
     clearAnalogSendTimer();
     ignoreGamepadRef.current = true;
     touchAnalogRef.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
     analogState.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
     sendState({ x: 0, y: 0 }, { x: 0, y: 0 }, true);
-    const retry = () => {
-      const m = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
-      analogState.current = m;
-      onDriveRef.current?.({ drive: m.drive, gimbal: m.gimbal });
-    };
-    setTimeout(retry, 45);
-    setTimeout(retry, 110);
   };
 
   /** Unlock pad after safety stop — blur + BT drift previously left drive dead forever. */
@@ -504,7 +483,7 @@ export const DualJoystickControls = ({
     });
 
     driveManager.on("end", () => {
-      sendDriveStopWithRetries();
+      sendDriveStop();
     });
 
     lookManager.on("move", (evt, data) => {
@@ -514,12 +493,12 @@ export const DualJoystickControls = ({
 
     lookManager.on("end", () => {
       stopGimbalRaf();
-      sendGimbalStopWithRetries();
+      sendGimbalStop();
     });
 
     const handleSafetyStop = () => {
       stopGimbalRaf();
-      sendAllStopWithRetries();
+      sendAllStop();
     };
     const onVisibility = () => {
       if (document.hidden || document.visibilityState !== "visible") {
@@ -531,6 +510,7 @@ export const DualJoystickControls = ({
     window.addEventListener("blur", handleSafetyStop);
     window.addEventListener("focus", rearmGamepad);
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", handleSafetyStop);
 
     return () => {
       if (gimbalRafRef.current) {
@@ -544,7 +524,8 @@ export const DualJoystickControls = ({
       window.removeEventListener("blur", handleSafetyStop);
       window.removeEventListener("focus", rearmGamepad);
       document.removeEventListener("visibilitychange", onVisibility);
-      sendAllStopWithRetries();
+      window.removeEventListener("pagehide", handleSafetyStop);
+      sendAllStop();
       driveManager.destroy();
       lookManager.destroy();
     };
@@ -554,7 +535,7 @@ export const DualJoystickControls = ({
     if (!immersive) return undefined;
 
     const handleSafetyStop = () => {
-      sendAllStopWithRetries();
+      sendAllStop();
     };
     const onVisibility = () => {
       if (document.hidden || document.visibilityState !== "visible") {
@@ -566,11 +547,13 @@ export const DualJoystickControls = ({
     window.addEventListener("blur", handleSafetyStop);
     window.addEventListener("focus", rearmGamepad);
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", handleSafetyStop);
     return () => {
       window.removeEventListener("blur", handleSafetyStop);
       window.removeEventListener("focus", rearmGamepad);
       document.removeEventListener("visibilitychange", onVisibility);
-      handleSafetyStop();
+      window.removeEventListener("pagehide", handleSafetyStop);
+      sendAllStop();
     };
   }, [immersive]);
 

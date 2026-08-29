@@ -1,0 +1,53 @@
+<!-- Collision ahead: clear + wait + replan. No rear lidar — never BackUp into walls.
+     No Spin — recovery spins hunted yaw, interrupted RPP rotate-to-heading, and
+     locked nav in vx=0 forever (nav-20260826-065940). -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateStableRecovery">
+      <PipelineSequence name="NavigateStable">
+        <RateController hz="1.0">
+          <Fallback name="KeepValidPath">
+            <ReactiveSequence>
+              <Inverter>
+                <GlobalUpdatedGoal/>
+              </Inverter>
+              <IsPathValid path="{path}"/>
+            </ReactiveSequence>
+            <ComputePathToPose
+              goal="{goal}"
+              path="{path}"
+              planner_id="GridBased"
+              server_timeout="2000"/>
+          </Fallback>
+        </RateController>
+        <FollowPath
+            path="{path}"
+            controller_id="FollowPath"
+            goal_checker_id="general_goal_checker"
+            server_timeout="2000"/>
+      </PipelineSequence>
+      <ReactiveFallback name="ObstacleRecovery">
+        <GoalUpdated/>
+        <RoundRobin name="ClearAndCreep">
+          <Sequence name="ClearAndReplan">
+            <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap service_name="global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="2.0"/>
+          </Sequence>
+          <Sequence name="ClearAgain">
+            <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap service_name="global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="2.0"/>
+          </Sequence>
+          <!-- Short forward creep to escape footprint traps — no Spin. -->
+          <Sequence name="CreepForward">
+            <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+            <Wait wait_duration="1.0"/>
+            <DriveOnHeading dist_to_travel="0.12" speed="0.08"/>
+            <Wait wait_duration="1.0"/>
+          </Sequence>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

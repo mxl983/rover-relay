@@ -110,28 +110,23 @@ def nav_config_context() -> dict[str, Any]:
     return {
         "nav2_params_file": NAV2_PARAMS_FILE,
         "bt_xml": NAV_BT_XML,
-        "max_linear_mps": float(os.environ.get("NAV_MAX_LINEAR_MPS", "0.28")),
-        "max_angular_rps": float(os.environ.get("NAV_MAX_ANGULAR_RPS", "0.55")),
-        "align_angular_rps": float(os.environ.get("NAV_ALIGN_ANGULAR_RPS", "0.55")),
-        "turn_pulse_on_pure_s": float(
-            os.environ.get("NAV_TURN_PULSE_ON_PURE_SEC", "0.45")
-        ),
-        "turn_pulse_off_pure_s": float(
-            os.environ.get("NAV_TURN_PULSE_OFF_PURE_SEC", "3.0")
-        ),
-        "observe_settle_s": float(os.environ.get("NAV_OBSERVE_SETTLE_SEC", "3.0")),
-        "turn_pure_wz_deadband": float(
-            os.environ.get("NAV_TURN_PURE_WZ_DEADBAND", "0.05")
-        ),
-        "fine_dock_xy_tol_m": float(os.environ.get("NAV_FINE_DOCK_XY_TOL_M", "0.16")),
-        "fine_dock_yaw_tol_rad": float(
-            os.environ.get("NAV_FINE_DOCK_YAW_TOL_RAD", str(math.radians(5.0)))
-        ),
+        "control": "nav2_continuous_cmd_vel",
+        "max_linear_mps": float(os.environ.get("NAV_MAX_LINEAR_MPS", "0.35")),
+        "max_angular_rps": float(os.environ.get("NAV_MAX_ANGULAR_RPS", "0.80")),
+        "max_linear_accel": float(os.environ.get("NAV_MAX_LINEAR_ACCEL", "0.40")),
+        "max_angular_accel": float(os.environ.get("NAV_MAX_ANGULAR_ACCEL", "0.90")),
+        "cmd_vel_stale_s": float(os.environ.get("NAV_CMD_VEL_STALE_SEC", "0.35")),
+        "tf_stale_s": float(os.environ.get("NAV_TF_STALE_SEC", "1.0")),
         "progress_period_s": float(os.environ.get("NAV_PROGRESS_PERIOD_SEC", "2.0")),
-        "stall_warn_s": float(os.environ.get("NAV_STALL_WARN_SEC", "8.0")),
-        "stall_event_s": float(os.environ.get("NAV_STALL_EVENT_SEC", "20.0")),
+        "stall_warn_s": float(os.environ.get("NAV_STALL_WARN_SEC", "12.0")),
+        "stall_event_s": float(os.environ.get("NAV_STALL_EVENT_SEC", "45.0")),
+        "start_settle_s": float(os.environ.get("NAV_START_SETTLE_SEC", "3.0")),
+        "pose_stable_s": float(os.environ.get("NAV_POSE_STABLE_SEC", "2.0")),
+        "min_scan_match": float(os.environ.get("NAV_MIN_SCAN_MATCH", "0.28")),
         "scan_topic": os.environ.get("NAV_SCAN_TOPIC", "/scan_nav"),
         "cmd_vel_topic": os.environ.get("NAV_CMD_VEL_TOPIC", "/cmd_vel"),
+        # Marker docking not wired yet — retained for future DockRobot / visual servo.
+        "marker_docking_enabled": False,
     }
 
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from tools.nav_rehearsal.mapdata import load_best_map, load_slam_map
 from tools.nav_rehearsal.parse import (
     build_frames,
+    canonical_nav_id,
     latest_nav_id,
     list_runs,
     load_jsonl,
@@ -233,6 +234,58 @@ class NavRehearsalMapTests(unittest.TestCase):
             self.assertIsNotNone(best)
             assert best is not None
             self.assertEqual(best.source, "slam_live.json")
+
+    def test_canonical_nav_id_strips_settle_suffixes(self) -> None:
+        self.assertEqual(
+            canonical_nav_id("nav-20260826-193315-bf20c6-fine-done"),
+            "nav-20260826-193315-bf20c6",
+        )
+        self.assertEqual(
+            canonical_nav_id("nav-x-motion"),
+            "nav-x",
+        )
+        self.assertEqual(canonical_nav_id("nav-x"), "nav-x")
+
+    def test_list_runs_merges_suffix_events(self) -> None:
+        events = [
+            {
+                "ts": 1.0,
+                "iso": "2026-01-01T00:00:00Z",
+                "event": "goto",
+                "nav_id": "nav-test-1",
+                "label": "mark",
+                "target": {"x": 1.0, "y": 0.0, "yaw": 0.0},
+                "start_pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+            },
+            {
+                "ts": 2.0,
+                "iso": "2026-01-01T00:00:01Z",
+                "event": "settled",
+                "nav_id": "nav-test-1-motion",
+                "pose": {"x": 0.1, "y": 0.0, "yaw": 0.0},
+            },
+            {
+                "ts": 3.0,
+                "iso": "2026-01-01T00:00:02Z",
+                "event": "progress",
+                "nav_id": "nav-test-1",
+                "pose": {"x": 0.2, "y": 0.0, "yaw": 0.0},
+                "goal": {"x": 1.0, "y": 0.0, "yaw": 0.0},
+            },
+            {
+                "ts": 4.0,
+                "iso": "2026-01-01T00:00:03Z",
+                "event": "note",
+                "nav_id": "nav-test-1-fine-done",
+            },
+        ]
+        runs = list_runs(events)
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0].nav_id, "nav-test-1")
+        self.assertEqual(runs[0].event_count, 4)
+        self.assertEqual(latest_nav_id(events), "nav-test-1")
+        frames = build_frames(events, "nav-test-1-fine-done")
+        self.assertGreaterEqual(len(frames), 3)
 
 
 if __name__ == "__main__":

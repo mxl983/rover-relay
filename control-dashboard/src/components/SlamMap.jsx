@@ -357,14 +357,20 @@ function drawCellLayer(ctx, map, layer, color, pose, cx, cy, pxPerM, cssW, cssH)
 
 function drawScanHits(ctx, hits, pose, cx, cy, pxPerM, cssW, cssH) {
   if (!Array.isArray(hits) || !hits.length) return;
-  ctx.fillStyle = "rgba(125, 255, 179, 0.95)";
+  const dotR = Math.max(2.5, pxPerM * 0.045);
+  ctx.fillStyle = "rgba(70, 255, 150, 0.98)";
+  ctx.strokeStyle = "rgba(30, 180, 95, 0.9)";
+  ctx.lineWidth = 1;
   for (const pt of hits) {
     const wx = Number(pt.x);
     const wy = Number(pt.y);
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
     const { sx, sy } = worldToHeadingUpScreen(wx, wy, pose, cx, cy, pxPerM);
-    if (sx < -2 || sy < -2 || sx > cssW + 2 || sy > cssH + 2) continue;
-    ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    if (sx < -dotR || sy < -dotR || sx > cssW + dotR || sy > cssH + dotR) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
 }
 
@@ -402,12 +408,12 @@ export function drawSlamMap(
   const camera = readCameraPose(map);
   const mapFrozen = map.mode === "localization";
 
-  // Frozen baseline (persistent structural map).
+  // Frozen baseline = blue; live mapping build = green walls.
   drawCellLayer(
     ctx,
     map,
     map,
-    "rgba(140, 180, 230, 0.9)",
+    mapFrozen ? "rgba(140, 180, 230, 0.72)" : "rgba(125, 255, 179, 0.92)",
     camera,
     cx,
     cy,
@@ -448,10 +454,8 @@ export function drawSlamMap(
     }
   }
 
-  // Live lidar hits — green = region currently under scan.
-  if (mapFrozen) {
-    drawScanHits(ctx, map.scan_hits, camera, cx, cy, pxPerM, cssW, cssH);
-  }
+  // Live lidar sweep — green over frozen walls where the beam hits now.
+  drawScanHits(ctx, map.scan_hits, camera, cx, cy, pxPerM, cssW, cssH);
 
   drawNavPath(ctx, camera, cx, cy, pxPerM, cssW, cssH, navPath?.global, {
     stroke: "rgba(90, 200, 255, 0.85)",
@@ -522,6 +526,9 @@ export function SlamMap({
   const [activeNavId, setActiveNavId] = useState(/** @type {string | null} */ (null));
   const [navIdCopied, setNavIdCopied] = useState(false);
   const [distRemaining, setDistRemaining] = useState(/** @type {number | null} */ (null));
+  const [navFeedback, setNavFeedback] = useState(
+    /** @type {Record<string, unknown> | null} */ (null),
+  );
   const [navPath, setNavPath] = useState(
     /** @type {{ global: number[][], local: number[][] } | null} */ (null),
   );
@@ -620,6 +627,7 @@ export function SlamMap({
         setNavPhase(status);
         setNavResult(goal.result != null ? String(goal.result) : null);
         setNavUi(drive.nav_ui && typeof drive.nav_ui === "object" ? drive.nav_ui : null);
+        setNavFeedback(goal.feedback && typeof goal.feedback === "object" ? goal.feedback : null);
         const dist = Number(goal.feedback?.distance_remaining);
         setDistRemaining(Number.isFinite(dist) ? dist : null);
         if (goal.goal?.label) setActiveGoalLabel(String(goal.goal.label));
@@ -637,6 +645,7 @@ export function SlamMap({
         if (status === "idle") {
           setActiveGoalId(null);
           setNavUi(null);
+          setNavFeedback(null);
         }
         if (
           goal.feedback?.position_error_m != null ||
@@ -684,7 +693,9 @@ export function SlamMap({
   const poseLabel = pose
     ? `${pose.x.toFixed(2)} , ${pose.y.toFixed(2)}`
     : "—";
-  const navigating = navPhase === "navigating" || navPhase === "docking";
+  const navigating =
+    navPhase === "navigating" || navPhase === "docking" || navPhase === "settling";
+  const settling = navPhase === "settling";
   const docking = navPhase === "docking";
   const arrived = navResult === "succeeded";
   const navUiStatus = navigating ? "navigating" : arrived ? "arrived" : "standby";
@@ -724,11 +735,12 @@ export function SlamMap({
   };
 
   const phaseNavLabel = (() => {
-    if (docking || navPhase === "docking") return "Phase 3 · Dock";
+    if (settling) return "SLAM settling…";
+    if (docking || navPhase === "docking") return "Final dock";
     const phase = Number(navUi?.phase);
-    if (phase === 1) return "Phase 1 · Align";
-    if (phase === 2) return "Phase 2 · Segments";
-    if (phase === 3) return "Phase 3 · Dock";
+    if (phase === 1) return "Nav2 · Approach";
+    if (phase === 2) return "Marker acquire";
+    if (phase === 3) return "Final dock";
     if (navUi?.label) return String(navUi.label);
     return null;
   })();
@@ -756,36 +768,10 @@ export function SlamMap({
     }
     const phase = Number(navUi?.phase);
     if (phase === 1) {
-      const yaw = navUi?.yaw_remaining_deg;
-      if (yaw != null) return `${Math.abs(Number(yaw)).toFixed(0)}° yaw gap (live)`;
-      return "aligning to first segment";
+      return "Nav2 controller · continuous /cmd_vel";
     }
     if (phase === 2) {
-      const seg = navUi?.segment;
-      const total = navUi?.segments_total;
-      const parts = [];
-      if (seg != null && total != null) parts.push(`segment ${seg}/${total}`);
-      if (navUi?.active_segment?.length_m != null) {
-        parts.push(`${Number(navUi.active_segment.length_m).toFixed(2)}m`);
-      }
-      if (navUi?.waiting_replan) {
-        parts.push("replanning…");
-      } else if (navUi?.segment_phase === "drive") {
-        if (navUi?.yaw_gap_deg != null) {
-          parts.push(`${Math.abs(Number(navUi.yaw_gap_deg)).toFixed(0)}° yaw`);
-        }
-        if (navUi?.drive_remaining_m != null) {
-          parts.push(`${Number(navUi.drive_remaining_m).toFixed(2)}m left`);
-        }
-      } else {
-        if (navUi?.yaw_gap_deg != null) {
-          parts.push(`${Math.abs(Number(navUi.yaw_gap_deg)).toFixed(0)}° yaw gap`);
-        }
-        if (navUi?.start_drift_m != null) {
-          parts.push(`drift ${Number(navUi.start_drift_m).toFixed(2)}m`);
-        }
-      }
-      return parts.join(" · ") || "following path";
+      return "waiting for marker (not enabled yet)";
     }
     return null;
   })();
@@ -795,6 +781,16 @@ export function SlamMap({
     if (flashMsg) return flashMsg;
     if (navUiStatus === "arrived") {
       return formatDeltas(arrivalFeedback) || "at destination";
+    }
+    if (settling) {
+      const ss = navFeedback?.settle_s;
+      const stable = navFeedback?.pose_stable_s;
+      const sm = navFeedback?.scan_match_score;
+      const parts = ["holding still for stable pose"];
+      if (ss != null) parts.push(`${Number(ss).toFixed(1)}s`);
+      if (stable != null) parts.push(`stable ${Number(stable).toFixed(1)}s`);
+      if (sm != null) parts.push(`match ${Math.round(Number(sm) * 100)}%`);
+      return parts.join(" · ");
     }
     if (navUiStatus === "navigating") {
       if (phaseNavDetail) return phaseNavDetail;
@@ -839,7 +835,7 @@ export function SlamMap({
         ? "Arrived"
         : "Standby";
 
-  const navCanGo = isLive && mapFrozen && !navBusy && !navigating;
+  const navCanGo = isLive && mapFrozen && !navBusy && !navigating && !settling;
 
   const createWaypoint = async (coords = null) => {
     const body = {};
@@ -1254,16 +1250,6 @@ export function SlamMap({
           >
             +
           </button>
-          <button
-            type="button"
-            className="lidar-minimap-zoom-btn"
-            onClick={() => void markHere()}
-            disabled={markBusy || !isLive || !mapFrozen}
-            aria-label="Mark current pose"
-            title="Mark current pose"
-          >
-            ✎
-          </button>
         </div>
         <span className={`lidar-minimap-status ${statusClass}`} aria-hidden="true" />
       </div>
@@ -1284,7 +1270,7 @@ export function SlamMap({
             aria-label="Select destination mark"
           >
             {!waypoints.length ? (
-              <option value="">No marks — use ✎</option>
+              <option value="">No marks — use MARK</option>
             ) : (
               waypoints.map((wp) => {
                 const yaw = Number(wp.yaw);
@@ -1309,7 +1295,7 @@ export function SlamMap({
         <div className="slam-nav-toolbar" role="toolbar" aria-label="Map and navigation">
           <button
             type="button"
-            className="slam-nav-btn slam-nav-btn--icon slam-nav-btn--go"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--go"
             onClick={() => void goToSelected()}
             disabled={navBusy || !isLive || !mapFrozen || !selected || navigating}
             title={
@@ -1319,21 +1305,21 @@ export function SlamMap({
             }
             aria-label="Go to mark"
           >
-            ▶
+            GO
           </button>
           <button
             type="button"
-            className="slam-nav-btn slam-nav-btn--icon slam-nav-btn--del"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--del"
             onClick={() => void deleteSelected()}
             disabled={navBusy || !selected || navigating}
             title="Delete selected mark"
             aria-label="Delete mark"
           >
-            ✕
+            DEL
           </button>
           <button
             type="button"
-            className={`slam-nav-btn slam-nav-btn--icon slam-nav-btn--freeze${mapFrozen ? " slam-nav-btn--active" : ""}`}
+            className={`slam-nav-btn slam-nav-btn--abbr slam-nav-btn--freeze${mapFrozen ? " slam-nav-btn--active" : ""}`}
             onClick={() => void freezeMap()}
             disabled={navBusy || mapFrozen || !isLive}
             title={
@@ -1343,42 +1329,51 @@ export function SlamMap({
             }
             aria-label={mapFrozen ? "Map frozen" : "Freeze map"}
           >
-            ❄
+            FRZ
           </button>
           <button
             type="button"
-            className="slam-nav-btn slam-nav-btn--icon slam-nav-btn--purge"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--mark"
+            onClick={() => void markHere()}
+            disabled={markBusy || !isLive || !mapFrozen}
+            title="Mark current pose"
+            aria-label="Mark current pose"
+          >
+            MARK
+          </button>
+          <button
+            type="button"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--purge"
             onClick={() => void purgeMap()}
             disabled={navBusy}
             title="Purge map and all marks"
             aria-label="Purge map"
           >
-            ⌧
+            PURG
           </button>
           <button
             type="button"
-            className="slam-nav-btn slam-nav-btn--icon slam-nav-btn--kill"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--kill"
             onClick={() => void cancelNav()}
             disabled={navBusy || !isLive}
             title="Terminate navigation and stop motors"
             aria-label="Terminate navigation"
           >
-            ■
+            STOP
           </button>
-        </div>
-        <div className="slam-nav-row slam-nav-row--tools" role="group" aria-label="Map tools">
           <button
             type="button"
-            className="slam-nav-btn slam-nav-btn--abbr"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--repos"
             onClick={() => void repositionRover()}
             disabled={navBusy || !mapFrozen || !isLive}
             title="Infer rover position from live lidar and the frozen map"
+            aria-label="Reposition"
           >
-            Repos
+            REPO
           </button>
           <button
             type="button"
-            className="slam-nav-btn slam-nav-btn--abbr"
+            className="slam-nav-btn slam-nav-btn--abbr slam-nav-btn--promote"
             onClick={() => void promoteWorkingCopy()}
             disabled={navBusy || !mapFrozen || !workingActive}
             title={
@@ -1386,8 +1381,9 @@ export function SlamMap({
                 ? "Save local corrections into the frozen baseline"
                 : "Local corrections appear after live scans differ from the frozen map"
             }
+            aria-label="Promote working copy"
           >
-            Promote
+            PROM
           </button>
         </div>
 

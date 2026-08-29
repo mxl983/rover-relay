@@ -1,13 +1,7 @@
-"""Skid-steer lateral moves via turn 90° → drive → turn back 90°.
+"""DEPRECATED helpers for WASD gap-close / lateral dock maneuvers.
 
-From the rover's perspective, a body-frame lateral offset is closed by:
-  - move right: turn right 90°, drive forward by |offset|, turn left 90°
-  - move left:  turn left 90°,  drive forward by |offset|, turn right 90°
-
-Quarter turns are done in small A/D steps; we stop once ~90° is reached and
-correct modest overshoot instead of hunting forever. XY gaps are closed one axis
-at a time (forward, then lateral, then goal yaw). Small skid on the orthogonal
-axis after each leg is tolerated up to ``skid_tol_m``.
+Retained for unit tests. Autonomous nav no longer uses these pulses —
+Nav2 continuous /cmd_vel owns motion (bridges.py).
 """
 
 from __future__ import annotations

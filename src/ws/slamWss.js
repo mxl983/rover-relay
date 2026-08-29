@@ -5,36 +5,51 @@ import config from "../config.js";
 
 const PATH = "/ws/slam";
 /** Drop frames for a client that is already > this far behind (bytes). */
-const MAX_BUFFERED = 256_000;
+const MAX_BUFFERED = 1_048_576;
 
 async function readLatestMap() {
   const livePath = config.slam?.mapFilePath || config.lidar?.slamLiveFilePath;
   const fallbackPath = config.lidar?.slamMapFilePath;
+  const posePath = livePath
+    ? livePath.replace(/slam\.json$/i, "slam_live.json")
+    : "/app/lidar/slam_live.json";
+  let map = null;
   try {
     if (livePath) {
       const raw = await fs.readFile(livePath, "utf8");
-      return JSON.parse(raw);
+      map = JSON.parse(raw);
     }
   } catch {
     /* try fallback */
   }
-  if (fallbackPath && fallbackPath !== livePath) {
+  if (!map && fallbackPath && fallbackPath !== livePath) {
     const raw = await fs.readFile(fallbackPath, "utf8");
-    return JSON.parse(raw);
+    map = JSON.parse(raw);
   }
-  throw new Error("SLAM map file missing");
+  if (!map) throw new Error("SLAM map file missing");
+  try {
+    const poseRaw = await fs.readFile(posePath, "utf8");
+    const live = JSON.parse(poseRaw);
+    if (live && typeof live === "object") {
+      // Legacy DIY slam_mapper writes version:2 payloads without pose_in_map /
+      // scan_hits — never merge those (they yank the rover to a stale pose).
+      const isLegacy =
+        Number(live.version) === 2 ||
+        (live.scan_count != null && live.scan_hits == null && live.occupied == null);
+      if (isLegacy) return map;
+      const liveTs = Number(live.updated_at) || 0;
+      const mapTs = Number(map.updated_at) || 0;
+      if (liveTs >= mapTs - 0.05) {
+        map = { ...map, ...live };
+      }
+    }
+  } catch {
+    /* pose sidecar optional */
+  }
+  return map;
 }
 
 function occupancyFingerprint(map) {
-  const occ = map?.occupied;
-  let occFp = `${map?.occupied_count ?? 0}`;
-  if (Array.isArray(occ) && occ.length) {
-    let h = occ.length;
-    // Sparse checksum — enough to detect grid edits without hashing 6k ints every poll.
-    for (let i = 0; i < occ.length; i += 11) h = (Math.imul(h, 31) + (occ[i] | 0)) | 0;
-    h = (Math.imul(h, 31) + (occ[occ.length - 1] | 0)) | 0;
-    occFp = `${occ.length}:${h}`;
-  }
   const overlay = map?.overlay;
   let overlayFp = "";
   if (overlay && typeof overlay === "object") {
@@ -44,16 +59,33 @@ function occupancyFingerprint(map) {
       overlay.removed?.occupied_count ?? "",
     ].join(",");
   }
+  if (map?.grid_revision != null && map.grid_revision !== "") {
+    return `${map.grid_revision}:${overlayFp}`;
+  }
+  // Prefer stable identity fields — never update_count alone (bumps every /map).
   return [
-    occFp,
     map?.source ?? "",
     map?.mode ?? "",
     map?.width ?? "",
     map?.height ?? "",
     map?.origin?.x ?? "",
     map?.origin?.y ?? "",
+    map?.baseline_frozen_at ?? "",
+    map?.occupied_count ?? "",
     overlayFp,
   ].join(":");
+}
+
+function scanHitsFingerprint(map) {
+  const hits = map?.scan_hits;
+  if (!Array.isArray(hits) || !hits.length) return "0";
+  let h = hits.length;
+  for (let i = 0; i < hits.length; i += 7) {
+    const pt = hits[i];
+    h = (Math.imul(h, 31) + Math.round((Number(pt?.x) || 0) * 100)) | 0;
+    h = (Math.imul(h, 31) + Math.round((Number(pt?.y) || 0) * 100)) | 0;
+  }
+  return String(h);
 }
 
 function poseKey(map) {
@@ -63,6 +95,7 @@ function poseKey(map) {
     map?.pose?.y ?? "",
     map?.pose?.yaw ?? "",
     map?.scan_hit_count ?? "",
+    scanHitsFingerprint(map),
   ].join(":");
 }
 
@@ -95,7 +128,7 @@ function thinPosePayload(map) {
  */
 export function attachSlamWss(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
-  const pushMs = config.slam?.wsPushMs ?? config.lidar?.slamWsPushMs ?? 250;
+  const pushMs = config.slam?.wsPushMs ?? config.lidar?.slamWsPushMs ?? 50;
   const mapPath =
     config.slam?.mapFilePath ||
     config.lidar?.slamLiveFilePath ||
@@ -200,6 +233,19 @@ export function attachSlamWss(httpServer) {
     if (!pollTimer) {
       pollTimer = setInterval(() => void queueBroadcast(), pushMs);
       if (typeof pollTimer.unref === "function") pollTimer.unref();
+    }
+
+    for (const path of new Set([
+      mapPath.replace(/slam\.json$/i, "slam_live.json"),
+      fallbackMapPath.replace(/slam\.json$/i, "slam_live.json"),
+    ])) {
+      try {
+        fsSync.watch(path, { persistent: false }, () => {
+          void queueBroadcast();
+        });
+      } catch {
+        /* file may not exist yet */
+      }
     }
   };
 

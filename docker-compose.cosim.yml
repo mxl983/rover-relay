@@ -1,0 +1,56 @@
+# True Nav2 co-sim: sim plant publishes /map + /scan_nav + TF;
+# ros2-nav runs real Nav2 + bridges and drives the sim via NAV_DRIVE_URL.
+#
+# Usage:
+#   ./scripts/run_cosim.sh
+#   open http://127.0.0.1:8879/  (click-drag goals → Nav2)
+#
+# Domain 87 + localhost-only DDS so this does not talk to a live rover.
+# Ports are offset from the live stack (:8877 GUI, :8768 goals) to avoid clashes.
+
+name: rover-cosim
+
+services:
+  sim-plant:
+    build:
+      context: .
+      dockerfile: sim/Dockerfile
+    image: relay-sim-plant:local
+    container_name: rover-cosim-sim-plant
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: "87"
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOCALHOST_ONLY: "1"
+      SIM_GUI: "true"
+      SIM_GUI_HOST: "0.0.0.0"
+      SIM_GUI_PORT: "8879"
+      SIM_DRIVE_HOST: "0.0.0.0"
+      SIM_DRIVE_PORT: "8880"
+      SIM_REVEAL_MAP: "true"
+      SIM_MAP_HZ: "5"
+      SIM_NAV_GOAL_URL: "http://127.0.0.1:8769/goto"
+      SIM_NAV_CANCEL_URL: "http://127.0.0.1:8769/cancel"
+
+  ros2-nav:
+    image: relay-ros2-nav:local
+    container_name: rover-cosim-ros2-nav
+    network_mode: host
+    depends_on:
+      - sim-plant
+    environment:
+      ROS_DOMAIN_ID: "87"
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOCALHOST_ONLY: "1"
+      NAV_DRIVE_URL: "http://127.0.0.1:8880/api/navigation/drive"
+      NAV_WIPE_ON_START: "true"
+      NAV_GOAL_PORT: "8769"
+      NAV_SCAN_TOPIC: "/scan_nav"
+      NAV2_PARAMS_FILE: "/opt/ros2-nav/config/nav2_params_cosim.yaml"
+      LOCAL_DDS_PEER: "127.0.0.1"
+      ROVER_DDS_PEER: "127.0.0.1"
+      DDS_LOCAL_INTERFACE: "lo"
+    volumes:
+      - ./data/lidar-cosim:/app/lidar
+      - ./ros2-nav/config/nav2_params_cosim.yaml:/opt/ros2-nav/config/nav2_params_cosim.yaml:ro
+    command: ["nav"]

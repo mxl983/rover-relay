@@ -892,8 +892,8 @@ html {
 
 .slam-nav-toolbar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
   width: 100%;
   min-width: 0;
 }
@@ -910,13 +910,14 @@ html {
 
 .slam-nav-btn--abbr {
   min-width: 0 !important;
+  width: 100% !important;
   height: 20px !important;
   min-height: 20px !important;
   max-height: 20px !important;
   padding: 0 1px !important;
   font-size: 7px;
   font-weight: 800;
-  letter-spacing: 0.15px;
+  letter-spacing: 0.12px;
   line-height: 1;
 }
 
@@ -1106,7 +1107,7 @@ html {
   text-overflow: ellipsis;
 }
 
-.slam-nav-btn--icon.slam-nav-btn--freeze.slam-nav-btn--active {
+.slam-nav-btn--freeze.slam-nav-btn--active {
   border-color: rgba(140, 200, 255, 0.75) !important;
   color: rgba(170, 220, 255, 0.98);
   background: rgba(90, 150, 220, 0.22) !important;
@@ -1132,12 +1133,12 @@ html {
   box-shadow: none !important;
 }
 
-.slam-nav-btn--icon.slam-nav-btn--purge {
+.slam-nav-btn--purge {
   border-color: rgba(255, 170, 120, 0.45) !important;
   color: rgba(255, 190, 150, 0.95);
 }
 
-.slam-nav-btn--icon.slam-nav-btn--kill {
+.slam-nav-btn--kill {
   border-color: rgba(255, 100, 90, 0.65) !important;
   color: rgba(255, 140, 130, 0.98);
   background: rgba(120, 20, 20, 0.35) !important;

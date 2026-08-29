@@ -13,6 +13,29 @@ const RECONNECT_BASE_MS = 600;
 const RECONNECT_MAX_MS = 8000;
 const IMU_STALE_CHECK_MS = 250;
 
+export function buildDriveWebSocketMessage(payload) {
+  const hasCommand = payload && payload.command !== undefined;
+  return hasCommand
+    ? { type: "DRIVE", payload }
+    : Array.isArray(payload)
+      ? { type: "DRIVE", payload }
+      : { type: "DRIVE", drive: payload.drive, gimbal: payload.gimbal };
+}
+
+function sendSocketMessage(socket, payload) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  const msg = buildDriveWebSocketMessage(payload);
+  socket.send(JSON.stringify(msg));
+  return true;
+}
+
+function sendDriveStop(socket) {
+  return sendSocketMessage(socket, {
+    drive: { x: 0, y: 0 },
+    gimbal: { x: 0, y: 0 },
+  });
+}
+
 export function usePiWebSocket() {
   const socketRef = useRef(null);
   const [stats, setStats] = useState({});
@@ -144,6 +167,9 @@ export function usePiWebSocket() {
       };
 
       socket.onclose = () => {
+        // Best effort: onerror runs first for most local failures, while this
+        // also covers a close received while the socket is still writable.
+        sendDriveStop(socket);
         if (isUnmounted) return;
         setDriveAssistUpdate(null);
         imuRef.current = null;
@@ -159,6 +185,9 @@ export function usePiWebSocket() {
       };
 
       socket.onerror = () => {
+        // The Pi backend treats drive commands as persistent. Send neutral
+        // before closing whenever the browser still permits a final frame.
+        sendDriveStop(socket);
         try {
           socket.close();
         } catch {
@@ -190,20 +219,13 @@ export function usePiWebSocket() {
       clearInterval(pingInterval);
       clearInterval(imuStaleTimer);
       clearTimeout(reconnectTimeout);
+      sendDriveStop(socket);
       socket?.close();
     };
   }, []);
 
   const sendControl = (payload) => {
-    if (socketRef.current?.readyState !== WebSocket.OPEN) return;
-    // Only use payload wrapper for command-only messages (e.g. toggle_laser); keep drive/gimbal at top level for compatibility
-    const hasCommand = payload && payload.command !== undefined;
-    const msg = hasCommand
-      ? { type: "DRIVE", payload }
-      : Array.isArray(payload)
-        ? { type: "DRIVE", payload }
-        : { type: "DRIVE", drive: payload.drive, gimbal: payload.gimbal };
-    socketRef.current.send(JSON.stringify(msg));
+    sendSocketMessage(socketRef.current, payload);
   };
 
   return { stats, driveAssistUpdate, imu, imuLive, isOnline, hasEverConnected, socketRef, sendControl };

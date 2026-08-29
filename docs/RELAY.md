@@ -46,6 +46,78 @@ HTTP_REDIRECT_ENABLED=true
 HTTP_REDIRECT_PORT=8080
 ```
 
+## Rover-aware ROS watchdog
+
+LiDAR, SLAM, and Nav2 are compute-heavy and do not need to run while the rover
+is offline. The repository includes a host-side systemd watchdog:
+
+```bash
+sudo install -m 0755 scripts/rover_stack_watchdog.sh \
+  /usr/local/libexec/rover_stack_watchdog.sh
+sudo install -m 0644 scripts/rover-stack-watchdog.service \
+  /etc/systemd/system/rover-stack-watchdog.service
+sudo install -m 0600 /dev/stdin /etc/default/rover-stack-watchdog <<'EOF'
+ROVER_WATCHDOG_URL="https://rover.tail9d0237.ts.net:3000/health"
+ROVER_WATCHDOG_CONTAINERS="relay-ros2-lidar-1 relay-ros2-slam-1 relay-ros2-nav-1"
+ROVER_WATCHDOG_INTERVAL_SEC="15"
+ROVER_WATCHDOG_TIMEOUT_SEC="5"
+ROVER_WATCHDOG_ONLINE_SUCCESSES="2"
+ROVER_WATCHDOG_OFFLINE_FAILURES="3"
+ROVER_WATCHDOG_OFFLINE_GRACE_SEC="90"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now rover-stack-watchdog
+```
+
+If root access is unavailable, the same repository units can run under the
+Docker-capable login user and persist across reboot:
+
+```bash
+systemctl --user link "$PWD/scripts/rover-stack-watchdog.user.service" \
+  "$PWD/scripts/rover-always-on.user.service"
+systemctl --user daemon-reload
+systemctl --user enable --now rover-always-on.user.service \
+  rover-stack-watchdog.user.service
+loginctl enable-linger "$USER"
+```
+
+The URL must be a cheap rover liveness endpoint that returns HTTP 2xx. If it
+requires the API token, add `ROVER_WATCHDOG_TOKEN="..."` to the root-readable
+environment file. Use `ROVER_WATCHDOG_INSECURE="true"` only when the rover uses
+a certificate that cannot be validated.
+
+The watchdog requires two successful probes before starting the listed
+containers, and waits for three failures plus the grace period before stopping
+them. It uses `docker start`/`docker stop`, so missing containers are reported
+rather than recreated. The relay and control dashboard are intentionally not in
+the default list and remain available to show offline state.
+
+Check it with:
+
+```bash
+systemctl status rover-stack-watchdog
+journalctl -u rover-stack-watchdog -f
+```
+
+The relay, dashboard, and current vision `control_server` are kept awake
+separately at host boot:
+
+```bash
+sudo install -m 0755 scripts/rover_always_on.sh \
+  /usr/local/libexec/rover_always_on.sh
+sudo install -m 0644 scripts/rover-always-on.service \
+  /etc/systemd/system/rover-always-on.service
+sudo install -m 0600 /dev/stdin /etc/default/rover-always-on <<'EOF'
+ROVER_ALWAYS_ON_CONTAINERS="relay-relay-1 relay-control-dashboard-1 control_server"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now rover-always-on
+```
+
+Docker is already enabled and the relay/dashboard containers use restart
+policies, so this unit is an explicit boot guarantee rather than a polling
+loop. Customize the container list if names differ on another host.
+
 Docker:
 
 ```bash

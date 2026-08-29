@@ -17,6 +17,8 @@ WAYPOINTS_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "waypoints.js
 FREEZE_POSE_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "freeze_pose.json"
 
 OCCUPIED_THRESHOLD = 65
+# Nav2 footprint (~0.22 m) + global inflation (~0.40 m) needs clearance at spawn.
+NAV2_START_CLEARANCE_M = 0.55
 DOCKER_GRID = "/app/lidar/maps/persistent_grid.json"
 DOCKER_WAYPOINTS = "/app/lidar/maps/waypoints.json"
 DOCKER_FREEZE = "/app/lidar/maps/freeze_pose.json"
@@ -154,6 +156,58 @@ def _load_json(path: Path) -> Any:
         return json.load(handle)
 
 
+def _cell_blocked(data: list[int], width: int, height: int, ix: int, iy: int) -> bool:
+    if ix < 0 or iy < 0 or ix >= width or iy >= height:
+        return True
+    value = data[iy * width + ix]
+    return value < 0 or value >= OCCUPIED_THRESHOLD
+
+
+def _nav2_start_clear(
+    data: list[int],
+    width: int,
+    height: int,
+    ix: int,
+    iy: int,
+    clearance_cells: int,
+) -> bool:
+    for dy in range(-clearance_cells, clearance_cells + 1):
+        for dx in range(-clearance_cells, clearance_cells + 1):
+            if dx * dx + dy * dy > clearance_cells * clearance_cells:
+                continue
+            if _cell_blocked(data, width, height, ix + dx, iy + dy):
+                return False
+    return True
+
+
+def _snap_start_to_nav2_free(
+    data: list[int],
+    width: int,
+    height: int,
+    resolution: float,
+    start_x: float,
+    start_y: float,
+    *,
+    clearance_m: float = NAV2_START_CLEARANCE_M,
+) -> tuple[float, float]:
+    """Move spawn out of inflated wall zones so Nav2 can plan on first goal."""
+    clearance_cells = max(1, int(math.ceil(clearance_m / resolution)))
+    ix0 = int(round(start_x / resolution))
+    iy0 = int(round(start_y / resolution))
+    if _nav2_start_clear(data, width, height, ix0, iy0, clearance_cells):
+        return start_x, start_y
+    max_r = max(width, height)
+    for radius in range(1, max_r):
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                if max(abs(dx), abs(dy)) != radius:
+                    continue
+                ix, iy = ix0 + dx, iy0 + dy
+                if _nav2_start_clear(data, width, height, ix, iy, clearance_cells):
+                    return ix * resolution, iy * resolution
+    return start_x, start_y
+
+
 def build_saved_slam_scenario(
     grid_path: Path | None = None,
     *,
@@ -225,9 +279,10 @@ def build_saved_slam_scenario(
                 "y": float(wp["y"]) - origin_y,
             }
 
-    # Keep start inside free space if freeze pose landed in a wall.
+    # Keep start inside free space with Nav2 inflation clearance.
     sx = max(0.4, min(world_w - 0.4, float(start["x"])))
     sy = max(0.4, min(world_h - 0.4, float(start["y"])))
+    sx, sy = _snap_start_to_nav2_free(data, width, height, resolution, sx, sy)
     start = {"x": sx, "y": sy, "yaw": float(start["yaw"])}
 
     return Scenario(

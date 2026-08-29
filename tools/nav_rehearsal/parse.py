@@ -11,6 +11,25 @@ from pathlib import Path
 from typing import Any
 
 
+# Settle/cancel helpers append suffixes to nav_id in run logs; treat them as the
+# parent run or the UI opens a 1-frame stub and looks frozen.
+_NAV_ID_SUFFIX_RE = re.compile(
+    r"-(?:motion|cancel|finish|aborted|replan|fine-done|settling|start)$"
+)
+
+
+def canonical_nav_id(nav_id: str) -> str:
+    """Map ``nav-…-motion`` / ``-fine-done`` / etc. back to the real run id."""
+    nid = str(nav_id or "").strip()
+    if not nid:
+        return ""
+    prev = None
+    while prev != nid:
+        prev = nid
+        nid = _NAV_ID_SUFFIX_RE.sub("", nid)
+    return nid
+
+
 @dataclass
 class RunSummary:
     nav_id: str
@@ -195,7 +214,8 @@ def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
 def list_runs(events: list[dict[str, Any]]) -> list[RunSummary]:
     by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for ev in events:
-        nid = str(ev.get("nav_id") or "")
+        raw = str(ev.get("nav_id") or "")
+        nid = canonical_nav_id(raw)
         if nid:
             by_id[nid].append(ev)
     summaries: list[RunSummary] = []
@@ -342,8 +362,9 @@ def build_frames(
     docker_log_text: str | None = None,
 ) -> list[Frame]:
     """Build steppable frames for one nav_id across phases 1–3."""
+    want = canonical_nav_id(nav_id) or str(nav_id or "")
     selected = sorted(
-        [e for e in events if str(e.get("nav_id") or "") == nav_id],
+        [e for e in events if canonical_nav_id(str(e.get("nav_id") or "")) == want],
         key=lambda e: float(e.get("ts") or 0.0),
     )
     if not selected:

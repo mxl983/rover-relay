@@ -173,7 +173,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <main>
   <section class="stage">
     <canvas id="world"></canvas>
-    <div class="hint">WASD tank drive · scroll = zoom · right-drag = pan · double-click = follow rover · green = true pose, yellow = estimate</div>
+    <div class="hint">click-drag goal = pose (xy+yaw) · scroll = zoom · right-drag = pan · double-click = follow · green = true, yellow = estimate · co-sim drive = Nav2 Twist → Pi stick (not WASD)</div>
     <div class="label-gt">GROUND TRUTH</div>
   </section>
   <aside>
@@ -227,6 +227,7 @@ let keys = new Set();
 let running = true;
 let drag = null;
 let panDrag = null;
+let goalDrag = null;
 // Camera for the ground-truth canvas (large saved maps need zoom to see motion).
 let cam = { zoom: 1, cx: null, cy: null, follow: true };
 
@@ -304,6 +305,39 @@ window.addEventListener("resize", resize);
 if (typeof ResizeObserver !== "undefined") {
   new ResizeObserver(() => resize()).observe(worldCanvas.parentElement || worldCanvas);
   new ResizeObserver(() => resize()).observe(miniCanvas.parentElement || miniCanvas);
+}
+
+function drawPoseMarker(ctx, t, pose, color, label) {
+  const g = t.point(pose.x, pose.y);
+  const yaw = Number(pose.yaw) || 0;
+  const len = 18;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(g.x, g.y, 8, 0, Math.PI * 2);
+  ctx.stroke();
+  // Heading arrow (screen: +x right, +y down; world yaw CCW from +x).
+  const tipX = g.x + Math.cos(yaw) * len;
+  const tipY = g.y - Math.sin(yaw) * len;
+  ctx.beginPath();
+  ctx.moveTo(g.x, g.y);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+  const leftX = tipX - Math.cos(yaw - 0.4) * 7;
+  const leftY = tipY + Math.sin(yaw - 0.4) * 7;
+  const rightX = tipX - Math.cos(yaw + 0.4) * 7;
+  const rightY = tipY + Math.sin(yaw + 0.4) * 7;
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(leftX, leftY);
+  ctx.lineTo(rightX, rightY);
+  ctx.closePath();
+  ctx.fill();
+  if (label) {
+    ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(label, g.x + 12, g.y - 10);
+  }
 }
 
 function drawRover(ctx, t, pose, color, alpha) {
@@ -437,27 +471,32 @@ function drawGroundTruth() {
   }
 
   if (state.goal) {
-    const g = t.point(state.goal.x, state.goal.y);
     let color = "rgba(255,211,92,1)";
     if (state.nav_complete) color = "rgba(120,220,255,1)";
     else if (state.goal_reachable === false) color = "rgba(255,120,100,1)";
     else if (state.goal_reachable === true) color = "rgba(115,255,186,1)";
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(g.x, g.y, 9, 0, Math.PI * 2);
-    ctx.moveTo(g.x - 12, g.y); ctx.lineTo(g.x + 12, g.y);
-    ctx.moveTo(g.x, g.y - 12); ctx.lineTo(g.x, g.y + 12);
-    ctx.stroke();
-    if (state.nav_complete) {
-      ctx.fillStyle = "rgba(120,220,255,0.95)";
-      ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
-      ctx.fillText("ARRIVED", g.x + 14, g.y - 10);
-    } else if (state.goal_reachable === false) {
-      ctx.fillStyle = "rgba(255,140,120,0.95)";
-      ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
-      ctx.fillText("UNREACHABLE", g.x + 14, g.y - 10);
-    }
+    const gyaw = state.goal.yaw != null ? state.goal.yaw : state.goal_yaw;
+    drawPoseMarker(
+      ctx,
+      t,
+      { x: state.goal.x, y: state.goal.y, yaw: gyaw || 0 },
+      color,
+      state.nav_complete ? "ARRIVED" : (state.goal_reachable === false ? "UNREACHABLE" : null)
+    );
+  }
+  if (goalDrag) {
+    const yaw = goalDrag.yaw != null
+      ? goalDrag.yaw
+      : (state.pose
+          ? Math.atan2(goalDrag.y - state.pose.y, goalDrag.x - state.pose.x)
+          : 0);
+    drawPoseMarker(
+      ctx,
+      t,
+      { x: goalDrag.x, y: goalDrag.y, yaw },
+      "rgba(255,211,92,0.75)",
+      "GOAL"
+    );
   }
 
   drawRover(ctx, t, state.estimated_pose, "#ffcf66", 0.55);
@@ -536,7 +575,7 @@ function drawPerceived() {
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
     state.path.forEach((p, i) => {
-      const s = worldToHeadingUp(p.x, p.y, pose, cx, cy, pxPerM);
+      const s = worldToHeadingUp(p.x, p.y, mapPose, cx, cy, pxPerM);
       if (i === 0) ctx.moveTo(s.sx, s.sy); else ctx.lineTo(s.sx, s.sy);
     });
     ctx.stroke();
@@ -544,7 +583,7 @@ function drawPerceived() {
   }
 
   if (state.goal) {
-    const g = worldToHeadingUp(state.goal.x, state.goal.y, pose, cx, cy, pxPerM);
+    const g = worldToHeadingUp(state.goal.x, state.goal.y, mapPose, cx, cy, pxPerM);
     let color = "rgba(255,211,92,0.95)";
     if (state.nav_complete) color = "rgba(120,220,255,0.95)";
     else if (state.goal_reachable === false) color = "rgba(255,120,100,0.95)";
@@ -566,8 +605,17 @@ function drawPerceived() {
 }
 
 function draw() {
-  drawGroundTruth();
-  drawPerceived();
+  if (!state) return;
+  try {
+    drawGroundTruth();
+  } catch (err) {
+    console.warn("ground-truth draw failed", err);
+  }
+  try {
+    drawPerceived();
+  } catch (err) {
+    console.warn("perceived draw failed", err);
+  }
 }
 
 async function api(path, body) {
@@ -604,8 +652,8 @@ function renderNavBanner(s) {
   } else if (s.goal && s.goal_reachable === false) {
     el.textContent = "Goal unreachable — no clear path in the map";
     el.classList.add("show", "unreachable");
-  } else if (s.goal && s.goal_reachable === true && s.autopilot) {
-    el.textContent = "Goal reachable — navigating";
+  } else if (s.goal && s.goal_reachable === true && (s.autopilot || s.cosim)) {
+    el.textContent = s.cosim ? "Nav2 navigating (co-sim)" : "Goal reachable — navigating";
     el.classList.add("show", "reachable");
   } else if (s.goal && s.goal_reachable === true) {
     el.textContent = "Goal reachable — path ready";
@@ -647,13 +695,31 @@ function applyState(next) {
   state = next;
   const statusEl = document.getElementById("status");
   const drive = state.drive || {};
-  const keyTxt = (drive.keys && drive.keys.length) ? drive.keys.join("").toUpperCase() : "·";
-  const tracks = drive.tracks || {};
-  const trackTxt = (tracks.left != null)
-    ? ` L${Number(tracks.left).toFixed(2)}/R${Number(tracks.right).toFixed(2)}`
-    : "";
+  const body = drive.body || {};
+  const stick = drive.stick || {};
+  let driveTxt = "·";
+  if (state.cosim) {
+    // Continuous Nav2 path: show body Twist (and Pi stick), never fake WASD.
+    const vx = Number(body.linear);
+    const wz = Number(body.angular);
+    const sx = Number(stick.x);
+    const sy = Number(stick.y);
+    const twistOk = Number.isFinite(vx) || Number.isFinite(wz);
+    const stickOk = Number.isFinite(sx) || Number.isFinite(sy);
+    if (twistOk || stickOk) {
+      driveTxt =
+        `cmd(${(vx || 0).toFixed(2)} m/s, ${(wz || 0).toFixed(2)} rad/s)` +
+        (stickOk ? ` · stick(${(sx || 0).toFixed(2)}, ${(sy || 0).toFixed(2)})` : "");
+    }
+  } else {
+    const keyTxt = (drive.keys && drive.keys.length) ? drive.keys.join("").toUpperCase() : "·";
+    const stickTxt = (stick.x != null)
+      ? ` stick(${Number(stick.x).toFixed(2)},${Number(stick.y).toFixed(2)})`
+      : "";
+    driveTxt = `${keyTxt}${stickTxt}`;
+  }
   const phaseTxt = drive.phase && drive.phase !== "idle" ? ` · ${drive.phase}` : "";
-  statusEl.textContent = `${state.mode} · ${state.status} · ${keyTxt}${trackTxt}${phaseTxt}`;
+  statusEl.textContent = `${state.mode} · ${state.status} · ${driveTxt}${phaseTxt}`;
   statusEl.className = "status";
   if (state.nav_complete) statusEl.classList.add("is-ok");
   else if (state.goal_reachable === false) statusEl.classList.add("is-bad");
@@ -687,8 +753,11 @@ async function tick() {
   // try/finally so a single failed fetch cannot kill the loop forever.
   try {
     const auto = state && (state.autopilot || state.exploring);
-    const shouldStep = running || auto;
-    if (shouldStep) {
+    const cosim = !!(state && state.cosim);
+    if (cosim) {
+      // Plant owns physics; always refresh so the rover animates under Nav2.
+      applyState(await api("/api/state"));
+    } else if (running || auto) {
       let linear = 0, angular = 0;
       // Manual keys only while not auto-driving — WASD would cancel autopilot.
       if (!auto) {
@@ -821,20 +890,29 @@ worldCanvas.addEventListener("pointerdown", async (e) => {
     document.getElementById("kidnap").checked = false;
     return;
   }
-  const next = await api("/api/command", {cmd: "goal", x: world.x, y: world.y});
-  applyState(next);
-  // Click-to-nav must resume the sim — a paused tick loop shows the path but never drives.
-  if (next && next.autopilot) {
-    running = true;
-    const runBtn = document.querySelector('button[data-cmd="toggle_run"]');
-    if (runBtn) runBtn.textContent = "Run / Pause";
-  }
+  // Click-drag places a PoseStamped goal: down = xy, drag = yaw.
+  goalDrag = { x: world.x, y: world.y, yaw: null };
+  worldCanvas.setPointerCapture(e.pointerId);
+  e.preventDefault();
+  draw();
 });
 worldCanvas.addEventListener("pointermove", async (e) => {
   if (panDrag && state) {
     const t = worldTransform(state, worldCanvas.clientWidth, worldCanvas.clientHeight);
     cam.cx = panDrag.cx - (e.clientX - panDrag.x) / t.scale;
     cam.cy = panDrag.cy + (e.clientY - panDrag.y) / t.scale;
+    draw();
+    return;
+  }
+  if (goalDrag && state) {
+    const rect = worldCanvas.getBoundingClientRect();
+    const t = worldTransform(state, worldCanvas.clientWidth, worldCanvas.clientHeight);
+    const world = t.world(e.clientX - rect.left, e.clientY - rect.top);
+    const dx = world.x - goalDrag.x;
+    const dy = world.y - goalDrag.y;
+    if (Math.hypot(dx, dy) > 0.12) {
+      goalDrag.yaw = Math.atan2(dy, dx);
+    }
     draw();
     return;
   }
@@ -846,8 +924,27 @@ worldCanvas.addEventListener("pointermove", async (e) => {
     cmd: "move_prop", id: drag.id, x: world.x, y: world.y,
   }));
 });
-worldCanvas.addEventListener("pointerup", () => { drag = null; panDrag = null; });
-worldCanvas.addEventListener("pointercancel", () => { drag = null; panDrag = null; });
+worldCanvas.addEventListener("pointerup", async (e) => {
+  if (goalDrag) {
+    const payload = { cmd: "goal", x: goalDrag.x, y: goalDrag.y };
+    if (goalDrag.yaw != null) payload.yaw = goalDrag.yaw;
+    goalDrag = null;
+    const next = await api("/api/command", payload);
+    applyState(next);
+    if (next && (next.autopilot || next.cosim)) {
+      running = true;
+      const runBtn = document.querySelector('button[data-cmd="toggle_run"]');
+      if (runBtn) runBtn.textContent = "Run / Pause";
+    }
+  }
+  drag = null;
+  panDrag = null;
+});
+worldCanvas.addEventListener("pointercancel", () => {
+  drag = null;
+  panDrag = null;
+  goalDrag = null;
+});
 worldCanvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
 function isTypingTarget(el) {

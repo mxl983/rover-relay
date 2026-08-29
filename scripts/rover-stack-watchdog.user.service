@@ -1,0 +1,19 @@
+[Unit]
+Description=Start rover LiDAR/SLAM/Nav only while rover is online
+After=docker.service network-online.target
+
+[Service]
+Type=simple
+Environment=ROVER_WATCHDOG_URL=https://rover.tail9d0237.ts.net:3000/health
+Environment="ROVER_WATCHDOG_CONTAINERS=relay-ros2-lidar-1 relay-ros2-slam-1 relay-ros2-nav-1"
+Environment=ROVER_WATCHDOG_INTERVAL_SEC=15
+Environment=ROVER_WATCHDOG_TIMEOUT_SEC=5
+Environment=ROVER_WATCHDOG_ONLINE_SUCCESSES=2
+Environment=ROVER_WATCHDOG_OFFLINE_FAILURES=3
+Environment=ROVER_WATCHDOG_OFFLINE_GRACE_SEC=90
+ExecStart=/usr/bin/env bash /home/jjcloud/Documents/rover/relay/scripts/rover_stack_watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

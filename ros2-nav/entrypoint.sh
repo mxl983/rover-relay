@@ -42,7 +42,32 @@ resolve_peer() {
 ROVER_DDS_PEER_RESOLVED="$(resolve_peer "${ROVER_DDS_PEER}")"
 CYCLONEDDS_CONFIG_PATH="${CYCLONEDDS_CONFIG_PATH:-/tmp/cyclonedds_nav.xml}"
 
-cat > "${CYCLONEDDS_CONFIG_PATH}" <<EOF
+# Localhost-only co-sim: avoid dual-interface Cyclone XML (clashes with
+# ROS_LOCALHOST_ONLY binding lo twice). Still raise MaxAutoParticipantIndex —
+# Nav2 + plant + bridges exceed the default (~9–32) and bridges fail with
+# "rmw_create_node: failed to create domain".
+if [[ "${ROS_LOCALHOST_ONLY}" == "1" || "${ROS_LOCALHOST_ONLY,,}" == "true" ]]; then
+  cat > "${CYCLONEDDS_CONFIG_PATH}" <<EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+  <Domain Id="any">
+    <General>
+      <AllowMulticast>false</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer Address="127.0.0.1" />
+      </Peers>
+    </Discovery>
+  </Domain>
+</CycloneDDS>
+EOF
+  export CYCLONEDDS_URI="file://${CYCLONEDDS_CONFIG_PATH}"
+  echo "ros2-nav: ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY} — localhost Cyclone (MaxAutoParticipantIndex=120)"
+else
+  cat > "${CYCLONEDDS_CONFIG_PATH}" <<EOF
 <?xml version="1.0" encoding="UTF-8" ?>
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
   <Domain Id="any">
@@ -56,7 +81,7 @@ cat > "${CYCLONEDDS_CONFIG_PATH}" <<EOF
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>50</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
       <Peers>
         <Peer Address="${ROVER_DDS_PEER_RESOLVED}" />
         <Peer Address="${LOCAL_DDS_PEER}" />
@@ -65,11 +90,16 @@ cat > "${CYCLONEDDS_CONFIG_PATH}" <<EOF
   </Domain>
 </CycloneDDS>
 EOF
-export CYCLONEDDS_URI="file://${CYCLONEDDS_CONFIG_PATH}"
+  export CYCLONEDDS_URI="file://${CYCLONEDDS_CONFIG_PATH}"
+fi
 
 PARAMS="${NAV2_PARAMS_FILE:-/opt/ros2-nav/config/nav2_params.yaml}"
 SCAN_TOPIC="${NAV_SCAN_TOPIC:-/scan_filtered}"
 NAV_WIPE_ON_START="${NAV_WIPE_ON_START:-false}"
+# SLAM observe window before any drive/plan (legacy NAV_START_SETTLE_SEC=0 → 3s in bridges.py too).
+export NAV_START_SETTLE_SEC="${NAV_START_SETTLE_SEC:-3.0}"
+export NAV_MOTION_SETTLE_SEC="${NAV_MOTION_SETTLE_SEC:-3.0}"
+export NAV_CANCEL_SETTLE_SEC="${NAV_CANCEL_SETTLE_SEC:-3.0}"
 SLAM_MAP_FILE_PATH="${SLAM_MAP_FILE_PATH:-/app/lidar/slam.json}"
 SLAM_PERSISTENT_MAP_PATH="${SLAM_PERSISTENT_MAP_PATH:-/app/lidar/maps/persistent_grid.json}"
 SLAM_WAYPOINTS_PATH="${SLAM_WAYPOINTS_PATH:-/app/lidar/maps/waypoints.json}"
@@ -119,7 +149,7 @@ start_nav() {
       echo "ros2-nav: Nav2 launch exited" >&2
       break
     fi
-    echo "ros2-nav: starting bridges (odom/cmd_vel/goal) scan=${SCAN_TOPIC}"
+    echo "ros2-nav: starting bridges (odom/cmd_vel/goal, continuous analog) scan=${SCAN_TOPIC}"
     python3 /opt/ros2-nav/bridges.py &
     bridges_pid=$!
     wait "${bridges_pid}" || true

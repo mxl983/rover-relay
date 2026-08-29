@@ -19,6 +19,16 @@ const CONTROL_CONFIG = [
   { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
 ];
 
+const KEYBOARD_DRIVE_CONFIG = CONTROL_CONFIG.filter((config) => config.type !== "action");
+
+/** Normalize the persistent Pi keyboard payload without changing direction semantics. */
+export function keyboardDrivePayload(keys) {
+  return [...new Set(Array.from(keys || [], (key) => String(key).toLowerCase()))]
+    .filter((key) => KEYBOARD_DRIVE_CONFIG.some((config) => config.key === key))
+    .map((key) => KEYBOARD_DRIVE_CONFIG.find((config) => config.key === key)?.python || key)
+    .sort();
+}
+
 export const KeyboardControlCluster = ({
   onDrive,
   onLightToggle,
@@ -39,6 +49,11 @@ export const KeyboardControlCluster = ({
 }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
   const prevKeysRef = useRef("");
+  const onDriveRef = useRef(onDrive);
+
+  useEffect(() => {
+    onDriveRef.current = onDrive;
+  }, [onDrive]);
 
   const updateAction = useCallback(
     (key, isDown) => {
@@ -69,21 +84,17 @@ export const KeyboardControlCluster = ({
         const next = new Set(prev);
         isDown ? next.add(key) : next.delete(key);
 
-        const activeList = Array.from(next)
-          .map((k) => CONTROL_CONFIG.find((c) => c.key === k)?.python || k)
-          .filter((k) => k.length <= 1 || k.startsWith("Arrow"))
-          .sort();
+        const activeList = keyboardDrivePayload(next);
 
         const keysString = activeList.join("");
         if (keysString !== prevKeysRef.current) {
-          onDrive(activeList);
+          onDriveRef.current(activeList);
           prevKeysRef.current = keysString;
         }
         return next;
       });
     },
     [
-      onDrive,
       onLightToggle,
       onLaserToggle,
       onVoiceStart,
@@ -97,32 +108,47 @@ export const KeyboardControlCluster = ({
     ],
   );
 
+  const updateActionRef = useRef(updateAction);
   useEffect(() => {
-    // Keyboard Event Handlers
+    updateActionRef.current = updateAction;
+  }, [updateAction]);
+
+  useEffect(() => {
     const handleKeyEvent = (e) => {
       if (e.repeat) return;
       const key = e.key.toLowerCase();
       if (key.startsWith("arrow")) e.preventDefault();
-      updateAction(key, e.type === "keydown");
+      updateActionRef.current(key, e.type === "keydown");
     };
 
-    // Global Safety: If user switches tabs or window loses focus, STOP the rover
-    const handleBlur = () => {
+    // Drive commands persist on the Pi, so every focus/page transition must
+    // explicitly publish the empty keyboard payload.
+    const handleSafetyStop = () => {
       setActiveKeys(new Set());
-      onDrive([]);
+      onDriveRef.current([]);
       prevKeysRef.current = "";
+    };
+    const onVisibility = () => {
+      if (document.hidden || document.visibilityState !== "visible") {
+        handleSafetyStop();
+      }
     };
 
     window.addEventListener("keydown", handleKeyEvent);
     window.addEventListener("keyup", handleKeyEvent);
-    window.addEventListener("blur", handleBlur);
+    window.addEventListener("blur", handleSafetyStop);
+    window.addEventListener("pagehide", handleSafetyStop);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       window.removeEventListener("keydown", handleKeyEvent);
       window.removeEventListener("keyup", handleKeyEvent);
-      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("blur", handleSafetyStop);
+      window.removeEventListener("pagehide", handleSafetyStop);
+      document.removeEventListener("visibilitychange", onVisibility);
+      handleSafetyStop();
     };
-  }, [updateAction, onDrive]);
+  }, []);
 
   return (
     <div className="wasd-controls">

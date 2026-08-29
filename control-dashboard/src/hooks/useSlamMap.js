@@ -25,6 +25,17 @@ const STALE_MS = 4000;
  * @property {number} hz
  */
 
+function gridKey(payload) {
+  if (!payload) return "";
+  return [
+    payload.grid_revision ?? "",
+    payload.update_count ?? "",
+    payload.occupied_count ?? "",
+    payload.width ?? "",
+    payload.height ?? "",
+  ].join(":");
+}
+
 /**
  * Subscribe to Cartographer occupancy + pose over relay WebSocket.
  * Full `relay.slam.map` frames carry occupancy; thin `relay.slam.pose`
@@ -35,17 +46,17 @@ export function useSlamMap(enabled) {
   const [map, setMap] = useState(null);
   const [isLive, setIsLive] = useState(false);
   const [error, setError] = useState(null);
-  const lastStampRef = useRef(0);
   const lastMessageAtRef = useRef(0);
   const mapRef = useRef(null);
+  const gridKeyRef = useRef("");
 
   useEffect(() => {
     if (!enabled) {
       setMap(null);
       mapRef.current = null;
+      gridKeyRef.current = "";
       setIsLive(false);
       setError(null);
-      lastStampRef.current = 0;
       lastMessageAtRef.current = 0;
       return undefined;
     }
@@ -54,6 +65,24 @@ export function useSlamMap(enabled) {
     let ws = null;
     let reconnectTimer = null;
     let staleTimer = null;
+    let rafPending = false;
+    let pendingMap = null;
+
+    const flushMap = () => {
+      rafPending = false;
+      if (cancelled || pendingMap == null) return;
+      mapRef.current = pendingMap;
+      setMap(pendingMap);
+      pendingMap = null;
+      applyLive();
+    };
+
+    const scheduleMap = (next) => {
+      pendingMap = next;
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(flushMap);
+    };
 
     const markStale = () => {
       if (cancelled) return;
@@ -63,14 +92,9 @@ export function useSlamMap(enabled) {
       }
     };
 
-    const applyLive = (payload) => {
-      setError(null);
+    const applyLive = () => {
       lastMessageAtRef.current = Date.now();
-      const fresh =
-        Number.isFinite(payload?.stamp) &&
-        payload.stamp !== lastStampRef.current;
-      if (fresh) lastStampRef.current = payload.stamp;
-      setIsLive(fresh || Date.now() - lastMessageAtRef.current <= STALE_MS);
+      setIsLive(true);
     };
 
     const connect = () => {
@@ -101,10 +125,7 @@ export function useSlamMap(enabled) {
             } = msg;
             const prev = mapRef.current;
             if (!prev) return;
-            const next = { ...prev, ...posePatch };
-            mapRef.current = next;
-            setMap(next);
-            applyLive(next);
+            scheduleMap({ ...prev, ...posePatch });
             return;
           }
           if (msg.type !== "relay.slam.map") return;
@@ -114,9 +135,28 @@ export function useSlamMap(enabled) {
             return;
           }
           const { type: _type, success: _success, error: _error, ts: _ts, ...payload } = msg;
-          mapRef.current = payload;
-          setMap(payload);
-          applyLive(payload);
+          const prev = mapRef.current;
+          // Keep newer live pose if a stale full-grid frame arrives behind pose ticks.
+          let next = payload;
+          if (
+            prev?.pose &&
+            payload?.pose &&
+            Number(prev.updated_at) > Number(payload.updated_at)
+          ) {
+            next = {
+              ...payload,
+              pose: prev.pose,
+              view: prev.view ?? payload.view,
+              scan_hits: prev.scan_hits ?? payload.scan_hits,
+              scan_hit_count: prev.scan_hit_count ?? payload.scan_hit_count,
+              scan_match_score: prev.scan_match_score ?? payload.scan_match_score,
+              updated_at: prev.updated_at,
+              stamp: prev.stamp ?? payload.stamp,
+              pose_in_map: prev.pose_in_map ?? payload.pose_in_map,
+            };
+          }
+          gridKeyRef.current = gridKey(next);
+          scheduleMap(next);
         } catch {
           /* ignore malformed frames */
         }
