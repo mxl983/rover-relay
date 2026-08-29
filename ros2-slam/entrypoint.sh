@@ -23,6 +23,9 @@ SLAM_TRACKING_FRAME="${SLAM_TRACKING_FRAME:-}"
 SLAM_WAIT_SCAN_SEC="${SLAM_WAIT_SCAN_SEC:-60}"
 SLAM_FILTERED_TOPIC="${SLAM_FILTERED_TOPIC:-/scan_filtered}"
 SLAM_CORRECTED_LASER_FRAME="${SLAM_CORRECTED_LASER_FRAME:-base_laser_slam}"
+# LiDAR is mounted 15 cm forward of the rover's base_link/rotation center.
+SLAM_LIDAR_X_M="${SLAM_LIDAR_X_M:-0.15}"
+SLAM_LIDAR_Y_M="${SLAM_LIDAR_Y_M:-0.0}"
 # Fresh session on every container start (avoids stale marks duplicated onto a new map).
 SLAM_WIPE_ON_START="${SLAM_WIPE_ON_START:-true}"
 SLAM_PERSISTENT_MAP_PATH="${SLAM_PERSISTENT_MAP_PATH:-/app/lidar/maps/persistent_grid.json}"
@@ -36,6 +39,8 @@ SLAM_BASELINE_GRID_PATH="${SLAM_BASELINE_GRID_PATH:-/app/lidar/maps/baseline_gri
 SLAM_REPOSITION_REQUEST_PATH="${SLAM_REPOSITION_REQUEST_PATH:-/app/lidar/.reposition_slam}"
 SLAM_GLOBAL_LOCALIZATION_PATH="${SLAM_GLOBAL_LOCALIZATION_PATH:-/app/lidar/.global_localization}"
 SLAM_GLOBAL_LOCALIZATION_ACTIVE_PATH="${SLAM_GLOBAL_LOCALIZATION_ACTIVE_PATH:-/app/lidar/.global_localization_active}"
+NAV_COMMAND_PATH="${NAV_COMMAND_PATH:-/app/lidar/navigation_command.json}"
+NAV_KILL_PATH="${NAV_KILL_PATH:-/app/lidar/navigation_kill.json}"
 SLAM_IMU_URL="${SLAM_IMU_URL:-https://rover.tail9d0237.ts.net:3000/api/sensors/imu}"
 SLAM_IMU_TOPIC="${SLAM_IMU_TOPIC:-/imu}"
 SLAM_IMU_FRAME="${SLAM_IMU_FRAME:-base_link}"
@@ -46,6 +51,21 @@ SLAM_IMU_WAIT_SEC="${SLAM_IMU_WAIT_SEC:-20}"
 SLAM_USE_IMU="${SLAM_USE_IMU:-false}"
 
 mkdir -p "${CYCLONEDDS_CONFIG_DIR}" "${SLAM_CONFIG_DIR}"
+
+latch_navigation_shutdown() {
+  # SLAM loss invalidates the map pose, so autonomous navigation must be
+  # canceled and remain inhibited until a deliberate new goto clears the latch.
+  mkdir -p "$(dirname "${NAV_COMMAND_PATH}")" "$(dirname "${NAV_KILL_PATH}")" 2>/dev/null || true
+  local seq ts
+  seq="$(date +%s%3N)"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"latched":true,"reason":"slam_shutdown","updatedAt":"%s"}\n' "${ts}" \
+    > "${NAV_KILL_PATH}.tmp" 2>/dev/null || true
+  mv -f "${NAV_KILL_PATH}.tmp" "${NAV_KILL_PATH}" 2>/dev/null || true
+  printf '{"op":"cancel","seq":%s,"ts":"%s"}\n' "${seq}" "${ts}" \
+    > "${NAV_COMMAND_PATH}.tmp" 2>/dev/null || true
+  mv -f "${NAV_COMMAND_PATH}.tmp" "${NAV_COMMAND_PATH}" 2>/dev/null || true
+}
 
 wipe_slam_session() {
   local wipe="${SLAM_WIPE_ON_START,,}"
@@ -302,6 +322,7 @@ PY
 
 start_slam() {
   wipe_slam_session
+  latch_navigation_shutdown
 
   local laser_frame
   laser_frame="$(detect_laser_frame)"
@@ -314,11 +335,13 @@ start_slam() {
   export SLAM_TRACKING_FRAME="${tracking_frame}"
   export SLAM_LASER_FRAME="${corrected_laser_frame}"
   export SLAM_CORRECTED_LASER_FRAME="${corrected_laser_frame}"
+  export SLAM_LIDAR_X_M SLAM_LIDAR_Y_M
   export SLAM_FILTERED_TOPIC
   export SLAM_IMU_URL SLAM_IMU_TOPIC SLAM_IMU_FRAME SLAM_IMU_READY_PATH
 
   local pids=()
   cleanup() {
+    latch_navigation_shutdown
     local pid
     for pid in "${pids[@]:-}"; do
       kill "${pid}" 2>/dev/null || true
@@ -326,11 +349,11 @@ start_slam() {
   }
   trap cleanup EXIT INT TERM
 
-  # The rover owns base_link→base_laser (identity mounting TF). Publishing a
-  # second transform for that pair made TF nondeterministic. The filter rewrites
-  # scans to this private frame, whose sole transform makes +x physical forward.
+  # The filter rewrites scans to this private frame. Include the real sensor
+  # offset so a turn is represented around base_link, not around the LiDAR.
   ros2 run tf2_ros static_transform_publisher \
-    --x 0 --y 0 --z 0 --yaw -1.57079632679 --pitch 0 --roll 0 \
+    --x "${SLAM_LIDAR_X_M}" --y "${SLAM_LIDAR_Y_M}" --z 0 \
+    --yaw -1.57079632679 --pitch 0 --roll 0 \
     --frame-id "${tracking_frame}" \
     --child-frame-id "${corrected_laser_frame}" &
   pids+=($!)

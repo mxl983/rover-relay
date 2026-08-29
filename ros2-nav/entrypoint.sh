@@ -95,7 +95,9 @@ fi
 
 PARAMS="${NAV2_PARAMS_FILE:-/opt/ros2-nav/config/nav2_params.yaml}"
 SCAN_TOPIC="${NAV_SCAN_TOPIC:-/scan_filtered}"
-NAV_WIPE_ON_START="${NAV_WIPE_ON_START:-false}"
+NAV_WIPE_ON_START="${NAV_WIPE_ON_START:-true}"
+NAV_COMMAND_PATH="${NAV_COMMAND_PATH:-/app/lidar/navigation_command.json}"
+NAV_KILL_PATH="${NAV_KILL_PATH:-/app/lidar/navigation_kill.json}"
 # SLAM observe window before any drive/plan (legacy NAV_START_SETTLE_SEC=0 → 3s in bridges.py too).
 export NAV_START_SETTLE_SEC="${NAV_START_SETTLE_SEC:-3.0}"
 export NAV_MOTION_SETTLE_SEC="${NAV_MOTION_SETTLE_SEC:-3.0}"
@@ -105,20 +107,25 @@ SLAM_PERSISTENT_MAP_PATH="${SLAM_PERSISTENT_MAP_PATH:-/app/lidar/maps/persistent
 SLAM_WAYPOINTS_PATH="${SLAM_WAYPOINTS_PATH:-/app/lidar/maps/waypoints.json}"
 
 wipe_nav_session() {
-  local wipe="${NAV_WIPE_ON_START,,}"
-  if [[ "${wipe}" != "1" && "${wipe}" != "true" && "${wipe}" != "yes" && "${wipe}" != "on" ]]; then
-    echo "ros2-nav: keeping prior navigation session (NAV_WIPE_ON_START=${NAV_WIPE_ON_START})"
-    return 0
-  fi
-  # Nav2 owns only these transient command/status files. Persistent SLAM maps,
-  # Cartographer states, and waypoints are managed by the explicit purge API.
-  echo "ros2-nav: clearing transient navigation session"
+  # Navigation is deliberately non-resumable. A stale goto command must never
+  # be replayed after boot, SLAM restart, or a container restart.
+  echo "ros2-nav: clearing transient navigation session (NAV_WIPE_ON_START=${NAV_WIPE_ON_START})"
   rm -f \
+    "${NAV_COMMAND_PATH}" \
     /app/lidar/navigation_path.json \
     /app/lidar/navigation_goal.json \
-    /app/lidar/navigation_command.json \
     /app/lidar/navigation_status.json \
     2>/dev/null || true
+  mkdir -p "$(dirname "${NAV_COMMAND_PATH}")" "$(dirname "${NAV_KILL_PATH}")" 2>/dev/null || true
+  local seq ts
+  seq="$(date +%s%3N)"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"latched":true,"reason":"nav_start","updatedAt":"%s"}\n' "${ts}" \
+    > "${NAV_KILL_PATH}.tmp" 2>/dev/null || true
+  mv -f "${NAV_KILL_PATH}.tmp" "${NAV_KILL_PATH}" 2>/dev/null || true
+  printf '{"op":"cancel","seq":%s,"ts":"%s"}\n' "${seq}" "${ts}" \
+    > "${NAV_COMMAND_PATH}.tmp" 2>/dev/null || true
+  mv -f "${NAV_COMMAND_PATH}.tmp" "${NAV_COMMAND_PATH}" 2>/dev/null || true
 }
 
 start_nav() {
@@ -126,6 +133,7 @@ start_nav() {
 
   local nav2_pid="" bridges_pid=""
   cleanup() {
+    wipe_nav_session
     [[ -n "${bridges_pid}" ]] && kill "${bridges_pid}" 2>/dev/null || true
     [[ -n "${nav2_pid}" ]] && kill "${nav2_pid}" 2>/dev/null || true
   }

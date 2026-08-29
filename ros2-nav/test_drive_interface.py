@@ -43,12 +43,17 @@ class DriveInterfaceTests(unittest.TestCase):
         drive = twist_to_pi_drive(-0.20, 0.0)
         self.assertEqual(drive["y"], 0.0)
 
-    def test_inplace_noise_stays_soft(self) -> None:
-        # Below commit threshold — proportional only.
+    def test_inplace_tiny_turn_commits_floor(self) -> None:
+        # Any pure-yaw command above the deadband must clear static friction.
         drive = twist_to_pi_drive(0.0, 0.06)
         self.assertEqual(drive["y"], 0.0)
         self.assertLess(drive["x"], 0.0)
-        self.assertLess(abs(drive["x"]), PURE_ROTATE_STICK)
+        self.assertGreaterEqual(abs(drive["x"]), PURE_ROTATE_STICK - 1e-6)
+
+    def test_inplace_sub_min_angular_turn_commits_floor(self) -> None:
+        drive = twist_to_pi_drive(0.0, 0.04)
+        self.assertEqual(drive["y"], 0.0)
+        self.assertGreaterEqual(abs(drive["x"]), PURE_ROTATE_STICK - 1e-6)
 
     def test_inplace_nav2_rotate_commits_floor(self) -> None:
         # RPP rotate-to-heading / PP yaw (~0.12+) must break static friction.

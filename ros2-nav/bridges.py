@@ -24,11 +24,8 @@ from __future__ import annotations
 import json
 import math
 import os
-import ssl
 import threading
 import time
-import urllib.error
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
@@ -59,6 +56,8 @@ from nav_context import (
     drive_assist_blocking,
     nav_context,
 )
+from pi_drive_client import PiDriveClient
+from path_progress import remaining_path_distance
 from xy_gap_close import (
     XyGapCloseConfig,
     XyGapCloseState,
@@ -79,6 +78,10 @@ from nav_imu import NAV_USE_IMU, NavImuAssist
 
 # --- env ---
 CMD_VEL_TOPIC = os.environ.get("NAV_CMD_VEL_TOPIC", "/cmd_vel")
+NAV_DRIVE_TRANSPORT = os.environ.get("NAV_DRIVE_TRANSPORT", "ws").lower().strip()
+NAV_DRIVE_WS_URL = os.environ.get(
+    "NAV_DRIVE_WS_URL", "wss://rover.tail9d0237.ts.net:3000"
+).rstrip("/")
 DRIVE_URL = os.environ.get(
     "NAV_DRIVE_URL",
     os.environ.get("NAV_DRIVE_BASE_URL", "https://127.0.0.1:8787")
@@ -113,6 +116,19 @@ CMD_HOLD_SEC = float(os.environ.get("NAV_CMD_HOLD_SEC", "0.55"))
 MAX_LINEAR_ACCEL = float(os.environ.get("NAV_MAX_LINEAR_ACCEL", "0.50"))
 MAX_ANGULAR_ACCEL = float(os.environ.get("NAV_MAX_ANGULAR_ACCEL", "2.50"))
 TF_STALE_SEC = float(os.environ.get("NAV_TF_STALE_SEC", "1.0"))
+# Initial Nav2 rotate-to-heading is also pulsed so SLAM can settle between
+# heading corrections. Final goal yaw uses the slower error-sized pulses.
+PURE_ROTATE_PULSE_ON_SEC = float(
+    os.environ.get("NAV_PURE_ROTATE_PULSE_ON_SEC", "0.18")
+)
+PURE_ROTATE_PULSE_OFF_SEC = float(
+    os.environ.get("NAV_PURE_ROTATE_PULSE_OFF_SEC", "0.55")
+)
+# Use slow, discrete final correction pulses only inside the final handoff zone.
+# Nav2 still owns the normal trajectory and all motion outside that zone.
+CUSTOM_FINAL_APPROACH = os.environ.get(
+    "NAV_CUSTOM_FINAL_APPROACH", "true"
+).lower() in {"1", "true", "yes"}
 LOCALIZATION_FAIL_STOP = os.environ.get("NAV_LOCALIZATION_FAIL_STOP", "true").lower() in {
     "1",
     "true",
@@ -138,8 +154,10 @@ ODOM_HZ = float(os.environ.get("NAV_ODOM_HZ", "20"))
 NAV_PROGRESS_PERIOD_SEC = float(os.environ.get("NAV_PROGRESS_PERIOD_SEC", "2.0"))
 NAV_STALL_WARN_SEC = float(os.environ.get("NAV_STALL_WARN_SEC", "12.0"))
 NAV_STALL_EVENT_SEC = float(os.environ.get("NAV_STALL_EVENT_SEC", "45.0"))
-# Hard abort when distance has not improved for this long (was log-only forever).
-NAV_STALL_ABORT_SEC = float(os.environ.get("NAV_STALL_ABORT_SEC", "90.0"))
+# Hard abort only after a long period without path progress. This is a safety
+# backstop, not a route timeout; valid obstacle detours can take several
+# minutes before their path distance reaches a new minimum.
+NAV_STALL_ABORT_SEC = float(os.environ.get("NAV_STALL_ABORT_SEC", "180.0"))
 NAV_CONTEXT_REFRESH_SEC = float(os.environ.get("NAV_CONTEXT_REFRESH_SEC", "10.0"))
 NAV_ASSIST_REFRESH_SEC = float(os.environ.get("NAV_ASSIST_REFRESH_SEC", "2.0"))
 # Hold still before planning/driving so Cartographer pose + scan_match stabilize.
@@ -218,6 +236,7 @@ _goal_state: dict[str, Any] = {
     "nav_id": "",
 }
 _last_cmd_seq = 0
+_process_started_ms = int(time.time() * 1000)
 _goal_node: "GoalNode | None" = None
 _cmd_bridge: "CmdVelBridge | None" = None
 _path_bridge: "PathBridge | None" = None
@@ -452,15 +471,26 @@ class CmdVelBridge(Node):
         self._post_failures = 0
         self._held_drive = {"x": 0.0, "y": 0.0}
         self._held_until = 0.0
-        self._ssl = None if SSL_VERIFY else ssl._create_unverified_context()
+        self._pure_rotate_started_at = 0.0
+        self._pure_rotate_sign = 0
+        self._drive_client = PiDriveClient(
+            transport=NAV_DRIVE_TRANSPORT,
+            ws_url=NAV_DRIVE_WS_URL,
+            http_url=DRIVE_URL,
+            token=NAV_API_TOKEN,
+            ssl_verify=SSL_VERIFY,
+            timeout=1.0,
+        )
         self.create_subscription(Twist, CMD_VEL_TOPIC, self._on_cmd, qos_profile_sensor_data)
         self.create_timer(1.0 / max(KEEPALIVE_HZ, 1.0), self._tick)
         self.get_logger().info(
-            f"cmd_vel bridge topic={CMD_VEL_TOPIC} drive={DRIVE_URL} "
+            f"cmd_vel bridge topic={CMD_VEL_TOPIC} transport={NAV_DRIVE_TRANSPORT} "
+            f"ws={NAV_DRIVE_WS_URL} http={DRIVE_URL} "
             f"mode=continuous_analog max_v={MAX_LINEAR_MPS} max_w={MAX_ANGULAR_RPS} "
             f"stale_stop={STALE_STOP_SEC}s cmd_hold={CMD_HOLD_SEC}s "
             f"keepalive={KEEPALIVE_HZ}Hz start_settle={NAV_START_SETTLE_SEC}s "
             f"motion_settle={NAV_MOTION_SETTLE_SEC}s motion_idle={NAV_MOTION_IDLE_SEC}s"
+            f" pure_rotate_pulse={PURE_ROTATE_PULSE_ON_SEC}/{PURE_ROTATE_PULSE_OFF_SEC}s"
         )
 
     def _on_cmd(self, msg: Twist) -> None:
@@ -474,6 +504,7 @@ class CmdVelBridge(Node):
             self._latest = None
         self._post_drive({"x": 0.0, "y": 0.0})
         self._last_sent = {"x": 0.0, "y": 0.0}
+        self._reset_pure_rotate_pulse()
         self._phase = "paused"
 
     def resume(self) -> None:
@@ -481,7 +512,7 @@ class CmdVelBridge(Node):
             self._paused = False
 
     def stop_motors(self) -> None:
-        # Analog drive needs explicit 0,0 keepalive — one POST is not always enough.
+        # Explicit neutral frames also clear the Pi's persistent drive command.
         for _ in range(4):
             self._post_drive({"x": 0.0, "y": 0.0})
             time.sleep(0.05)
@@ -490,6 +521,7 @@ class CmdVelBridge(Node):
         self._prev_wz = 0.0
         self._held_drive = {"x": 0.0, "y": 0.0}
         self._held_until = 0.0
+        self._reset_pure_rotate_pulse()
         self._phase = "idle"
 
     def snapshot(self) -> dict[str, Any]:
@@ -645,6 +677,10 @@ class CmdVelBridge(Node):
                 drive = twist_to_pi_drive(
                     vx, wz, limits=DRIVE_LIMITS, allow_reverse=False
                 )
+                if pure_rotate and abs(wz) >= 0.10:
+                    drive = self._pulse_pure_rotate(drive, wz, now)
+                else:
+                    self._reset_pure_rotate_pulse()
                 moving = abs(drive["x"]) > 1e-3 or abs(drive["y"]) > 1e-3
                 self._phase = "driving" if moving else "idle"
                 if abs(drive["y"]) > 1e-3:
@@ -668,23 +704,14 @@ class CmdVelBridge(Node):
         self._write_status(drive, None if msg is None else age)
 
     def _post_drive(self, drive: dict[str, float]) -> bool:
-        data = json.dumps({"drive": drive, "gimbal": {"x": 0, "y": 0}}).encode("utf-8")
-        req = urllib.request.Request(
-            DRIVE_URL,
-            data=data,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        if NAV_API_TOKEN:
-            req.add_header("Authorization", f"Bearer {NAV_API_TOKEN}")
         try:
-            urllib.request.urlopen(req, timeout=1.0, context=self._ssl)
+            self._drive_client.send(drive)
             self._post_failures = 0
             return True
-        except (urllib.error.URLError, TimeoutError, OSError) as err:
+        except Exception as err:
             self._post_failures += 1
             self.get_logger().warning(
-                f"drive post failed ({self._post_failures}): {err}",
+                f"drive {NAV_DRIVE_TRANSPORT} send failed ({self._post_failures}): {err}",
                 throttle_duration_sec=2.0,
             )
             if self._post_failures >= 5:
@@ -693,6 +720,24 @@ class CmdVelBridge(Node):
                     throttle_duration_sec=5.0,
                 )
             return False
+
+    def _reset_pure_rotate_pulse(self) -> None:
+        self._pure_rotate_started_at = 0.0
+        self._pure_rotate_sign = 0
+
+    def _pulse_pure_rotate(
+        self, drive: dict[str, float], wz: float, now: float
+    ) -> dict[str, float]:
+        """Pulse initial Nav2 heading turns and settle between pulses."""
+        sign = 1 if wz > 0.0 else -1
+        if sign != self._pure_rotate_sign or self._pure_rotate_started_at <= 0.0:
+            self._pure_rotate_started_at = now
+            self._pure_rotate_sign = sign
+        cycle = max(PURE_ROTATE_PULSE_ON_SEC + PURE_ROTATE_PULSE_OFF_SEC, 0.05)
+        phase = (now - self._pure_rotate_started_at) % cycle
+        if phase >= max(PURE_ROTATE_PULSE_ON_SEC, 0.0):
+            return {"x": 0.0, "y": 0.0}
+        return drive
 
     def _write_status(self, drive: dict[str, float], age: float | None) -> None:
         status = {
@@ -730,6 +775,7 @@ class GoalNode(Node):
         self._nav_started_at = 0.0
         self._target: tuple[float, float, float] | None = None
         self._best_distance: float | None = None
+        self._progress_metric = "straight"
         self._last_improve_at = 0.0
         self._stall_warned = False
         self._stall_evented = False
@@ -757,6 +803,7 @@ class GoalNode(Node):
             f"Nav2 NavigateToPose client ready (continuous /cmd_vel ownership) "
             f"run_log={RUN_LOG_PATH} start_settle={NAV_START_SETTLE_SEC}s "
             f"motion_settle={NAV_MOTION_SETTLE_SEC}s "
+            f"custom_final_approach={'on' if CUSTOM_FINAL_APPROACH else 'off'} "
             f"yaw_handoff={YAW_ALIGN_CFG.xy_handoff_m}m "
             f"large_yaw={YAW_ALIGN_CFG.xy_handoff_large_yaw_m}m "
             f"xy_tol={XY_GAP_CFG.xy_tol_m}m "
@@ -771,6 +818,7 @@ class GoalNode(Node):
 
     def _reset_progress(self) -> None:
         self._best_distance = None
+        self._progress_metric = "straight"
         self._last_improve_at = time.time()
         self._stall_warned = False
         self._stall_evented = False
@@ -1426,6 +1474,10 @@ class GoalNode(Node):
             self._cancel_controller_goals()
             if NAV_CANCEL_SETTLE_SEC > 0:
                 time.sleep(min(NAV_CANCEL_SETTLE_SEC, 0.6))
+            # Do not let the previous goal's global path seed the new goal's
+            # progress baseline while Nav2 is still planning.
+            if _path_bridge is not None:
+                _path_bridge.clear()
 
             start = self._wait_pose_settle(
                 self._nav_id,
@@ -1509,9 +1561,31 @@ class GoalNode(Node):
             )
             return {"success": True, "nav_id": self._nav_id, "status": "navigating"}
 
-    def _note_distance(self, distance: float | None) -> None:
+    def _progress_distance(
+        self, pose: tuple[float, float, float] | None
+    ) -> tuple[float | None, str]:
+        if pose is not None and _path_bridge is not None:
+            path = _path_bridge.snapshot().get("global") or []
+            path_distance = remaining_path_distance(path, (pose[0], pose[1]))
+            if path_distance is not None:
+                return path_distance, "path"
+        if pose is not None and self._target is not None:
+            return (
+                math.hypot(self._target[0] - pose[0], self._target[1] - pose[1]),
+                "straight",
+            )
+        return None, "straight"
+
+    def _note_distance(self, distance: float | None, metric: str = "straight") -> None:
         if distance is None:
             return
+        if metric != self._progress_metric:
+            self._progress_metric = metric
+            self._best_distance = None
+            self._last_improve_at = time.time()
+            self._stall_warned = False
+            self._stall_evented = False
+            self._stall_aborting = False
         if self._best_distance is None or distance < self._best_distance - 0.05:
             self._best_distance = float(distance)
             self._last_improve_at = time.time()
@@ -1524,15 +1598,19 @@ class GoalNode(Node):
         *,
         pose: tuple[float, float, float] | None = None,
         distance: float | None = None,
+        position_error: float | None = None,
     ) -> dict[str, Any]:
         if pose is None:
             pose = self._lookup_map_pose()
         drive = _cmd_bridge.snapshot() if _cmd_bridge is not None else {}
         path = _path_bridge.snapshot() if _path_bridge is not None else {}
         now = time.time()
+        metric = self._progress_metric
         dist = distance
-        if dist is None and pose is not None and self._target is not None:
-            dist = math.hypot(self._target[0] - pose[0], self._target[1] - pose[1])
+        if dist is None:
+            dist, metric = self._progress_distance(pose)
+        if position_error is None:
+            position_error = dist
         stall_s = max(0.0, now - self._last_improve_at) if self._last_improve_at else 0.0
         payload: dict[str, Any] = {
             "nav_id": self._nav_id,
@@ -1542,10 +1620,14 @@ class GoalNode(Node):
             "best_distance_m": round(self._best_distance, 3)
             if self._best_distance is not None
             else None,
+            "distance_metric": metric,
             "stall_s": round(stall_s, 1),
             "drive": drive,
             "path": {
                 "path_length_m": path.get("path_length_m"),
+                "remaining_m": round(dist, 3)
+                if metric == "path" and dist is not None
+                else None,
                 "updated_at": path.get("updated_at"),
             },
             "control": "nav2_continuous",
@@ -1571,7 +1653,9 @@ class GoalNode(Node):
                 payload["goal_yaw_err_deg"] = round(
                     math.degrees(wrap_angle(self._target[2] - pose[2])), 1
                 )
-                payload["position_error_m"] = round(dist, 3) if dist is not None else None
+                payload["position_error_m"] = (
+                    round(position_error, 3) if position_error is not None else None
+                )
                 payload["yaw_error_deg"] = payload["goal_yaw_err_deg"]
         return payload
 
@@ -1596,31 +1680,36 @@ class GoalNode(Node):
             return
         self._last_tf_ok_at = now
 
-        dist = None
+        dist, metric = self._progress_distance(pose)
+        xy_dist = (
+            math.hypot(self._target[0] - pose[0], self._target[1] - pose[1])
+            if self._target is not None
+            else None
+        )
         yaw_err = None
         if self._target is not None:
-            dist = math.hypot(self._target[0] - pose[0], self._target[1] - pose[1])
             yaw_err = goal_yaw_error(pose[2], self._target[2])
-        self._yaw_handoff_zone = (
-            dist is not None
+        self._yaw_handoff_zone = CUSTOM_FINAL_APPROACH and (
+            xy_dist is not None
             and (
-                should_handoff_xy(dist, YAW_ALIGN_CFG)
+                should_handoff_xy(xy_dist, YAW_ALIGN_CFG)
                 or (
-                    dist <= YAW_ALIGN_CFG.xy_handoff_large_yaw_m
+                    xy_dist <= YAW_ALIGN_CFG.xy_handoff_large_yaw_m
                     and yaw_err is not None
                     and abs(yaw_err) >= YAW_ALIGN_CFG.large_handoff_err_rad
                 )
             )
         )
         if (
-            not self.fine_approach_active()
+            CUSTOM_FINAL_APPROACH
+            and not self.fine_approach_active()
             and yaw_err is not None
-            and dist is not None
-            and should_begin_yaw_align(dist, yaw_err, YAW_ALIGN_CFG)
+            and xy_dist is not None
+            and should_begin_yaw_align(xy_dist, yaw_err, YAW_ALIGN_CFG)
         ):
-            self._begin_fine_approach(yaw_err, dist)
+            self._begin_fine_approach(yaw_err, xy_dist)
 
-        self._note_distance(dist)
+        self._note_distance(dist, metric)
 
         refresh_assist = now - self._last_assist_refresh_at >= NAV_ASSIST_REFRESH_SEC
         if refresh_assist:
@@ -1629,7 +1718,11 @@ class GoalNode(Node):
         if full_ctx:
             self._last_context_refresh_at = now
 
-        info = self._progress_payload(pose=pose, distance=dist)
+        info = self._progress_payload(
+            pose=pose,
+            distance=dist,
+            position_error=xy_dist,
+        )
         ctx = nav_context(full=full_ctx, refresh_assist=refresh_assist)
         info["map"] = ctx.get("map")
         info["scan"] = ctx.get("scan")
@@ -1707,6 +1800,7 @@ class GoalNode(Node):
                 f"nav progress nav_id={self._nav_id} status={status} "
                 f"elapsed={info.get('elapsed_s')}s dist={dist} "
                 f"best={info.get('best_distance_m')} stall={stall_s:.1f}s "
+                f"metric={info.get('distance_metric')} "
                 f"cmd_vx={drive.get('cmd_vx')} cmd_wz={drive.get('cmd_wz')} "
                 f"drive_phase={drive.get('phase')} "
                 f"yaw_err={info.get('goal_yaw_err_deg')}° "
@@ -1830,14 +1924,18 @@ class GoalNode(Node):
             return
         fb = feedback_msg.feedback
         dist = None
-        try:
-            dist = float(fb.distance_remaining)
-        except (AttributeError, TypeError, ValueError):
-            pass
         pose = self._lookup_map_pose()
-        if pose is not None and self._target is not None:
-            dist = math.hypot(self._target[0] - pose[0], self._target[1] - pose[1])
-        self._note_distance(dist)
+        dist, metric = self._progress_distance(pose)
+        if dist is None:
+            try:
+                dist = float(fb.distance_remaining)
+                metric = self._progress_metric
+            except (AttributeError, TypeError, ValueError):
+                pass
+        # Never feed Nav2's straight-line fallback into a path-based stall
+        # timer when the current pose is temporarily unavailable.
+        if metric != "path" or pose is not None:
+            self._note_distance(dist, metric)
         with _goal_lock:
             current = dict(_goal_state.get("feedback") or {})
             current["distance_remaining"] = (
@@ -1885,7 +1983,8 @@ class GoalNode(Node):
                 )
                 yaw_err = goal_yaw_error(pose[2], self._target[2])
             if (
-                dist_f is not None
+                CUSTOM_FINAL_APPROACH
+                and dist_f is not None
                 and yaw_err is not None
                 and should_begin_yaw_align(dist_f, yaw_err, YAW_ALIGN_CFG)
             ):
@@ -2034,6 +2133,17 @@ def poll_command_file() -> None:
             continue
         _last_cmd_seq = seq
         op = str(raw.get("op") or "").lower()
+        if seq <= _process_started_ms and op == "goto":
+            # Navigation is non-resumable. Do not replay a command left on the
+            # shared volume by an earlier process, even if startup cleanup
+            # raced with this poller.
+            try:
+                _goal_node.get_logger().warning(
+                    f"ignoring stale goto command seq={seq} during startup"
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            continue
         err = None
         try:
             if op == "goto":

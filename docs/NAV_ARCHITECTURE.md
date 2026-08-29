@@ -147,7 +147,9 @@ ros2 topic echo /cmd_vel --once # during nav: continuous non-zero then settle
 
 - **No wheel encoders** — cannot run classical `diff_drive_controller` odometry.
 - **IMU on Pi** — dashboard/drive-assist + Cartographer via `imu_bridge` (`SLAM_IMU_URL`).
-- Motors driven via **HTTP analog stick** (or WASD for teleop), not ros2_control.
+- Motors driven via the Pi's **persistent WebSocket analog-stick protocol**,
+  matching dashboard joystick/gamepad control; HTTP analog stick remains an
+  explicit compatibility mode for co-sim and legacy deployments.
 - Marker detector **not in this repo**.
 
 ## N. Remaining debt
@@ -164,10 +166,11 @@ ros2 topic echo /cmd_vel --once # during nav: continuous non-zero then settle
 # Build nav image
 docker build -f ros2-nav/Dockerfile -t relay-ros2-nav:local .
 
-# Run (host net + lidar volume + env as today)
+# Run (host net + lidar volume + direct Pi WebSocket drive)
 docker run --network host --rm \
   -v lidar-data:/app/lidar \
-  -e NAV_DRIVE_URL=https://127.0.0.1:8787/api/navigation/drive \
+  -e NAV_DRIVE_WS_URL=wss://rover.tail9d0237.ts.net:3000 \
+  -e NAV_DRIVE_TRANSPORT=ws \
   -e NAVIGATION_API_TOKEN=... \
   relay-ros2-nav:local nav
 
@@ -177,7 +180,8 @@ docker run --network host --rm \
 ## P. True Nav2 co-sim (preferred for nav debugging)
 
 Sim no longer “mimics” RPP. The plant publishes Cartographer-shaped interfaces;
-**real** `ros2-nav` (Nav2 + bridges) drives the plant over the same Pi stick HTTP API.
+**real** `ros2-nav` (Nav2 + bridges) drives the plant over the compatibility
+HTTP API, selected explicitly with `NAV_DRIVE_TRANSPORT=http`.
 
 ```
 sim plant: /map, /scan_nav, TF map→odom→base_link

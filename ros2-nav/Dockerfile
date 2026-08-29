@@ -6,6 +6,7 @@ RUN apt-get update \
         dnsutils \
         python3-pip \
         python3-requests \
+        python3-websocket \
         ros-humble-rmw-cyclonedds-cpp \
         ros-humble-navigation2 \
         ros-humble-nav2-bringup \
@@ -22,6 +23,8 @@ COPY ros2-nav/drive_interface.py /opt/ros2-nav/drive_interface.py
 COPY ros2-nav/yaw_pulse_align.py /opt/ros2-nav/yaw_pulse_align.py
 COPY ros2-nav/xy_gap_close.py /opt/ros2-nav/xy_gap_close.py
 COPY ros2-nav/nav_context.py /opt/ros2-nav/nav_context.py
+COPY ros2-nav/path_progress.py /opt/ros2-nav/path_progress.py
+COPY ros2-nav/pi_drive_client.py /opt/ros2-nav/pi_drive_client.py
 COPY ros2-nav/cmd_vel_bridge.py /opt/ros2-nav/cmd_vel_bridge.py
 COPY ros2-nav/goal_server.py /opt/ros2-nav/goal_server.py
 COPY ros2-nav/odom_republisher.py /opt/ros2-nav/odom_republisher.py

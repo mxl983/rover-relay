@@ -551,6 +551,11 @@ export function SlamMap({
   const [navUi, setNavUi] = useState(
     /** @type {Record<string, unknown> | null} */ (null),
   );
+  const [navDrive, setNavDrive] = useState(
+    /** @type {{ drive?: { x?: number, y?: number }, cmd_vx?: number, cmd_wz?: number, phase?: string } | null} */ (
+      null
+    ),
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -626,6 +631,18 @@ export function SlamMap({
         const status = String(goal.status || "idle");
         setNavPhase(status);
         setNavResult(goal.result != null ? String(goal.result) : null);
+        setNavDrive({
+          drive:
+            drive.drive && typeof drive.drive === "object"
+              ? {
+                  x: Number(drive.drive.x) || 0,
+                  y: Number(drive.drive.y) || 0,
+                }
+              : { x: 0, y: 0 },
+          cmd_vx: Number(drive.cmd_vx) || 0,
+          cmd_wz: Number(drive.cmd_wz) || 0,
+          phase: String(drive.phase || "idle"),
+        });
         setNavUi(drive.nav_ui && typeof drive.nav_ui === "object" ? drive.nav_ui : null);
         setNavFeedback(goal.feedback && typeof goal.feedback === "object" ? goal.feedback : null);
         const dist = Number(goal.feedback?.distance_remaining);
@@ -690,6 +707,13 @@ export function SlamMap({
 
   const statusClass = error ? "stale" : isLive ? "live" : "stale";
   const cells = countVisibleCells(map);
+  const slamScore = Number(map?.scan_match_score);
+  const slamScoreClass =
+    !Number.isFinite(slamScore) || slamScore < 0.32
+      ? "low"
+      : slamScore < 0.7
+        ? "mid"
+        : "good";
   const poseLabel = pose
     ? `${pose.x.toFixed(2)} , ${pose.y.toFixed(2)}`
     : "—";
@@ -729,9 +753,13 @@ export function SlamMap({
   const formatDeltas = (fb) => {
     if (!fb) return null;
     const parts = [];
-    if (fb.position_error_m != null) parts.push(`${fb.position_error_m.toFixed(2)}m`);
-    if (fb.yaw_error_deg != null) parts.push(`${Math.abs(fb.yaw_error_deg).toFixed(0)}°`);
-    return parts.length ? `Δ ${parts.join(" · ")}` : null;
+    if (fb.position_error_m != null) {
+      parts.push(`Δpos ${Number(fb.position_error_m).toFixed(2)}m`);
+    }
+    if (fb.yaw_error_deg != null) {
+      parts.push(`Δyaw ${Math.abs(Number(fb.yaw_error_deg)).toFixed(0)}°`);
+    }
+    return parts.length ? parts.join(" · ") : null;
   };
 
   const phaseNavLabel = (() => {
@@ -834,6 +862,11 @@ export function SlamMap({
       : navUiStatus === "arrived"
         ? "Arrived"
         : "Standby";
+  const piDrive = navDrive?.drive || { x: 0, y: 0 };
+  const velocityLabel = `ROVER vx ${(Number(piDrive.x) || 0).toFixed(2)} · vy ${(Number(piDrive.y) || 0).toFixed(2)}`;
+  const velocityDisplay = [velocityLabel, formatDeltas(navFeedback || arrivalFeedback)]
+    .filter(Boolean)
+    .join(" · ");
 
   const navCanGo = isLive && mapFrozen && !navBusy && !navigating && !settling;
 
@@ -1216,6 +1249,13 @@ export function SlamMap({
           </span>
           <span className="slam-nav-detail">{statusDetail}</span>
         </div>
+        <div
+          className="slam-nav-velocity"
+          title="Converted rover drive vector: vx is the turn/x axis, vy is the forward/y axis; vy<0 forward, vx<0 left."
+          aria-label={`Translated drive velocity and navigation deltas: ${velocityDisplay}`}
+        >
+          {velocityDisplay}
+        </div>
       </div>
     );
   }
@@ -1253,12 +1293,23 @@ export function SlamMap({
         </div>
         <span className={`lidar-minimap-status ${statusClass}`} aria-hidden="true" />
       </div>
-      <canvas
-        ref={canvasRef}
-        className="lidar-minimap-canvas"
-        onClick={onCanvasClick}
-        style={{ cursor: waypoints.length ? "pointer" : "default" }}
-      />
+      <div className="slam-map-canvas-wrap">
+        <canvas
+          ref={canvasRef}
+          className="lidar-minimap-canvas"
+          onClick={onCanvasClick}
+          style={{ cursor: waypoints.length ? "pointer" : "default" }}
+        />
+        {Number.isFinite(slamScore) && (
+          <span
+            className={`slam-map-score slam-map-score--${slamScoreClass}`}
+            title="Live LiDAR scan-match score"
+            aria-label={`SLAM scan match ${Math.round(slamScore * 100)} percent`}
+          >
+            {Math.round(slamScore * 100)}%
+          </span>
+        )}
+      </div>
 
       <div className="slam-nav-panel">
         <div className="slam-nav-row" role="group" aria-label="Destination">
@@ -1400,11 +1451,13 @@ export function SlamMap({
           </span>
           <span className="slam-nav-detail">{statusDetail}</span>
         </div>
-      </div>
-
-      <div className="lidar-minimap-stats">
-        <span>{`${displayRangeM.toFixed(1)}m`}</span>
-        <span className="lidar-minimap-nearest">{statusDetail}</span>
+        <div
+          className="slam-nav-velocity"
+          title="Converted rover drive vector: vx is the turn/x axis, vy is the forward/y axis; vy<0 forward, vx<0 left."
+          aria-label={`Translated drive velocity and navigation deltas: ${velocityDisplay}`}
+        >
+          {velocityDisplay}
+        </div>
       </div>
     </div>
   );

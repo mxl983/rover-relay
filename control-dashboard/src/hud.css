@@ -806,6 +806,37 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
+.slam-map-canvas-wrap {
+  position: relative;
+  max-width: 100%;
+}
+
+.slam-map-score {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  padding: 1px 3px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: rgba(5, 10, 16, 0.78);
+  font-size: 9px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.slam-map-score--good {
+  color: rgba(125, 255, 179, 0.95);
+}
+
+.slam-map-score--mid {
+  color: rgba(255, 220, 125, 0.95);
+}
+
+.slam-map-score--low {
+  color: rgba(255, 140, 125, 0.95);
+}
+
 .lidar-minimap-stats {
   display: flex;
   justify-content: space-between;
@@ -1319,6 +1350,16 @@ html {
   text-align: right;
   color: rgba(180, 210, 235, 0.85);
   min-width: 0;
+}
+
+.slam-nav-velocity {
+  min-width: 0;
+  color: rgba(120, 235, 255, 0.86);
+  font-size: 8px;
+  line-height: 1.35;
+  letter-spacing: 0.15px;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .slam-nav-id {

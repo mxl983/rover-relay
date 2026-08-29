@@ -105,7 +105,10 @@ controller_server:
       lookahead_time: 1.2
       transform_tolerance: 0.5
       use_velocity_scaled_lookahead_dist: true
-      min_approach_linear_velocity: 0.04
+      # The Pi drive conversion cannot move reliably below ~0.08 m/s.
+      # Keep the final approach above that physical floor instead of emitting
+      # a Twist that translates to a neutral stick.
+      min_approach_linear_velocity: 0.10
       approach_velocity_scaling_dist: 1.20
       # With scan+static local costmap, "collision ahead" often false-trips near
       # inflation and leaves rotate-to-heading spinning with vx=0.
@@ -122,12 +125,13 @@ controller_server:
       inflation_cost_scaling_factor: 3.0
       use_rotate_to_heading: true
       allow_reversing: false
-      # Pure-rotate ONLY when |angle_to_carrot| exceeds this (rad). SMALLER = more
-      # spin-with-vx=0. Nav2 default 0.785 (~45°) unlocks forward sooner.
-      rotate_to_heading_min_angle: 0.785
+      # Use pure rotation for modest heading errors too. Below this threshold,
+      # RPP's tiny curved-pursuit turn can fall below the rover drive floor.
+      rotate_to_heading_min_angle: 0.52
       # Must clear Pi static friction once mapped (see PURE_ROTATE_COMMIT_RPS).
-      rotate_to_heading_angular_vel: 0.45
-      max_angular_accel: 1.2
+      # Slower pure heading turns give Cartographer more time to catch up.
+      rotate_to_heading_angular_vel: 0.30
+      max_angular_accel: 0.60
       max_robot_pose_search_dist: 1.5
       use_interpolation: true
 

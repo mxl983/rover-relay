@@ -25,7 +25,9 @@ BASELINE_PATH = os.environ.get(
 )
 WORKING_WINDOW_M = float(os.environ.get("SLAM_WORKING_WINDOW_M", "8.0"))
 MAX_SCAN_HITS = int(os.environ.get("SLAM_MAX_SCAN_HITS", "360"))
-# Filtered scans live in base_laser_slam = base_link yaw −90° (entrypoint static TF).
+# Filtered scans live 15 cm forward of base_link, rotated −90° (entrypoint TF).
+LASER_X_OFFSET_M = float(os.environ.get("SLAM_LIDAR_X_M", "0.15"))
+LASER_Y_OFFSET_M = float(os.environ.get("SLAM_LIDAR_Y_M", "0.0"))
 LASER_YAW_OFFSET_RAD = float(
     os.environ.get("SLAM_LASER_YAW_OFFSET_RAD", str(-math.pi / 2.0))
 )
@@ -52,6 +54,11 @@ def scan_hits_world(
     """
     rmin = range_min if range_min is not None else MIN_RANGE
     rmax = range_max if range_max is not None else MAX_RANGE
+    # Transform the sensor origin from base_link to map before projecting
+    # returns. The rover rotates around base_link, not the forward-mounted
+    # LiDAR, so omitting this offset creates a visible arc/shift.
+    sensor_x = px + math.cos(yaw) * LASER_X_OFFSET_M - math.sin(yaw) * LASER_Y_OFFSET_M
+    sensor_y = py + math.sin(yaw) * LASER_X_OFFSET_M + math.cos(yaw) * LASER_Y_OFFSET_M
     hits: list[dict[str, float]] = []
     for i, distance in enumerate(ranges):
         beam = angle_min + i * angle_increment
@@ -62,8 +69,8 @@ def scan_hits_world(
         world_angle = yaw + beam + LASER_YAW_OFFSET_RAD
         hits.append(
             {
-                "x": round(px + distance * math.cos(world_angle), 3),
-                "y": round(py + distance * math.sin(world_angle), 3),
+                "x": round(sensor_x + distance * math.cos(world_angle), 3),
+                "y": round(sensor_y + distance * math.sin(world_angle), 3),
             }
         )
     if MAX_SCAN_HITS > 0 and len(hits) > MAX_SCAN_HITS:

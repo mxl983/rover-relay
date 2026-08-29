@@ -4,7 +4,7 @@ After=docker.service network-online.target
 
 [Service]
 Type=simple
-Environment=ROVER_WATCHDOG_URL=https://rover.tail9d0237.ts.net:3000/health
+Environment=ROVER_WATCHDOG_URL=https://rover.tail9d0237.ts.net:3000/api/sensors/status
 Environment="ROVER_WATCHDOG_CONTAINERS=relay-ros2-lidar-1 relay-ros2-slam-1 relay-ros2-nav-1"
 Environment=ROVER_WATCHDOG_INTERVAL_SEC=15
 Environment=ROVER_WATCHDOG_TIMEOUT_SEC=5

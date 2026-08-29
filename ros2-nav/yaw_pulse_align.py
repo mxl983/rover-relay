@@ -32,7 +32,7 @@ class YawPulseAlignConfig:
     invert_angular: bool = False
     # Rough deg/s at stick=1.0 for pulse duration cap (measured ~90–120°/s teleop burst).
     turn_rate_deg_per_s: float = 100.0
-    max_turn_fraction: float = 0.38  # never pulse more than this fraction of |err|
+    max_turn_fraction: float = 0.50  # never pulse more than this fraction of |err|
     # When already at tight XY, avoid tiny taps that skid without helping.
     tight_xy_m: float = 0.14
     tight_xy_min_err_rad: float = math.radians(12.0)
@@ -93,14 +93,14 @@ def _pulse_profile(
     """Return (pulse_s, stick_mag, settle_s, mode). No reverse/overshoot tier."""
     deg = math.degrees(abs_err)
     if deg >= 70.0:
-        pulse_s, stick, settle_s, mode = 0.55, 0.50, 1.3, "xlarge"
+        pulse_s, stick, settle_s, mode = 0.55, 0.50, 1.2, "xlarge"
     elif deg >= 40.0:
-        pulse_s, stick, settle_s, mode = 0.40, 0.44, 1.6, "large"
+        pulse_s, stick, settle_s, mode = 0.40, 0.44, 1.4, "large"
     elif deg >= 20.0:
-        pulse_s, stick, settle_s, mode = 0.26, 0.38, 2.0, "mid"
+        pulse_s, stick, settle_s, mode = 0.26, 0.36, 1.7, "mid"
     else:
-        # Below ~20° use mid-small once — never 0.07s fine taps.
-        pulse_s, stick, settle_s, mode = 0.18, 0.34, 2.5, "final"
+        # Close to the goal: short low-power pulse, then let SLAM settle.
+        pulse_s, stick, settle_s, mode = 0.15, 0.30, 2.0, "final"
 
     rate = math.radians(cfg.turn_rate_deg_per_s)
     if rate > 1e-3 and abs_err > 1e-3:
@@ -225,11 +225,11 @@ def tick_yaw_pulse_align(
     pulse_s, stick_mag, settle_s, mode = _pulse_profile(abs(err), cfg)
     if dist_xy is not None and dist_xy <= cfg.tight_xy_m:
         if mode == "xlarge":
-            pulse_s, stick_mag, settle_s, mode = 0.36, 0.44, 1.6, "large_tight_xy"
+            pulse_s, stick_mag, settle_s, mode = 0.42, 0.44, 1.5, "large_tight_xy"
         elif mode == "large":
-            pulse_s, stick_mag, settle_s, mode = 0.30, 0.40, 1.8, "mid_tight_xy"
+            pulse_s, stick_mag, settle_s, mode = 0.32, 0.40, 1.7, "mid_tight_xy"
         elif mode == "final":
-            # Last ~20° at tight XY: one more mid pulse or commit — no micro taps.
+            # Last ~20° at tight XY: short pulse or commit.
             if abs(err) <= commit:
                 state.active = False
                 state.phase = "idle"
@@ -238,7 +238,7 @@ def tick_yaw_pulse_align(
                     f"err={math.degrees(err):+.1f}°"
                 )
                 return zero, state, True
-            pulse_s, stick_mag, settle_s, mode = 0.22, 0.36, 2.2, "final_tight_xy"
+            pulse_s, stick_mag, settle_s, mode = 0.15, 0.30, 2.0, "final_tight_xy"
 
     state.stick_x = _stick_for_approach(state.approach_sign, stick_mag, cfg)
     state.settle_s = settle_s

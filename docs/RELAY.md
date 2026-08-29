@@ -57,7 +57,7 @@ sudo install -m 0755 scripts/rover_stack_watchdog.sh \
 sudo install -m 0644 scripts/rover-stack-watchdog.service \
   /etc/systemd/system/rover-stack-watchdog.service
 sudo install -m 0600 /dev/stdin /etc/default/rover-stack-watchdog <<'EOF'
-ROVER_WATCHDOG_URL="https://rover.tail9d0237.ts.net:3000/health"
+ROVER_WATCHDOG_URL="https://rover.tail9d0237.ts.net:3000/api/sensors/status"
 ROVER_WATCHDOG_CONTAINERS="relay-ros2-lidar-1 relay-ros2-slam-1 relay-ros2-nav-1"
 ROVER_WATCHDOG_INTERVAL_SEC="15"
 ROVER_WATCHDOG_TIMEOUT_SEC="5"

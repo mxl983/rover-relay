@@ -43,6 +43,8 @@ services:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_LOCALHOST_ONLY: "1"
       NAV_DRIVE_URL: "http://127.0.0.1:8880/api/navigation/drive"
+      # The live rover uses direct Pi WebSocket; the simulator exposes HTTP.
+      NAV_DRIVE_TRANSPORT: "http"
       NAV_WIPE_ON_START: "true"
       NAV_GOAL_PORT: "8769"
       NAV_SCAN_TOPIC: "/scan_nav"

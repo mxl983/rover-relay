@@ -9,11 +9,8 @@ from __future__ import annotations
 
 import json
 import os
-import ssl
 import threading
 import time
-import urllib.error
-import urllib.request
 from typing import Any
 
 import rclpy
@@ -22,8 +19,13 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
 from drive_interface import DriveLimits, twist_to_pi_drive
+from pi_drive_client import PiDriveClient
 
 CMD_VEL_TOPIC = os.environ.get("NAV_CMD_VEL_TOPIC", "/cmd_vel")
+NAV_DRIVE_TRANSPORT = os.environ.get("NAV_DRIVE_TRANSPORT", "ws").lower().strip()
+NAV_DRIVE_WS_URL = os.environ.get(
+    "NAV_DRIVE_WS_URL", "wss://rover.tail9d0237.ts.net:3000"
+).rstrip("/")
 DRIVE_URL = os.environ.get(
     "NAV_DRIVE_URL",
     os.environ.get("NAV_DRIVE_BASE_URL", "http://127.0.0.1:8787") + "/api/navigation/drive",
@@ -60,11 +62,19 @@ class CmdVelBridge(Node):
         self._latest: Twist | None = None
         self._latest_at = 0.0
         self._last_sent = {"x": 0.0, "y": 0.0}
-        self._ssl = None if SSL_VERIFY else ssl._create_unverified_context()
+        self._drive_client = PiDriveClient(
+            transport=NAV_DRIVE_TRANSPORT,
+            ws_url=NAV_DRIVE_WS_URL,
+            http_url=DRIVE_URL,
+            token=NAV_API_TOKEN,
+            ssl_verify=SSL_VERIFY,
+            timeout=1.2,
+        )
         self.create_subscription(Twist, CMD_VEL_TOPIC, self._on_cmd, qos_profile_sensor_data)
         self.create_timer(1.0 / max(KEEPALIVE_HZ, 1.0), self._tick)
         self.get_logger().info(
-            f"cmd_vel bridge topic={CMD_VEL_TOPIC} drive={DRIVE_URL} "
+            f"cmd_vel bridge topic={CMD_VEL_TOPIC} transport={NAV_DRIVE_TRANSPORT} "
+            f"ws={NAV_DRIVE_WS_URL} http={DRIVE_URL} "
             f"mode=continuous_analog max_v={MAX_LINEAR_MPS} max_w={MAX_ANGULAR_RPS}"
         )
 
@@ -92,19 +102,13 @@ class CmdVelBridge(Node):
         self._write_status(drive, age if msg else None)
 
     def _post(self, payload: dict[str, Any]) -> None:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            DRIVE_URL,
-            data=data,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        if NAV_API_TOKEN:
-            req.add_header("Authorization", f"Bearer {NAV_API_TOKEN}")
         try:
-            urllib.request.urlopen(req, timeout=1.2, context=self._ssl)
-        except (urllib.error.URLError, TimeoutError) as err:
-            self.get_logger().warning(f"drive post failed: {err}", throttle_duration_sec=2.0)
+            self._drive_client.send(payload.get("drive") or {})
+        except Exception as err:
+            self.get_logger().warning(
+                f"drive {NAV_DRIVE_TRANSPORT} send failed: {err}",
+                throttle_duration_sec=2.0,
+            )
 
     def _write_status(self, drive: dict[str, float], age: float | None) -> None:
         moving = abs(drive.get("x", 0)) > 1e-3 or abs(drive.get("y", 0)) > 1e-3

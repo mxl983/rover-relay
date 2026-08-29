@@ -108,8 +108,8 @@ controller_server:
       lookahead_time: 1.2
       transform_tolerance: 0.5
       use_velocity_scaled_lookahead_dist: true
-      # Creep in for the last meter so we do not overshoot the 5 cm gate.
-      min_approach_linear_velocity: 0.04
+      # Keep the final approach above the rover's physical movement floor.
+      min_approach_linear_velocity: 0.10
       approach_velocity_scaling_dist: 1.20
       # Local rolling costmap has no live scan; unknown/inflated static cells
       # falsely trip "collision ahead" and freeze vx at 0. Global plan avoids walls.
@@ -124,10 +124,12 @@ controller_server:
       inflation_cost_scaling_factor: 3.0
       use_rotate_to_heading: true
       allow_reversing: false
-      # Pure-rotate ONLY when |angle_to_carrot| exceeds this. Smaller = more vx=0 spin.
-      rotate_to_heading_min_angle: 0.785
-      rotate_to_heading_angular_vel: 0.80
-      max_angular_accel: 1.5
+      # Match live Nav2: pure rotation starts at modest heading errors so
+      # tiny curved-pursuit turns do not fall below the drive floor.
+      rotate_to_heading_min_angle: 0.52
+      # Match live Nav2 heading-turn timing so co-sim remains representative.
+      rotate_to_heading_angular_vel: 0.30
+      max_angular_accel: 0.60
       max_robot_pose_search_dist: 1.5
       use_interpolation: true
 

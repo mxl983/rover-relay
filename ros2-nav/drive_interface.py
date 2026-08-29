@@ -43,11 +43,13 @@ MIN_FWD_STICK = 0.20
 # Arc / combined motion yaw assist (while also translating).
 MIN_TURN_STICK = 0.30
 TURN_COMMIT_RPS = 0.18
-# In-place tank turn (vx≈0): commit full stick once Nav2 asks for a real yaw.
+# In-place tank turn (vx≈0): commit enough stick to overcome static friction.
 # Was 0.45 — RPP rotate-to-heading emits ~0.22–0.35 (and PP often ~0.05–0.14
 # when vx is crushed), which mapped to stick≈0.14 and never broke static friction
 # (nav-20260826-073411: tiny wz, rover did not turn).
-PURE_ROTATE_STICK = 0.70
+# Keep pure heading turns slower than manual full-stick rotation while still
+# clearing the measured static-friction region.
+PURE_ROTATE_STICK = 0.55
 PURE_ROTATE_COMMIT_RPS = 0.10
 # While translating: cap yaw trim so forward+drive doesn't arc into circles.
 ARC_MAX_STICK = 0.20
@@ -172,16 +174,19 @@ def twist_to_pi_drive(
             y = 0.0
 
     x = 0.0
-    if abs(wz) >= lim.min_angular_rps:
+    if abs(wz) >= lim.angular_deadband_rps:
         frac = abs(wz) / max(lim.max_angular_rps, 1e-3)
         pure_rotate = abs(vx) < lim.min_linear_mps
         if pure_rotate:
-            if abs(wz) >= PURE_ROTATE_COMMIT_RPS:
-                # Real yaw command — floor stick so static friction + keepalive bite.
-                mag = max(rotate_floor, min(1.0, frac))
-            else:
-                # Sub-commit noise only (below ~0.10 rad/s).
-                mag = max(MIN_TURN_STICK * 0.45, min(0.55, frac * 1.05))
+            # Any surviving pure-yaw command must be physically actionable.
+            # Preserve its direction while raising tiny Nav2 commands to the
+            # lowest angular speed that clears rover static friction.
+            effective_wz = math.copysign(
+                max(abs(wz), PURE_ROTATE_COMMIT_RPS),
+                wz,
+            )
+            frac = abs(effective_wz) / max(lim.max_angular_rps, 1e-3)
+            mag = max(rotate_floor, min(1.0, frac))
         elif abs(wz) >= TURN_COMMIT_RPS:
             mag = max(0.10, min(ARC_MAX_STICK, frac * 0.38))
         else:
