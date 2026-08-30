@@ -128,7 +128,9 @@ export const SystemControls = ({
           style={styles.triggerWrapper}
           aria-label="Open settings"
           onPointerDown={(event) => event.preventDefault()}
-          onClick={() => setOpen((previous) => !previous)}
+          onPointerUp={(event) => {
+            if (event.button === 0) setOpen((previous) => !previous);
+          }}
         >
           <Settings size={18} style={styles.bareIcon} />
         </button>
