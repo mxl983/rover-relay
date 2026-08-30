@@ -518,6 +518,15 @@ html {
   align-items: flex-end;
 }
 
+.settings-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
 /* Keep the full settings menu accessible as a side drawer on every viewport. */
 .settings-menu-drawer {
   position: static !important;
@@ -533,10 +542,10 @@ html {
   border-radius: 0 !important;
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
     max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-  transform: none !important;
+  transition: transform 220ms ease-out;
 }
 
-div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer) {
+div[data-radix-popper-content-wrapper] {
   position: fixed !important;
   inset: 0 0 0 auto !important;
   width: min(340px, 88vw) !important;
@@ -548,15 +557,14 @@ div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer) {
   z-index: 9999 !important;
   pointer-events: none;
   transform: none !important;
-  transition: transform 220ms ease-out;
 }
 
-div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer[data-state="open"]) {
+.settings-menu-drawer[data-state="open"] {
   pointer-events: auto;
   transform: translateX(0) !important;
 }
 
-div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer[data-state="closed"]) {
+.settings-menu-drawer[data-state="closed"] {
   pointer-events: none;
   transform: translateX(100%) !important;
 }

@@ -51,11 +51,23 @@ describe("SystemControls", () => {
     );
     const trigger = document.querySelector("[aria-haspopup='menu']");
     expect(trigger).toBeTruthy();
+    expect(document.querySelector(".settings-menu-drawer")).toHaveAttribute(
+      "data-state",
+      "closed",
+    );
     await user.click(trigger);
-    expect(document.querySelector(".settings-menu-drawer")).toBeTruthy();
+    expect(document.querySelector(".settings-menu-drawer")).toHaveAttribute(
+      "data-state",
+      "open",
+    );
     expect(document.querySelector(".settings-capture-button")).toBeTruthy();
     expect(document.body.textContent).toMatch(
       /Stream|Night|720|Focus|PSM|On|Off|Driving|Control|Mode|ECO|Sport|Assist|Map|Metrics|View telemetry|Reboot|Shutdown/i,
+    );
+    await user.click(document.querySelector(".settings-drawer-backdrop"));
+    expect(document.querySelector(".settings-menu-drawer")).toHaveAttribute(
+      "data-state",
+      "closed",
     );
   });
 });

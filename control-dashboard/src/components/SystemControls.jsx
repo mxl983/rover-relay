@@ -121,15 +121,16 @@ export const SystemControls = ({
   if (!isPowered) return null;
 
   return (
-    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
           style={styles.triggerWrapper}
           aria-label="Open settings"
-          onPointerDown={(event) => event.preventDefault()}
-          onPointerUp={(event) => {
-            if (event.button === 0) setOpen((previous) => !previous);
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(true);
           }}
         >
           <Settings size={18} style={styles.bareIcon} />
@@ -137,15 +138,23 @@ export const SystemControls = ({
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Portal forceMount>
-        <DropdownMenu.Content
-          className="settings-menu-drawer"
-          forceMount
-          style={styles.menuContent}
-          side="right"
-          align="start"
-          sideOffset={0}
-          avoidCollisions={false}
-        >
+        <>
+          {open && (
+            <div
+              className="settings-drawer-backdrop"
+              aria-hidden="true"
+              onPointerDown={() => setOpen(false)}
+            />
+          )}
+          <DropdownMenu.Content
+            className="settings-menu-drawer"
+            forceMount
+            style={styles.menuContent}
+            side="right"
+            align="start"
+            sideOffset={0}
+            avoidCollisions={false}
+          >
           <DropdownMenu.Sub>
             <DropdownMenu.SubTrigger style={styles.menuItem}>
               <Video size={14} /> <span>Stream</span>
@@ -409,7 +418,8 @@ export const SystemControls = ({
               style={isCapturing ? { animation: "spin 2s linear infinite" } : {}}
             />
           </DropdownMenu.Item>
-        </DropdownMenu.Content>
+          </DropdownMenu.Content>
+        </>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
   );
