@@ -35,7 +35,7 @@ describe("RoverSchematic", () => {
     const clock = formatClockShort(new Date("2026-08-16T06:48:00"));
     expect(screen.getByText(clock)).toBeTruthy();
     expect(screen.getAllByLabelText(/Battery 50%/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText("50%")).toBeNull();
+    expect(screen.getByText("50%", { selector: "text" })).toBeTruthy();
     expect(screen.queryByText("BAT")).toBeNull();
     expect(screen.getAllByText("TMP").length).toBeGreaterThan(0);
     expect(screen.getAllByText("VOL").length).toBeGreaterThan(0);

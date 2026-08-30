@@ -207,10 +207,10 @@ YAW_ALIGN_CFG = YawPulseAlignConfig(
 XY_GAP_CFG = XyGapCloseConfig(
     xy_tol_m=float(os.environ.get("NAV_XY_GAP_TOL_M", "0.08")),
     settle_s=_settle_seconds("NAV_XY_GAP_SETTLE_SEC", 3.0),
-    forward_stick=float(os.environ.get("NAV_XY_GAP_FWD_STICK", "0.42")),
+    forward_stick=float(os.environ.get("NAV_XY_GAP_FWD_STICK", "0.50")),
     face_stick=float(os.environ.get("NAV_XY_GAP_FACE_STICK", "0.36")),
-    final_forward_stick=float(os.environ.get("NAV_XY_GAP_FINAL_STICK", "0.52")),
-    final_forward_pulse_s=float(os.environ.get("NAV_XY_GAP_FINAL_PULSE_SEC", "0.32")),
+    final_forward_stick=float(os.environ.get("NAV_XY_GAP_FINAL_STICK", "0.50")),
+    final_forward_pulse_s=float(os.environ.get("NAV_XY_GAP_FINAL_PULSE_SEC", "0.24")),
     invert_angular=DRIVE_INVERT_ANGULAR,
 )
 # After XY is committed, ignore rotation skid unless pose jumps this far (kidnap).

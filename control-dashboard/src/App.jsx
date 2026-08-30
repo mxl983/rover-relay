@@ -25,7 +25,6 @@ import { DualJoystickControls } from "./components/DualJoystickControls";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
-import { LidarMinimap } from "./components/LidarMinimap";
 import { SlamMap } from "./components/SlamMap";
 import { BrandCatIcon } from "./components/BrandCatIcon";
 import { HudIndicatorStrip } from "./components/HudIndicatorStrip";
@@ -34,7 +33,6 @@ import { useFullscreen } from "./hooks/useFullscreen";
 import { usePiWebSocket } from "./hooks/usePiWebSocket";
 import { useEspMqtt } from "./hooks/useEspMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
-import { useLidarScan } from "./hooks/useLidarScan";
 import { useSlamMap } from "./hooks/useSlamMap";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
@@ -180,19 +178,13 @@ export default function App() {
   const [focusMode, setFocusMode] = useState("far");
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
   const [showBackupView, setShowBackupView] = useState(false);
-  const [showLidarMinimap, setShowLidarMinimapState] = useState(false);
   const [showSlamMap, setShowSlamMapState] = useState(false);
   const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
   const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
   const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
 
-  const setShowLidarMinimap = (enabled) => {
-    setShowLidarMinimapState(enabled);
-    void playRoverChime();
-  };
-
-  const toggleLidarMinimap = () => {
-    setShowLidarMinimapState((prev) => {
+  const toggleSlamMap = () => {
+    setShowSlamMapState((prev) => {
       const next = !prev;
       void playRoverChime();
       return next;
@@ -273,10 +265,6 @@ export default function App() {
   const [relayDistanceMeters, setRelayDistanceMeters] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
-  const lidarSubscribed = isAuthenticated && showLidarMinimap;
-  const { scan: lidarScan, isLive: lidarLive, error: lidarError } = useLidarScan(
-    lidarSubscribed,
-  );
   const slamSubscribed = isAuthenticated && showSlamMap;
   const { map: slamMap, isLive: slamLive, error: slamError } = useSlamMap(slamSubscribed);
 
@@ -1032,7 +1020,7 @@ export default function App() {
           backupViewEnabled={showBackupView}
           onTreat={handleFeederTreat}
           onToggleFullscreen={toggleDocumentFullscreen}
-          onToggleMap={toggleLidarMinimap}
+          onToggleMap={toggleSlamMap}
           onToggleMetrics={toggleMetricsPanel}
         />
       )}
@@ -1064,8 +1052,6 @@ export default function App() {
             onFocusChange={handleFocusChange}
             controlMode={controlMode}
             onControlModeChange={setControlMode}
-            lidarMinimapEnabled={showLidarMinimap}
-            onLidarMinimapChange={setShowLidarMinimap}
             slamMapEnabled={showSlamMap}
             onSlamMapChange={setShowSlamMap}
             metricsPanelEnabled={showMetricsPanel}
@@ -1077,30 +1063,13 @@ export default function App() {
           />
 
           {showSlamMap && (
-            <div
-              className={
-                showLidarMinimap
-                  ? "slam-map-float"
-                  : "slam-map-float slam-map-float--solo"
-              }
-            >
+            <div className="slam-map-float slam-map-float--solo">
               <SlamMap
                 map={slamMap}
                 isLive={slamLive}
                 error={slamError}
                 driveAssistEnabled={driveAssistEnabled}
                 driveAssistUpdate={driveAssistHudUpdate}
-              />
-            </div>
-          )}
-
-          {showLidarMinimap && (
-            <div className="lidar-minimap-float">
-              <LidarMinimap
-                scan={lidarScan}
-                isLive={lidarLive}
-                error={lidarError}
-                pan={displayStats.pan}
               />
             </div>
           )}
@@ -1133,7 +1102,7 @@ export default function App() {
             backupViewEnabled={showBackupView}
             onFeederTreat={handleFeederTreat}
             onToggleFullscreen={toggleDocumentFullscreen}
-            onToggleMap={toggleLidarMinimap}
+            onToggleMap={toggleSlamMap}
             onToggleMetrics={toggleMetricsPanel}
           />
         </div>
@@ -1193,8 +1162,6 @@ function HudHeader({
   onFocusChange,
   controlMode,
   onControlModeChange,
-  lidarMinimapEnabled,
-  onLidarMinimapChange,
   slamMapEnabled,
   onSlamMapChange,
   metricsPanelEnabled,
@@ -1256,8 +1223,6 @@ function HudHeader({
           onFocusChange={onFocusChange}
           controlMode={controlMode}
           onControlModeChange={onControlModeChange}
-          lidarMinimapEnabled={lidarMinimapEnabled}
-          onLidarMinimapChange={onLidarMinimapChange}
           slamMapEnabled={slamMapEnabled}
           onSlamMapChange={onSlamMapChange}
           metricsPanelEnabled={metricsPanelEnabled}

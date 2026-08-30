@@ -29,6 +29,7 @@ describe("SystemControls", () => {
 
   it("opens menu when powered", async () => {
     const user = userEvent.setup();
+    const onAction = vi.fn();
     render(
       <SystemControls
         isPowered
@@ -43,7 +44,7 @@ describe("SystemControls", () => {
         onNVToggle={vi.fn()}
         onResChange={vi.fn()}
         onFocusChange={vi.fn()}
-        onAction={vi.fn()}
+        onAction={onAction}
         controlMode="keyboard"
         onControlModeChange={vi.fn()}
       />,
@@ -51,6 +52,8 @@ describe("SystemControls", () => {
     const trigger = document.querySelector("[aria-haspopup='menu']");
     expect(trigger).toBeTruthy();
     await user.click(trigger);
+    expect(document.querySelector(".settings-menu-drawer")).toBeTruthy();
+    expect(document.querySelector(".settings-capture-button")).toBeTruthy();
     expect(document.body.textContent).toMatch(
       /Stream|Night|720|Focus|PSM|On|Off|Driving|Control|Mode|ECO|Sport|Assist|Map|Metrics|View telemetry|Reboot|Shutdown/i,
     );

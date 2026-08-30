@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { getRelayHttpOrigin } from "../config";
 import { compactDriveAssistSnapshot } from "../utils/driveAssistApi.js";
-import { waypointCompactLabel, waypointDisplayLabel } from "../utils/waypointLabels.js";
-
-const SLAM_EXPANDED_STORAGE_KEY = "slam_panel_expanded";
+import { waypointDisplayLabel } from "../utils/waypointLabels.js";
 
 const DEFAULT_RANGE_M = 8;
-const MIN_RANGE_M = 3;
+// Two additional zoom-in steps below the previous 3 m minimum.
+const MIN_RANGE_M = 1.92;
 const MAX_RANGE_M = 40;
 const ZOOM_FACTOR = 1.25;
 const MAX_DPR = 3;
@@ -539,10 +538,6 @@ export function SlamMap({
   const [arrivalFeedback, setArrivalFeedback] = useState(
     /** @type {{ position_error_m?: number, yaw_error_deg?: number } | null} */ (null),
   );
-  const [expanded, setExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(SLAM_EXPANDED_STORAGE_KEY) === "1";
-  });
   const [dockFeedback, setDockFeedback] = useState(
     /** @type {{ position_error_m?: number, yaw_error_deg?: number, fwd_m?: number, left_m?: number } | null} */ (
       null
@@ -562,12 +557,6 @@ export function SlamMap({
       window.localStorage.setItem("slam_fine_docking", fineDocking ? "1" : "0");
     }
   }, [fineDocking]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(SLAM_EXPANDED_STORAGE_KEY, expanded ? "1" : "0");
-    }
-  }, [expanded]);
 
   const waypoints = listWaypoints(map);
   const selected =
@@ -590,7 +579,6 @@ export function SlamMap({
   }, [waypoints, selectedId]);
 
   useEffect(() => {
-    if (!expanded) return undefined;
     let raf = 0;
     raf = requestAnimationFrame(() => {
       const canvas = canvasRef.current;
@@ -614,7 +602,7 @@ export function SlamMap({
       );
     });
     return () => cancelAnimationFrame(raf);
-  }, [expanded, map, rangeM, selectedId, activeGoalId, navPath, navUi]);
+  }, [map, rangeM, selectedId, activeGoalId, navPath, navUi]);
 
   useEffect(() => {
     if (!isLive) return undefined;
@@ -715,8 +703,10 @@ export function SlamMap({
         ? "mid"
         : "good";
   const poseLabel = pose
-    ? `${pose.x.toFixed(2)} , ${pose.y.toFixed(2)}`
-    : "—";
+    ? `POSE x ${pose.x.toFixed(3)} · y ${pose.y.toFixed(3)} · yaw ${(
+        (pose.yaw * 180) / Math.PI
+      ).toFixed(2)}°`
+    : "POSE —";
   const navigating =
     navPhase === "navigating" || navPhase === "docking" || navPhase === "settling";
   const settling = navPhase === "settling";
@@ -864,7 +854,7 @@ export function SlamMap({
         : "Standby";
   const piDrive = navDrive?.drive || { x: 0, y: 0 };
   const velocityLabel = `ROVER vx ${(Number(piDrive.x) || 0).toFixed(2)} · vy ${(Number(piDrive.y) || 0).toFixed(2)}`;
-  const velocityDisplay = [velocityLabel, formatDeltas(navFeedback || arrivalFeedback)]
+  const velocityDisplay = [velocityLabel, poseLabel, formatDeltas(navFeedback || arrivalFeedback)]
     .filter(Boolean)
     .join(" · ");
 
@@ -1190,90 +1180,11 @@ export function SlamMap({
     }
   };
 
-  if (!expanded) {
-    return (
-      <div
-        className="lidar-minimap lidar-minimap--floating lidar-minimap--slam lidar-minimap--slam-compact"
-        aria-label="SLAM navigation"
-      >
-        <div className="slam-compact-bar">
-          <span className="lidar-minimap-title">
-            SLAM{mapFrozen ? " · FRZ" : ""}
-          </span>
-          <span className={`lidar-minimap-status ${statusClass}`} aria-hidden="true" />
-          <div className="slam-compact-dests" role="group" aria-label="Go to mark">
-            {!waypoints.length ? (
-              <span className="slam-compact-empty">no marks</span>
-            ) : (
-              waypoints.map((wp, index) => {
-                const label = waypointCompactLabel(wp, index);
-                const isActive =
-                  String(activeGoalId) === String(wp.id) ||
-                  (navigating && String(selectedId) === String(wp.id));
-                return (
-                  <button
-                    key={wp.id}
-                    type="button"
-                    className={`slam-compact-dest-btn${isActive ? " slam-compact-dest-btn--active" : ""}`}
-                    onClick={() => void goToWaypoint(wp)}
-                    disabled={!navCanGo}
-                    title={`Navigate to ${waypointDisplayLabel(wp, index)}`}
-                    aria-label={`Go to ${waypointDisplayLabel(wp, index)}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })
-            )}
-          </div>
-          <button
-            type="button"
-            className="slam-compact-expand"
-            onClick={() => setExpanded(true)}
-            title="Expand SLAM map and controls"
-            aria-label="Expand SLAM panel"
-          >
-            MAP
-          </button>
-        </div>
-        <div
-          className={`slam-nav-indicator slam-nav-indicator--compact slam-nav-indicator--${navUiStatus}${navigating ? " slam-nav-indicator--active" : ""}`}
-          aria-live="polite"
-        >
-          <span className="slam-nav-phase">
-            <span
-              className={`slam-nav-dot${navigating ? " slam-nav-dot--live" : ""}${navUiStatus === "arrived" ? " slam-nav-dot--arrived" : ""}`}
-              aria-hidden="true"
-            />
-            {statusLabel}
-          </span>
-          <span className="slam-nav-detail">{statusDetail}</span>
-        </div>
-        <div
-          className="slam-nav-velocity"
-          title="Converted rover drive vector: vx is the turn/x axis, vy is the forward/y axis; vy<0 forward, vx<0 left."
-          aria-label={`Translated drive velocity and navigation deltas: ${velocityDisplay}`}
-        >
-          {velocityDisplay}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="lidar-minimap lidar-minimap--floating lidar-minimap--slam" aria-label="SLAM map">
       <div className="lidar-minimap-header">
         <span className="lidar-minimap-title">SLAM{mapFrozen ? " · FROZEN" : " · MAPPING"}</span>
         <div className="lidar-minimap-zoom" role="group" aria-label="Zoom">
-          <button
-            type="button"
-            className="lidar-minimap-zoom-btn"
-            onClick={() => setExpanded(false)}
-            aria-label="Collapse SLAM panel"
-            title="Compact view"
-          >
-            −
-          </button>
           <button
             type="button"
             className="lidar-minimap-zoom-btn"

@@ -557,7 +557,7 @@ function BatteryHero({ level, text, clockLabel, color, isCharging, isOffline }) 
         {clockLabel}
       </div>
 
-      {/* iPhone status-bar battery — replaces the percentage numeral */}
+      {/* iPhone status-bar battery */}
       <svg
         className="rover-battery-hero__icon"
         width="27"
@@ -600,6 +600,18 @@ function BatteryHero({ level, text, clockLabel, color, isCharging, isOffline }) 
             stroke="none"
           />
         ) : null}
+        <text
+          x="12"
+          y="7"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#ffffff"
+          fontSize="6"
+          fontWeight="700"
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+        >
+          {text}
+        </text>
       </svg>
     </div>
   );

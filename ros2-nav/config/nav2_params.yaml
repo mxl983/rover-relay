@@ -108,7 +108,7 @@ controller_server:
       # The Pi drive conversion cannot move reliably below ~0.08 m/s.
       # Keep the final approach above that physical floor instead of emitting
       # a Twist that translates to a neutral stick.
-      min_approach_linear_velocity: 0.10
+      min_approach_linear_velocity: 0.16
       approach_velocity_scaling_dist: 1.20
       # With scan+static local costmap, "collision ahead" often false-trips near
       # inflation and leaves rotate-to-heading spinning with vx=0.

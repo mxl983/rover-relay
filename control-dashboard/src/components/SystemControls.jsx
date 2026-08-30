@@ -16,7 +16,6 @@ import {
   Keyboard,
   Gamepad2,
   BarChart3,
-  Radar,
   Map as MapIcon,
   ShieldAlert,
   Glasses,
@@ -109,8 +108,6 @@ export const SystemControls = ({
   onAction,
   controlMode,
   onControlModeChange,
-  lidarMinimapEnabled = false,
-  onLidarMinimapChange,
   slamMapEnabled = false,
   onSlamMapChange,
   metricsPanelEnabled,
@@ -120,47 +117,33 @@ export const SystemControls = ({
   dashMicEnabled = false,
   onDashMicChange,
 }) => {
+  const [open, setOpen] = React.useState(false);
   if (!isPowered) return null;
 
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger asChild>
-        <div style={styles.triggerWrapper}>
+        <button
+          type="button"
+          style={styles.triggerWrapper}
+          aria-label="Open settings"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setOpen((previous) => !previous)}
+        >
           <Settings size={18} style={styles.bareIcon} />
-        </div>
+        </button>
       </DropdownMenu.Trigger>
 
-      <DropdownMenu.Portal>
+      <DropdownMenu.Portal forceMount>
         <DropdownMenu.Content
+          className="settings-menu-drawer"
+          forceMount
           style={styles.menuContent}
-          side="bottom"
-          align="end"
-          sideOffset={8}
+          side="right"
+          align="start"
+          sideOffset={0}
+          avoidCollisions={false}
         >
-          {/* HI-RES CAPTURE ACTION */}
-          <DropdownMenu.Item
-            style={{
-              ...styles.menuItem,
-              color: "#00f2ff",
-              opacity: isCapturing ? 0.5 : 1,
-            }}
-            onSelect={() => !isCapturing && onAction("capture")}
-            disabled={isCapturing}
-          >
-            <Aperture
-              size={14}
-              style={
-                isCapturing ? { animation: "spin 2s linear infinite" } : {}
-              }
-            />
-            <span>{isCapturing ? "Capturing..." : "Take Hi-Res Photo"}</span>
-            <span style={{ marginLeft: "auto", fontSize: "9px", opacity: 0.5 }}>
-              C
-            </span>
-          </DropdownMenu.Item>
-
-          <DropdownMenu.Separator style={styles.separator} />
-
           <DropdownMenu.Sub>
             <DropdownMenu.SubTrigger style={styles.menuItem}>
               <Video size={14} /> <span>Stream</span>
@@ -321,19 +304,15 @@ export const SystemControls = ({
             />
           </SettingsToggleRow>
 
-          <SettingsToggleRow
-            icon={<Radar size={12} />}
-            label="Map"
-            title="Live LiDAR minimap"
-          >
+          <SettingsToggleRow icon={<Gauge size={12} />} label="Metrics">
             <SegmentedToggle
-              ariaLabel="LiDAR map"
-              value={lidarMinimapEnabled ? "on" : "off"}
+              ariaLabel="Metrics panel"
+              value={metricsPanelEnabled ? "on" : "off"}
               options={[
                 { label: "OFF", value: "off" },
                 { label: "ON", value: "on" },
               ]}
-              onChange={(mode) => onLidarMinimapChange?.(mode === "on")}
+              onChange={(mode) => onMetricsPanelChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 
@@ -350,18 +329,6 @@ export const SystemControls = ({
                 { label: "ON", value: "on" },
               ]}
               onChange={(mode) => onSlamMapChange?.(mode === "on")}
-            />
-          </SettingsToggleRow>
-
-          <SettingsToggleRow icon={<Gauge size={12} />} label="Metrics">
-            <SegmentedToggle
-              ariaLabel="Metrics panel"
-              value={metricsPanelEnabled ? "on" : "off"}
-              options={[
-                { label: "OFF", value: "off" },
-                { label: "ON", value: "on" },
-              ]}
-              onChange={(mode) => onMetricsPanelChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 
@@ -422,6 +389,24 @@ export const SystemControls = ({
           >
             <Power size={14} /> <span>Shutdown</span>
           </DropdownMenu.Item>
+
+          <DropdownMenu.Item
+            className="settings-capture-button"
+            style={{
+              ...styles.captureButton,
+              opacity: isCapturing ? 0.5 : 1,
+            }}
+            onSelect={() => !isCapturing && onAction("capture")}
+            disabled={isCapturing}
+            aria-label={isCapturing ? "Capturing photo" : "Take hi-res photo"}
+            title={isCapturing ? "Capturing..." : "Take hi-res photo"}
+          >
+            <Aperture
+              size={60}
+              strokeWidth={1.5}
+              style={isCapturing ? { animation: "spin 2s linear infinite" } : {}}
+            />
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -432,6 +417,17 @@ const styles = {
   triggerWrapper: {
     outline: "none",
     display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 28,
+    padding: 0,
+    border: "none",
+    borderRadius: 0,
+    background: "transparent",
+    boxShadow: "none",
+    color: "inherit",
+    cursor: "pointer",
   },
   bareIcon: {
     color: "#00f2ff",
@@ -449,6 +445,8 @@ const styles = {
     border: "1px solid rgba(0, 242, 255, 0.2)",
     boxShadow: "0px 10px 38px -10px rgba(0, 0, 0, 0.5)",
     zIndex: 9999,
+    display: "flex",
+    flexDirection: "column",
   },
   menuItem: {
     fontSize: "12px",
@@ -461,6 +459,23 @@ const styles = {
     cursor: "pointer",
     outline: "none",
     transition: "background 0.2s",
+  },
+  captureButton: {
+    alignSelf: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "76px",
+    height: "76px",
+    minHeight: "76px",
+    boxSizing: "border-box",
+    margin: "auto 0 12px",
+    padding: 0,
+    border: "3px solid #ffffff",
+    borderRadius: "50%",
+    background: "rgba(255, 255, 255, 0.08)",
+    color: "#ffffff",
+    transition: "background 0.2s, transform 0.2s",
   },
   toggleRow: {
     fontSize: "11px",

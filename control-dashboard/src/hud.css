@@ -518,19 +518,60 @@ html {
   align-items: flex-end;
 }
 
-.lidar-minimap {
-  pointer-events: none;
+/* Keep the full settings menu accessible as a side drawer on every viewport. */
+.settings-menu-drawer {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 100% !important;
+  max-height: none !important;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 0 !important;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  transform: none !important;
 }
 
-.lidar-minimap-float {
-  position: fixed;
-  top: max(68px, calc(env(safe-area-inset-top) + 52px));
-  left: max(12px, env(safe-area-inset-left));
-  z-index: 12;
+div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer) {
+  position: fixed !important;
+  inset: 0 0 0 auto !important;
+  width: min(340px, 88vw) !important;
+  min-width: 0 !important;
+  max-width: min(340px, 88vw) !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  box-sizing: border-box !important;
+  z-index: 9999 !important;
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  transform: none !important;
+  transition: transform 220ms ease-out;
+}
+
+div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer[data-state="open"]) {
+  pointer-events: auto;
+  transform: translateX(0) !important;
+}
+
+div[data-radix-popper-content-wrapper]:has(> .settings-menu-drawer[data-state="closed"]) {
+  pointer-events: none;
+  transform: translateX(100%) !important;
+}
+
+.settings-capture-button:hover:not([data-disabled]) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: scale(1.04);
+}
+
+.settings-capture-button:active:not([data-disabled]) {
+  transform: scale(0.96);
+}
+
+.lidar-minimap {
+  pointer-events: none;
 }
 
 .slam-map-float {
@@ -549,7 +590,7 @@ html {
   max-width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
 }
 
-/* SLAM panel is larger than the lidar minimap for nav status / debugging. */
+/* SLAM panel sizing for navigation status and debugging. */
 .slam-map-float .lidar-minimap--floating,
 .lidar-minimap--slam {
   width: 280px;
@@ -952,192 +993,6 @@ html {
   line-height: 1;
 }
 
-.slam-panel-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.slam-minimap-collapse-btn {
-  padding: 0 !important;
-}
-
-/* Compact SLAM bar — default view */
-.lidar-minimap--slam.lidar-minimap--slam-compact,
-.slam-map-float .lidar-minimap--slam.lidar-minimap--slam-compact {
-  width: max-content;
-  min-width: 0;
-  max-width: 100%;
-  padding: 4px 5px 5px;
-  box-sizing: border-box;
-  overflow: visible;
-}
-
-.slam-compact-bar {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  min-width: 0;
-  pointer-events: auto;
-}
-
-.slam-compact-bar .slam-compact-expand {
-  flex: 0 0 auto;
-  margin-left: 1px;
-}
-
-.slam-compact-bar .lidar-minimap-title {
-  flex: 0 0 auto;
-  font-size: 8px;
-  letter-spacing: 0.8px;
-  white-space: nowrap;
-}
-
-.slam-compact-bar .lidar-minimap-status {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-}
-
-.slam-compact-dests {
-  display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  max-width: 72px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.slam-compact-dests::-webkit-scrollbar {
-  display: none;
-}
-
-.slam-compact-empty {
-  font-size: 8px;
-  color: rgba(180, 200, 220, 0.65);
-  white-space: nowrap;
-}
-
-/* Beat global `button { 45×45 }` and `.hud-overlay button` padding inside HUD */
-.hud-overlay .lidar-minimap--slam-compact .slam-compact-dest-btn,
-.hud-overlay .lidar-minimap--slam-compact .slam-compact-expand,
-.lidar-minimap--slam-compact .slam-compact-dest-btn,
-.lidar-minimap--slam-compact .slam-compact-expand {
-  width: 16px !important;
-  height: 16px !important;
-  min-width: 16px !important;
-  max-width: 16px !important;
-  min-height: 16px !important;
-  max-height: 16px !important;
-  padding: 0 !important;
-  margin: 0;
-  font-size: 7px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  line-height: 1 !important;
-  border-radius: 2px !important;
-  backdrop-filter: none !important;
-  box-shadow: none !important;
-  transform: none !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-  flex-shrink: 0;
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.lidar-minimap--slam-compact .slam-compact-dest-btn {
-  border: 1px solid rgba(125, 255, 179, 0.45) !important;
-  background: rgba(30, 60, 45, 0.55) !important;
-  color: rgba(170, 255, 200, 0.95) !important;
-}
-
-.lidar-minimap--slam-compact .slam-compact-expand {
-  border: 1px solid rgba(255, 255, 255, 0.28) !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: rgba(220, 235, 255, 0.95) !important;
-}
-
-.lidar-minimap--slam-compact .slam-compact-expand svg {
-  width: 10px;
-  height: 10px;
-  display: block;
-  flex-shrink: 0;
-}
-
-.slam-compact-dest-btn {
-  flex: 0 0 auto;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.slam-compact-dest-btn:hover:not(:disabled) {
-  background: rgba(50, 100, 70, 0.65) !important;
-  color: rgba(170, 255, 200, 0.95) !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-.slam-compact-dest-btn:active:not(:disabled) {
-  background: rgba(60, 120, 85, 0.75) !important;
-  color: rgba(200, 255, 220, 1) !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-.slam-compact-dest-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.slam-compact-dest-btn--active {
-  border-color: rgba(125, 255, 179, 0.85) !important;
-  background: rgba(80, 160, 110, 0.35) !important;
-  box-shadow: 0 0 6px rgba(125, 255, 179, 0.2) !important;
-}
-
-.slam-compact-expand:hover {
-  background: rgba(255, 255, 255, 0.18) !important;
-  color: rgba(240, 248, 255, 1) !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-.slam-compact-expand:active {
-  background: rgba(255, 255, 255, 0.24) !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-.slam-nav-indicator--compact {
-  margin-top: 3px;
-  pointer-events: none;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 3px 5px;
-  font-size: 8px;
-}
-
-.slam-nav-indicator--compact .slam-nav-phase {
-  font-size: 8px;
-}
-
-.slam-nav-indicator--compact .slam-nav-detail {
-  font-size: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .slam-nav-btn--freeze.slam-nav-btn--active {
   border-color: rgba(140, 200, 255, 0.75) !important;
   color: rgba(170, 220, 255, 0.98);
@@ -1418,11 +1273,6 @@ html {
 }
 
 @media (max-width: 768px) {
-  .lidar-minimap-float {
-    top: max(56px, calc(env(safe-area-inset-top) + 44px));
-    left: max(8px, env(safe-area-inset-left));
-  }
-
   .slam-map-float {
     top: max(56px, calc(env(safe-area-inset-top) + 44px));
     left: max(156px, calc(env(safe-area-inset-left) + 148px));
@@ -1572,11 +1422,6 @@ html {
 }
 
 @media (max-width: 768px) {
-  .lidar-minimap-float {
-    top: max(56px, calc(env(safe-area-inset-top) + 44px));
-    left: max(8px, env(safe-area-inset-left));
-  }
-
   .backup-view-pip {
     top: max(56px, calc(env(safe-area-inset-top) + 44px));
     left: 50%;

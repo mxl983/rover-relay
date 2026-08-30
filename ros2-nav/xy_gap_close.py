@@ -27,15 +27,15 @@ except ImportError:  # pragma: no cover
 class XyGapCloseConfig:
     xy_tol_m: float = 0.08
     settle_s: float = 3.0
-    forward_stick: float = 0.42
+    forward_stick: float = 0.50
     face_stick: float = 0.36
-    pulse_small_s: float = 0.12
-    pulse_mid_s: float = 0.20
-    pulse_large_s: float = 0.28
-    # Soft last push — old 0.32s@0.52 drove through the mark.
+    pulse_small_s: float = 0.16
+    pulse_mid_s: float = 0.24
+    pulse_large_s: float = 0.34
+    # Stronger last push, still capped by remaining forward distance.
     final_dist_m: float = 0.20
-    final_forward_stick: float = 0.40
-    final_forward_pulse_s: float = 0.16
+    final_forward_stick: float = 0.50
+    final_forward_pulse_s: float = 0.24
     face_goal_tol_rad: float = math.radians(18.0)
     face_near_tol_rad: float = math.radians(24.0)
     face_near_dist_m: float = 0.26
