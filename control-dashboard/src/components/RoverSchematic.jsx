@@ -82,11 +82,10 @@ function formatDistanceShort(meters, isOffline) {
     return isOffline ? "--" : "…";
   }
   const m = Math.max(0, Number(meters));
-  if (m <= 99) return `${Math.round(m)}m`;
+  if (m < 100) return "nearby";
   const km = m / 1000;
-  if (km < 10) return `${km.toFixed(1)}k`;
-  if (km < 1000) return `${Math.round(km)}k`;
-  return `${(km / 1000).toFixed(1)}M`;
+  if (km < 10) return `${km.toFixed(1)}km`;
+  return `${Math.round(km)}km`;
 }
 
 const STANDARD_PRESSURE_HPA = 1013.25;

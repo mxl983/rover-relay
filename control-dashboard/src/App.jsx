@@ -13,6 +13,7 @@ import {
   IMU_DEBUG,
   getRelayRoverHeartbeatWebSocketUrl,
   ROVER_CLIENT_DISTANCE_ENDPOINT,
+  ROVER_SITE_COORDS,
   ROVER_CHARGING_ENDPOINT,
   ROVER_STATE_ENDPOINT,
 } from "./config";
@@ -38,6 +39,7 @@ import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/captureUrl";
 import { formatClientSiteDistance } from "./utils/formatClientSiteDistance.js";
+import { distanceMeters as haversineMeters } from "./utils/geoDistance.js";
 import { deriveRoverCharging } from "./utils/deriveRoverCharging.js";
 import {
   fetchDriveAssistStatus,
@@ -297,8 +299,9 @@ export default function App() {
           setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
           const pressureHpa = Number(rover?.environment?.pressureHpa);
           setRelayPressureHpa(Number.isFinite(pressureHpa) ? pressureHpa : null);
+          // Only adopt distance when present — do not clear a value from geolocation/POST.
           const dist = Number(rover?.clientLocation?.distanceMeters);
-          setRelayDistanceMeters(Number.isFinite(dist) ? dist : null);
+          if (Number.isFinite(dist)) setRelayDistanceMeters(dist);
           setRelayRoverPayload({ rover });
         } catch {
           /* ignore */
@@ -316,7 +319,6 @@ export default function App() {
       ws.onclose = () => {
         if (cancelled) return;
         setRelayRoverPayload(null);
-        setRelayDistanceMeters(null);
         setRelayPressureHpa(null);
         reconnectTimer = setTimeout(connect, 2500);
       };
@@ -389,6 +391,18 @@ export default function App() {
 
     const reportLocation = (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
+
+      // Local haversine when rover site is configured in the dashboard env (dev fallback).
+      if (ROVER_SITE_COORDS) {
+        const local = haversineMeters(
+          { latitude, longitude },
+          ROVER_SITE_COORDS,
+        );
+        if (Number.isFinite(local)) {
+          setRelayDistanceMeters(Math.round(local * 10) / 10);
+        }
+      }
+
       void apiPostJson(ROVER_CLIENT_DISTANCE_ENDPOINT, { latitude, longitude, accuracy }, {
         timeout: 8000,
         retries: 0,
@@ -397,14 +411,20 @@ export default function App() {
           const dist = Number(data?.distanceMeters);
           if (Number.isFinite(dist)) setRelayDistanceMeters(dist);
         })
-        .catch(() => {
-          /* ignore — distance optional until rover site / permission ready */
+        .catch((err) => {
+          // Relay must have ROVER_LATITUDE / ROVER_LONGITUDE set, or DST stays empty.
+          console.warn(
+            "[dst] client-distance failed — set ROVER_LATITUDE/ROVER_LONGITUDE on the relay (or VITE_ROVER_* locally)",
+            err?.status ?? err?.message ?? err,
+          );
         });
     };
 
     watchId = navigator.geolocation.watchPosition(
       reportLocation,
-      () => {},
+      (err) => {
+        console.warn("[dst] geolocation unavailable — allow location for DST", err?.message ?? err);
+      },
       { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
     );
 

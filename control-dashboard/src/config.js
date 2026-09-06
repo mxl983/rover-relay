@@ -60,6 +60,17 @@ export const ROVER_CLIENT_DISTANCE_ENDPOINT =
   import.meta.env.VITE_ROVER_CLIENT_DISTANCE_URL ||
   `${getRelayHttpOrigin()}/api/rover/client-distance`;
 
+/**
+ * Optional fixed rover site for local DST (browser haversine).
+ * Prefer relay `ROVER_LATITUDE` / `ROVER_LONGITUDE`; set these only for local/dev fallback.
+ */
+const roverSiteLat = Number(import.meta.env.VITE_ROVER_LATITUDE);
+const roverSiteLon = Number(import.meta.env.VITE_ROVER_LONGITUDE);
+export const ROVER_SITE_COORDS =
+  Number.isFinite(roverSiteLat) && Number.isFinite(roverSiteLon)
+    ? { latitude: roverSiteLat, longitude: roverSiteLon }
+    : null;
+
 /** Fast charging-only path (webcam LED); avoids backup-cam latency on `/api/rover/state`. */
 export const ROVER_CHARGING_ENDPOINT =
   import.meta.env.VITE_ROVER_CHARGING_URL ||

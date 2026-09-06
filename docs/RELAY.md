@@ -16,7 +16,8 @@ By default this relay serves **HTTPS** (TLS).
 
 ```bash
 cp .env.example .env
-# edit .env — set ROVER_API_TOKEN, BACKUP_CAM_STREAM_URL, CORS_ORIGINS
+# edit .env — set ROVER_API_TOKEN, BACKUP_CAM_STREAM_URL, CORS_ORIGINS,
+# and ROVER_LATITUDE / ROVER_LONGITUDE (required for HUD DST / client distance)
 npm install
 npm test
 npm run dev

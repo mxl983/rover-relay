@@ -43,7 +43,7 @@ describe("RoverSchematic", () => {
     expect(screen.getAllByText("LV2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("AIR").length).toBeGreaterThan(0);
     expect(screen.getAllByText("DST").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("13k").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("13km").length).toBeGreaterThan(0);
     expect(screen.getAllByText("0").length).toBeGreaterThan(0);
     expect(screen.queryByText("ETA")).toBeNull();
     expect(screen.queryByText("-70")).toBeNull();
