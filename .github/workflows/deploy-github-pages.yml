@@ -1,5 +1,6 @@
-# Build control-dashboard and publish dist/ to the gh-pages branch.
-# Avoids the github-pages environment (which blocked liyang-dashboard).
+# Build control-dashboard and force-push dist/ to gh-pages.
+# Uses a fresh orphan branch so a broken vendor-rover gitlink on gh-pages
+# cannot break checkout/submodule sync.
 #
 # Repo → Settings → Pages → Build and deployment:
 #   Source: Deploy from a branch
@@ -23,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - uses: actions/setup-node@v4
         with:
@@ -39,11 +42,20 @@ jobs:
           npm run build:github-pages
           touch dist/.nojekyll
 
-      - name: Publish dist/ to gh-pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: control-dashboard/dist
-          branch: gh-pages
-          clean: true
-          single-commit: true
-          commit-message: chore: deploy mission control to GitHub Pages
+      - name: Force-publish dist/ to gh-pages
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          cp -a control-dashboard/dist/. "$work/"
+          touch "$work/.nojekyll"
+          cd "$work"
+          git init
+          git checkout -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: deploy mission control to GitHub Pages"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin gh-pages
