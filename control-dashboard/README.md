@@ -71,14 +71,14 @@ Repo: **[mxl983/rover-relay](https://github.com/mxl983/rover-relay)**.
 Branch-only publishing (**Settings → Pages → Deploy from branch → `gh-pages`**) sometimes never serves the site (**`404`** at `https://mxl983.github.io/rover-relay/` even when [commits exist on `gh-pages`](https://github.com/mxl983/rover-relay/commits/gh-pages)). The reliable fix is GitHub’s **Actions → GitHub Pages** integration:
 
 1. **Settings → Pages → Build and deployment → Source:** choose **GitHub Actions** (not “Deploy from a branch”).
-2. Merge/push **`.github/workflows/deploy-github-pages.yml`** on **`main`**. It installs **`control-dashboard`**, runs **`npm run build:github-pages`** with **`VITE_BASE_PATH=/rover-relay/`**, and deploys **`dist/`**.
+2. Push **`.github/workflows/deploy-github-pages.yml`** on **`liyang-dashboard`**. It installs **`control-dashboard`**, runs **`npm run build:github-pages`** with **`VITE_BASE_PATH=/rover-relay/`**, and deploys **`dist/`** on every push to that branch that touches the dashboard.
 3. Open **Actions**, run **Deploy GitHub Pages**, and approve the **`github-pages`** environment if GitHub asks on first run.
 
 After a green run, the live URL should respond (**may take a minute**).
 
 ### Optional: publish from your machine (`gh-pages` branch)
 
-You can still run **`npm run deploy`** from **`control-dashboard/`** — it uses [gh-pages](https://github.com/tschaub/gh-pages) to push **`dist/`** to the **`gh-pages`** branch (`--nojekyll`, **`--remove "**/*"`**). That only affects the branch; **GitHub will only serve it if Pages source is still “Deploy from branch.”** If you switched to **GitHub Actions**, use pushes to **`main`** (or **workflow_dispatch**) instead.
+You can still run **`npm run deploy`** from **`control-dashboard/`** — it uses [gh-pages](https://github.com/tschaub/gh-pages) to push **`dist/`** to the **`gh-pages`** branch (`--nojekyll`, **`--remove "**/*"`**). That only affects the branch; **GitHub will only serve it if Pages source is still “Deploy from branch.”** If you switched to **GitHub Actions**, use pushes to **`liyang-dashboard`** (or **workflow_dispatch**) instead.
 
 **Relay CORS** — In relay `.env`, include **`https://mxl983.github.io`** in **`CORS_ORIGINS`**.
 

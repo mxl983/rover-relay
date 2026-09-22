@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, screen } from "@testing-library/react";
 import { VideoStream } from "./VideoStream.jsx";
+import { recordPowerOnSent } from "../mqttPower.js";
 
 describe("VideoStream", () => {
   const OrigPC = globalThis.RTCPeerConnection;
   const OrigFetch = globalThis.fetch;
 
   beforeEach(() => {
+    localStorage.clear();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -39,6 +41,7 @@ describe("VideoStream", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    localStorage.clear();
     globalThis.RTCPeerConnection = OrigPC;
     globalThis.fetch = OrigFetch;
   });
@@ -47,5 +50,14 @@ describe("VideoStream", () => {
     const onReady = vi.fn();
     render(<VideoStream onVideoReadyChange={onReady} />);
     await waitFor(() => expect(globalThis.RTCPeerConnection).toHaveBeenCalled());
+  });
+
+  it("shows bouncing dots and boot percent from last MQTT ON", async () => {
+    recordPowerOnSent(Date.now() - 25_000);
+    render(<VideoStream controlChannelReady={false} />);
+    await waitFor(() => {
+      expect(document.querySelector(".boot-bounce-dots")).toBeTruthy();
+      expect(screen.getByText("50%")).toBeTruthy();
+    });
   });
 });

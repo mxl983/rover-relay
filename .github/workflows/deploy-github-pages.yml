@@ -1,14 +1,11 @@
 # Publishes control-dashboard to GitHub Pages using the official Actions flow.
-# After merging this, set: Repo → Settings → Pages → Build and deployment → Source: GitHub Actions.
-# (Branch-based “Deploy from gh-pages” often yields 404 even when the branch has commits.)
+# Repo → Settings → Pages → Build and deployment → Source: GitHub Actions.
+# Deploys from liyang-dashboard on every push that touches the dashboard (or this workflow).
 name: Deploy GitHub Pages
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "control-dashboard/**"
-      - ".github/workflows/deploy-github-pages.yml"
+    branches: [liyang-dashboard]
   workflow_dispatch:
 
 permissions:

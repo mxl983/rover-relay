@@ -5,6 +5,7 @@ import {
   AUDIO_TALK_HOST,
 } from "../config";
 import { apiFetch } from "../api/client";
+import { getBootProgressPercent } from "../mqttPower";
 import { VideoLoadingScene } from "./VideoLoadingScene.jsx";
 
 export const VideoStream = ({
@@ -14,8 +15,6 @@ export const VideoStream = ({
   dashMicEnabled = false,
   backupStreamUrl = "",
   showBackupView = false,
-  /** Optional boot-progress payload (legacy relay shape). Unused by App. */
-  relayRoverPayload = null,
   onHardPowerOff,
 }) => {
   const videoRef = useRef(null);
@@ -30,11 +29,6 @@ export const VideoStream = ({
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadingPercent, setLoadingPercent] = useState(null);
-  const loadingPercentRef = useRef(null);
-  const loadingPercentTargetRef = useRef(null);
-  const loadingInterpFromRef = useRef(null);
-  const loadingInterpStartMsRef = useRef(0);
-  const loadingInterpDurationMsRef = useRef(900);
   const [isBackupLoading, setIsBackupLoading] = useState(false);
   const [backupAvailable, setBackupAvailable] = useState(true);
   const [backupImgSrc, setBackupImgSrc] = useState("");
@@ -60,10 +54,6 @@ export const VideoStream = ({
   const rawNeedsLoader = isLoading || !controlChannelReady;
   const [loaderOverlayVisible, setLoaderOverlayVisible] = useState(rawNeedsLoader);
   const loaderHasEverBeenShownRef = useRef(rawNeedsLoader);
-
-  useEffect(() => {
-    loadingPercentRef.current = loadingPercent;
-  }, [loadingPercent]);
 
   useEffect(() => {
     onVideoReadyChange?.(!isLoading);
@@ -108,65 +98,20 @@ export const VideoStream = ({
     };
   }, [rawNeedsLoader]);
 
+  // Progress from last MQTT power-on, assuming ~50s rover boot.
   useEffect(() => {
-    if (!isLoading) return undefined;
-    if (!relayRoverPayload?.rover) return undefined;
-
-    const parsePercent = (data) => {
-      if (!data || typeof data !== "object") return null;
-      const asNum = (v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
-      };
-      return (
-        asNum(data.bootPercentage) ??
-        asNum(data.bootPercent) ??
-        asNum(data.progressPct) ??
-        asNum(data.progress) ??
-        asNum(data?.rover?.bootProgressPct) ??
-        asNum(data?.rover?.bootPercentage) ??
-        asNum(data?.rover?.bootPercent) ??
-        asNum(data?.rover?.progressPct) ??
-        asNum(data?.rover?.progress) ??
-        asNum(data?.state?.bootPercentage) ??
-        asNum(data?.state?.bootPercent)
-      );
+    if (!loaderOverlayVisible) {
+      setLoadingPercent(null);
+      return undefined;
+    }
+    const tick = () => {
+      const pct = getBootProgressPercent();
+      setLoadingPercent((prev) => (prev === pct ? prev : pct));
     };
-
-    const pct = parsePercent(relayRoverPayload);
-    if (pct == null) return undefined;
-    const now = Date.now();
-    const current = Number.isFinite(loadingPercentRef.current) ? loadingPercentRef.current : pct;
-    loadingInterpFromRef.current = current;
-    loadingPercentTargetRef.current = pct;
-    loadingInterpStartMsRef.current = now;
-    loadingInterpDurationMsRef.current = 900;
-    if (!Number.isFinite(loadingPercentRef.current)) setLoadingPercent(pct);
-    return undefined;
-  }, [isLoading, relayRoverPayload]);
-
-  useEffect(() => {
-    if (!isLoading) return undefined;
-    let rafId = 0;
-
-    const step = () => {
-      const target = loadingPercentTargetRef.current;
-      const from = loadingInterpFromRef.current;
-      if (Number.isFinite(target) && Number.isFinite(from)) {
-        const elapsed = Date.now() - loadingInterpStartMsRef.current;
-        const duration = Math.max(1, loadingInterpDurationMsRef.current);
-        const progress = Math.min(1, elapsed / duration);
-        const next = Math.round(from + (target - from) * progress);
-        setLoadingPercent((prev) => (prev === next ? prev : next));
-      }
-      rafId = window.requestAnimationFrame(step);
-    };
-
-    rafId = window.requestAnimationFrame(step);
-    return () => {
-      if (rafId) window.cancelAnimationFrame(rafId);
-    };
-  }, [isLoading]);
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, [loaderOverlayVisible]);
 
   const cleanup = (type) => {
     if (type === "video") {
@@ -409,10 +354,17 @@ export const VideoStream = ({
         <div style={loaderWrapper}>
           <VideoLoadingScene />
           <div style={loaderForeground}>
-            <div style={loaderTextStyle}>
-              COSMIC PIT STOP IN PROGRESS
-              {isLoading && loadingPercent != null ? ` — ${loadingPercent}% READY` : ""}
+            <div style={loaderProgressRow} aria-live="polite">
+              <span className="boot-bounce-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              {loadingPercent != null ? (
+                <span style={loaderPercentStyle}>{loadingPercent}%</span>
+              ) : null}
             </div>
+            <div style={loaderTextStyle}>COSMIC PIT STOP IN PROGRESS</div>
             <div style={loaderSubStyle}>
               {isLoading
                 ? "tuning antennas, dodging asteroids, and finding your rover feed..."
@@ -520,6 +472,24 @@ const loaderForeground = {
   justifyContent: "center",
   pointerEvents: "none",
   padding: "0 16px",
+};
+
+const loaderProgressRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "14px",
+  marginBottom: "14px",
+  minHeight: "28px",
+};
+
+const loaderPercentStyle = {
+  color: "#00f2ff",
+  fontSize: "22px",
+  fontWeight: "bold",
+  fontVariantNumeric: "tabular-nums",
+  letterSpacing: "0.06em",
+  fontFamily: "monospace",
 };
 
 const loaderTextStyle = {
