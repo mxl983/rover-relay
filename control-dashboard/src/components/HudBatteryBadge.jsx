@@ -12,13 +12,14 @@ export function HudBatteryBadge({
   const fillPct = hasData ? Math.min(100, Math.max(0, Number(level))) : 0;
   const low = hasData && !isOffline && fillPct < 20 && !isCharging;
   const text = hasData ? `${Math.round(fillPct)}%` : isOffline ? "--" : "…";
+  // Keep the bar translucent so the white % stays readable.
   const fillColor = isOffline
     ? "#636366"
     : isCharging
       ? "#34c759"
       : low
         ? "#ff3b30"
-        : "#ffffff";
+        : "rgba(255,255,255,0.38)";
 
   return (
     <div
@@ -74,11 +75,15 @@ export function HudBatteryBadge({
           />
         ) : null}
         <text
+          className="hud-battery-badge__pct"
           x="12"
           y="7"
           textAnchor="middle"
           dominantBaseline="middle"
           fill="#ffffff"
+          stroke="rgba(0,0,0,0.55)"
+          strokeWidth="0.55"
+          paintOrder="stroke fill"
           fontSize="6.5"
           fontWeight="700"
           fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
