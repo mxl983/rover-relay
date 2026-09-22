@@ -12,6 +12,7 @@ import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { BrandCatIcon } from "./components/BrandCatIcon";
 import { HudIndicatorStrip } from "./components/HudIndicatorStrip";
+import { HudBatteryBadge } from "./components/HudBatteryBadge";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
 import { useMentorPiControl } from "./hooks/useMentorPiControl";
@@ -27,6 +28,15 @@ import {
 import { logImuDebug } from "./utils/imuDebugLog.js";
 import { playRoverChime } from "./utils/chimeApi.js";
 import { toggleDocumentFullscreen } from "./utils/fullscreen.js";
+import {
+  PREF_KEYS,
+  readInitialControlMode,
+  readInitialResMode,
+  readPrefBool,
+  writeControlMode,
+  writePrefBool,
+  writeResMode,
+} from "./utils/dashboardPrefs.js";
 import {
   PI_SYSTEM_ENDPOINT,
   CAMERA_SECRET,
@@ -68,59 +78,7 @@ function isGimbalOnlyAssistantSequence(steps) {
 }
 
 const GIMBAL_HOME_SETTLE_MS = 600;
-
-const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
-const METRICS_PANEL_STORAGE_KEY = "rover-dashboard-metrics-panel";
-const ROVER_SPEAKER_STORAGE_KEY = "rover-dashboard-rover-speaker";
-const DASH_MIC_STORAGE_KEY = "rover-dashboard-dash-mic";
 const CONTROL_INTERVAL_WS_MS = 8; // ~125Hz coalesce before MentorPi HTTP
-
-function readInitialControlMode() {
-  if (typeof window === "undefined") return "keyboard";
-  try {
-    const v = window.localStorage.getItem(CONTROL_MODE_STORAGE_KEY);
-    if (v === "keyboard" || v === "joystick" || v === "immersive") return v;
-  } catch {
-    /* ignore */
-  }
-  return getIsMobileSnapshot() ? "joystick" : "keyboard";
-}
-
-function readInitialMetricsPanel() {
-  if (typeof window === "undefined") return true;
-  try {
-    const v = window.localStorage.getItem(METRICS_PANEL_STORAGE_KEY);
-    if (v === "false") return false;
-    if (v === "true") return true;
-  } catch {
-    /* ignore */
-  }
-  return true;
-}
-
-function readInitialRoverSpeaker() {
-  if (typeof window === "undefined") return true;
-  try {
-    const v = window.localStorage.getItem(ROVER_SPEAKER_STORAGE_KEY);
-    if (v === "false") return false;
-    if (v === "true") return true;
-  } catch {
-    /* ignore */
-  }
-  return true;
-}
-
-function readInitialDashMic() {
-  if (typeof window === "undefined") return false;
-  try {
-    const v = window.localStorage.getItem(DASH_MIC_STORAGE_KEY);
-    if (v === "true") return true;
-    if (v === "false") return false;
-  } catch {
-    /* ignore */
-  }
-  return false;
-}
 
 function formatRemainingTime(minutes) {
   if (!Number.isFinite(minutes) || minutes <= 0) return "an unknown amount of time";
@@ -134,16 +92,18 @@ function formatRemainingTime(minutes) {
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login } = useRoverSession();
+  const isMobile = useIsMobile();
+  const isFullscreen = useFullscreen();
+  const viewportRef = useRef(null);
   const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl, speedLevel, setSpeedLevel } =
     useMentorPiControl();
-  const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
+  const [driveAssistEnabled, setDriveAssistEnabledState] = useState(() =>
+    readPrefBool(PREF_KEYS.driveAssist, false),
+  );
+  const [quietMode, setQuietModeState] = useState(() =>
+    readPrefBool(PREF_KEYS.quietMode, true),
+  );
   const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
-
-  useEffect(() => {
-    if (typeof stats?.driveAssistEnabled === "boolean") {
-      setDriveAssistEnabled(stats.driveAssistEnabled);
-    }
-  }, [stats?.driveAssistEnabled]);
 
   useEffect(() => {
     if (!isAuthenticated || !DRIVE_ASSIST_DEBUG) return;
@@ -167,8 +127,15 @@ export default function App() {
     console.log(imuLive ? "[imu] stream live" : "[imu] stream stale / offline");
   }, [isAuthenticated, imuLive]);
 
-  const { isEspOnline, mqttClientRef } = useEspMqtt(
+  const [videoStreamReady, setVideoStreamReady] = useState(false);
+  const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
+  const [powerSavingTimeoutMinutes, setPowerSavingTimeoutMinutes] = useState(5);
+  const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
+
+  const probeEspWhileLoading = isAuthenticated && (!videoStreamReady || !piOnline);
+  const { isEspOnline, espPoweredOff, mqttClientRef } = useEspMqtt(
     isAuthenticated ? sessionCreds : null,
+    { probeEsp: probeEspWhileLoading },
   );
 
   const [isPowered, setIsPowered] = useState(true);
@@ -176,31 +143,36 @@ export default function App() {
   const nvActiveRef = useRef(false);
   const nvInFlightRef = useRef(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [resMode, setResMode] = useState("720p");
+  const [resMode, setResMode] = useState(readInitialResMode);
   const [focusMode, setFocusMode] = useState("far");
-  const [controlMode, setControlModeState] = useState(readInitialControlMode);
-  const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
-  const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
-  const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
+  const [controlMode, setControlModeState] = useState(() =>
+    readInitialControlMode(getIsMobileSnapshot()),
+  );
+  const [showMetricsPanel, setShowMetricsPanelState] = useState(() =>
+    readPrefBool(PREF_KEYS.metricsPanel, true),
+  );
+  const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(() =>
+    readPrefBool(PREF_KEYS.roverSpeaker, true),
+  );
+  const [dashMicEnabled, setDashMicEnabledState] = useState(() =>
+    readPrefBool(PREF_KEYS.dashMic, false),
+  );
+
+  // If form-factor flips and that form-factor has no saved mode yet, apply defaults.
+  useEffect(() => {
+    setControlModeState(readInitialControlMode(isMobile));
+  }, [isMobile]);
 
   const setShowMetricsPanel = (enabled) => {
     setShowMetricsPanelState(enabled);
-    try {
-      window.localStorage.setItem(METRICS_PANEL_STORAGE_KEY, enabled ? "true" : "false");
-    } catch {
-      /* ignore */
-    }
+    writePrefBool(PREF_KEYS.metricsPanel, enabled);
     void playRoverChime();
   };
 
   const toggleMetricsPanel = () => {
     setShowMetricsPanelState((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem(METRICS_PANEL_STORAGE_KEY, next ? "true" : "false");
-      } catch {
-        /* ignore */
-      }
+      writePrefBool(PREF_KEYS.metricsPanel, next);
       void playRoverChime();
       return next;
     });
@@ -208,32 +180,20 @@ export default function App() {
 
   const setRoverSpeakerEnabled = (enabled) => {
     setRoverSpeakerEnabledState(enabled);
-    try {
-      window.localStorage.setItem(ROVER_SPEAKER_STORAGE_KEY, enabled ? "true" : "false");
-    } catch {
-      /* ignore */
-    }
+    writePrefBool(PREF_KEYS.roverSpeaker, enabled);
     void playRoverChime();
   };
 
   const setDashMicEnabled = (enabled) => {
     setDashMicEnabledState(enabled);
-    try {
-      window.localStorage.setItem(DASH_MIC_STORAGE_KEY, enabled ? "true" : "false");
-    } catch {
-      /* ignore */
-    }
+    writePrefBool(PREF_KEYS.dashMic, enabled);
     void playRoverChime();
   };
 
   const setControlMode = (mode) => {
     if (mode !== "keyboard" && mode !== "joystick" && mode !== "immersive") return;
     setControlModeState(mode);
-    try {
-      window.localStorage.setItem(CONTROL_MODE_STORAGE_KEY, mode);
-    } catch {
-      /* ignore */
-    }
+    writeControlMode(mode, isMobile);
     void playRoverChime();
   };
   const [actionError, setActionError] = useState(null);
@@ -241,10 +201,6 @@ export default function App() {
   const [, setSystemLoading] = useState(false);
   const [, setCameraLoading] = useState(false);
   const [isPointerLocked, setIsPointerLocked] = useState(false);
-  const [videoStreamReady, setVideoStreamReady] = useState(false);
-  const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
-  const [powerSavingTimeoutMinutes, setPowerSavingTimeoutMinutes] = useState(5);
-  const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
 
   useEffect(() => {
     if (typeof stats?.powerSavingEnabled === "boolean") {
@@ -290,6 +246,7 @@ export default function App() {
         const json = await res.json();
         if (!cancelled && typeof json?.resolution === "string") {
           setResMode(json.resolution);
+          writeResMode(json.resolution);
         }
       } catch {
         /* optional */
@@ -311,19 +268,18 @@ export default function App() {
   const batteryPct = Number.isFinite(Number(stats?.battery))
     ? Number(stats.battery)
     : null;
-  const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
   const effectiveIsCharging =
     stats?.isCharging === true ||
     stats?.charging === true ||
     stats?.charging?.isCharging === true;
+  const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
+  const isCriticalBattery =
+    Number.isFinite(batteryPct) && batteryPct < 15 && !effectiveIsCharging;
   const distanceMeters = (() => {
     const v = Number(stats?.distance);
     return Number.isFinite(v) ? v : null;
   })();
 
-  const isMobile = useIsMobile();
-  const isFullscreen = useFullscreen();
-  const viewportRef = useRef(null);
   const mountedAtRef = useRef(Date.now());
   const lastDriveRef = useRef({ x: 0, y: 0 });
   const lastGimbalRef = useRef({ x: 0, y: 0 });
@@ -446,7 +402,16 @@ export default function App() {
     ) {
       return;
     }
-    publishPowerOff(mqttClientRef.current);
+    const client = mqttClientRef.current;
+    if (!client?.connected) {
+      setActionError("MQTT not connected — cannot hard reset");
+      return;
+    }
+    const ok = publishPowerOff(client);
+    if (!ok) {
+      setActionError("Hard reset failed — MQTT Off not published");
+      return;
+    }
     setIsPowered(false);
     showActionToast("Hard reset sent (OFF GPIO13)");
   };
@@ -573,6 +538,7 @@ export default function App() {
         { timeout: 20_000, retries: 0 },
       );
       setResMode(newMode);
+      writeResMode(newMode);
       showActionToast(`Resolution set to ${newMode.toUpperCase()}`);
       void playRoverChime();
     } catch (err) {
@@ -611,6 +577,8 @@ export default function App() {
 
   const setQuietMode = async (enabled) => {
     setActionError(null);
+    setQuietModeState(enabled);
+    writePrefBool(PREF_KEYS.quietMode, enabled);
     try {
       await apiPostJson(`${PI_SYSTEM_ENDPOINT}/quiet-mode`, { enabled });
       showActionToast(`Drive mode: ${enabled ? "ECO" : "Sport"}`);
@@ -623,15 +591,20 @@ export default function App() {
   const setDriveAssist = async (enabled) => {
     setActionError(null);
     const previousEnabled = driveAssistEnabled;
-    setDriveAssistEnabled(enabled);
+    setDriveAssistEnabledState(enabled);
+    writePrefBool(PREF_KEYS.driveAssist, enabled);
     try {
       const info = await postDriveAssist(enabled);
       const nextEnabled = readDriveAssistEnabled(info);
-      if (nextEnabled != null) setDriveAssistEnabled(nextEnabled);
+      if (nextEnabled != null) {
+        setDriveAssistEnabledState(nextEnabled);
+        writePrefBool(PREF_KEYS.driveAssist, nextEnabled);
+      }
       showActionToast(`Drive assist ${enabled ? "enabled" : "disabled"}`);
       void playRoverChime();
     } catch (err) {
-      setDriveAssistEnabled(previousEnabled);
+      setDriveAssistEnabledState(previousEnabled);
+      writePrefBool(PREF_KEYS.driveAssist, previousEnabled);
       setActionError(err.message ?? "Drive assist update failed");
       if (DRIVE_ASSIST_DEBUG) {
         console.log("[drive-assist] toggle failed", err?.message ?? err);
@@ -888,6 +861,7 @@ export default function App() {
         roverSpeakerEnabled={roverSpeakerEnabled}
         dashMicEnabled={dashMicEnabled}
         onHardPowerOff={handleHardPowerOff}
+        espPoweredOff={espPoweredOff}
       />
       <GimbalTiltHud pan={stats.pan} tilt={stats.tilt} />
 
@@ -937,6 +911,16 @@ export default function App() {
         />
       )}
 
+      {isAuthenticated &&
+        lowBatteryGlowArmed &&
+        isCriticalBattery && (
+          <div
+            className="battery-critical-frame"
+            role="alert"
+            aria-label="Critical battery — below 15 percent"
+          />
+        )}
+
       {isAuthenticated && (
         <div className={`hud-overlay${controlMode === "immersive" ? " hud-overlay--immersive" : ""}`}>
           <HudHeader
@@ -944,7 +928,7 @@ export default function App() {
             latencyMs={stats?.latency}
             isPowered={isPowered}
             resMode={resMode}
-            quietMode={stats?.quietMode}
+            quietMode={quietMode}
             driveAssistEnabled={driveAssistEnabled}
             driveAssistUpdate={driveAssistHudUpdate}
             powerSavingEnabled={powerSavingEnabled}
@@ -955,6 +939,7 @@ export default function App() {
             isCharging={effectiveIsCharging}
             isLowBattery={isLowBattery}
             lowBatteryIndicatorArmed={lowBatteryGlowArmed}
+            batteryPct={batteryPct}
             onQuietModeChange={setQuietMode}
             onDriveAssistChange={setDriveAssist}
             onPowerSavingChange={setPowerSaving}
@@ -1050,6 +1035,7 @@ function HudHeader({
   isCharging,
   isLowBattery,
   lowBatteryIndicatorArmed,
+  batteryPct = null,
   onQuietModeChange,
   onDriveAssistChange,
   onPowerSavingChange,
@@ -1088,6 +1074,11 @@ function HudHeader({
           lowBatteryIndicatorArmed={lowBatteryIndicatorArmed}
           wifiSignal={wifiSignal}
           latencyMs={latencyMs}
+        />
+        <HudBatteryBadge
+          level={batteryPct}
+          isCharging={Boolean(isCharging)}
+          isOffline={false}
         />
       </div>
       <div className="glass-card hud-header-actions">

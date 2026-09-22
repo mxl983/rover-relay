@@ -101,10 +101,10 @@ export const MouseGimbalLayer = ({
             style={{
               padding: "8px 14px",
               background: "rgba(0,0,0,0.7)",
-              color: "#00f2ff",
+              color: "#ffffff",
               fontSize: 13,
               borderRadius: 6,
-              border: "1px solid rgba(0,242,255,0.4)",
+              border: "1px solid rgba(255, 255, 255,0.4)",
             }}
           >
             Click to enable mouse look (FPS-style gimbal)

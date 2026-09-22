@@ -6,7 +6,6 @@ import {
 } from "../config";
 import { apiFetch } from "../api/client";
 import { getBootProgressPercent } from "../mqttPower";
-import { VideoLoadingScene } from "./VideoLoadingScene.jsx";
 
 export const VideoStream = ({
   onVideoReadyChange,
@@ -16,6 +15,7 @@ export const VideoStream = ({
   backupStreamUrl = "",
   showBackupView = false,
   onHardPowerOff,
+  espPoweredOff = false,
 }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -351,25 +351,27 @@ export const VideoStream = ({
       ) : null}
 
       {loaderOverlayVisible && (
-        <div style={loaderWrapper}>
-          <VideoLoadingScene />
+        <div style={loaderWrapper} role="status" aria-label="Loading rover video">
           <div style={loaderForeground}>
-            <div style={loaderProgressRow} aria-live="polite">
-              <span className="boot-bounce-dots" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-              {loadingPercent != null ? (
-                <span style={loaderPercentStyle}>{loadingPercent}%</span>
-              ) : null}
-            </div>
-            <div style={loaderTextStyle}>COSMIC PIT STOP IN PROGRESS</div>
-            <div style={loaderSubStyle}>
-              {isLoading
-                ? "tuning antennas, dodging asteroids, and finding your rover feed..."
-                : "video locked. waiting for control channel uplink..."}
-            </div>
+            {espPoweredOff ? (
+              <div className="boot-power-off-warning" role="alert">
+                <div className="boot-power-off-warning__title">Rover is powered off</div>
+                <div className="boot-power-off-warning__body">
+                  No ACK from the ESP — main power appears cut completely.
+                </div>
+              </div>
+            ) : (
+              <div style={loaderProgressRow} aria-live="polite">
+                <span className="boot-bounce-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                {loadingPercent != null ? (
+                  <span style={loaderPercentStyle}>{loadingPercent}%</span>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -458,7 +460,7 @@ const loaderWrapper = {
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  background: "#030308",
+  background: "#111111",
   zIndex: 50,
   overflow: "hidden",
 };
@@ -479,33 +481,14 @@ const loaderProgressRow = {
   alignItems: "center",
   justifyContent: "center",
   gap: "14px",
-  marginBottom: "14px",
   minHeight: "28px",
 };
 
 const loaderPercentStyle = {
-  color: "#00f2ff",
-  fontSize: "22px",
-  fontWeight: "bold",
+  color: "#9a9a9a",
+  fontSize: "18px",
+  fontWeight: 600,
   fontVariantNumeric: "tabular-nums",
-  letterSpacing: "0.06em",
-  fontFamily: "monospace",
-};
-
-const loaderTextStyle = {
-  color: "#00f2ff",
-  fontSize: "14px",
-  fontWeight: "bold",
-  letterSpacing: "4px",
-  textAlign: "center",
-};
-
-const loaderSubStyle = {
-  marginTop: "12px",
-  color: "rgba(255,255,255,0.45)",
-  fontSize: "11px",
-  letterSpacing: "0.08em",
-  textAlign: "center",
-  maxWidth: "280px",
-  lineHeight: 1.45,
+  letterSpacing: "0.04em",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
 };

@@ -167,8 +167,8 @@ export function AssistantPanel({
           letter-spacing: normal;
           text-align: center;
           border-radius: 6px;
-          border: 1px solid rgba(0,242,255,0.5);
-          background: rgba(0,242,255,0.12);
+          border: 1px solid rgba(255, 255, 255,0.5);
+          background: rgba(255, 255, 255,0.12);
           color: #9eefff;
           cursor: pointer;
           -webkit-tap-highlight-color: transparent;
@@ -332,13 +332,13 @@ export function AssistantPanel({
                     background: isErr
                       ? "rgba(255,68,68,0.18)"
                       : isUser
-                        ? "rgba(0,242,255,0.16)"
+                        ? "rgba(255, 255, 255,0.16)"
                         : "rgba(255,255,255,0.08)",
                     border: `1px solid ${
                       isErr
                         ? "rgba(255,68,68,0.45)"
                         : isUser
-                          ? "rgba(0,242,255,0.45)"
+                          ? "rgba(255, 255, 255,0.45)"
                           : "rgba(255,255,255,0.16)"
                     }`,
                     color: isErr ? "#ff8b8d" : "#d8f6ff",
@@ -422,7 +422,7 @@ export function AssistantPanel({
                 minWidth: 0,
                 background: "rgba(0,0,0,0.45)",
                 color: "#d8f6ff",
-                border: "1px solid rgba(0,242,255,0.45)",
+                border: "1px solid rgba(255, 255, 255,0.45)",
                 borderRadius: 6,
                 padding: "6px 8px",
                 outline: "none",

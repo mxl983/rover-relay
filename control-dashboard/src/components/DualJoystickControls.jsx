@@ -850,8 +850,8 @@ export const DualJoystickControls = ({
           height: ${RESET_BTN_SIZE}px;
           border-radius: 20px;
           background: ${NEUTRAL_BTN};
-          border: 1.5px solid #00f2ff;
-          color: #00f2ff;
+          border: 1.5px solid #ffffff;
+          color: #ffffff;
           font-size: 10px;
           font-weight: 800;
           display: flex;
@@ -860,7 +860,7 @@ export const DualJoystickControls = ({
           cursor: pointer;
           pointer-events: auto;
           z-index: 10001; 
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 242, 255, 0.2);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(255, 255, 255, 0.2);
           /* Transitioning only non-layout properties for stability */
           transition: transform 0.1s, background 0.15s, color 0.15s;
           user-select: none;
@@ -870,7 +870,7 @@ export const DualJoystickControls = ({
         
         .reset-btn-sibling:active {
           transform: scale(0.9);
-          background: #00f2ff;
+          background: #ffffff;
           color: #000;
         }
 
@@ -962,7 +962,7 @@ export const DualJoystickControls = ({
         .voice-ptt.listening {
           border-color: #22c55e;
           color: #b9ffc2;
-          background: linear-gradient(135deg, rgba(34,197,94,0.36), rgba(0,242,255,0.24));
+          background: linear-gradient(135deg, rgba(34,197,94,0.36), rgba(255, 255, 255,0.24));
           box-shadow: 0 0 14px rgba(34, 197, 94, 0.55);
         }
         .voice-ptt:active {

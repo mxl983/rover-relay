@@ -369,7 +369,7 @@ const styles = {
     cursor: "pointer",
   },
   bareIcon: {
-    color: "#00f2ff",
+    color: "#ffffff",
     cursor: "pointer",
     opacity: 0.8,
     transition: "opacity 0.2s",
@@ -381,7 +381,7 @@ const styles = {
     backdropFilter: "blur(12px)",
     borderRadius: "6px",
     padding: "5px",
-    border: "1px solid rgba(0, 242, 255, 0.2)",
+    border: "1px solid rgba(255, 255, 255, 0.2)",
     boxShadow: "0px 10px 38px -10px rgba(0, 0, 0, 0.5)",
     zIndex: 9999,
     display: "flex",
@@ -424,7 +424,7 @@ const styles = {
     flexShrink: 0,
     width: SEGMENT_TOGGLE_WIDTH,
     borderRadius: "3px",
-    border: "1px solid rgba(0, 242, 255, 0.2)",
+    border: "1px solid rgba(255, 255, 255, 0.2)",
     overflow: "hidden",
     background: "rgba(255, 255, 255, 0.04)",
     height: "18px",
@@ -448,8 +448,8 @@ const styles = {
     justifyContent: "center",
   },
   segmentBtnActive: {
-    background: "rgba(0, 242, 255, 0.18)",
-    color: "#00f2ff",
+    background: "rgba(255, 255, 255, 0.18)",
+    color: "#ffffff",
   },
   segmentBtnMixedCase: {
     fontSize: "7px",
@@ -474,7 +474,7 @@ const styles = {
     margin: "5px",
   },
   bootBtn: {
-    background: "#00f2ff",
+    background: "#ffffff",
     color: "#000",
     border: "none",
     padding: "8px 16px",

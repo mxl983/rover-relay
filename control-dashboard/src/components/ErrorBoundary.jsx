@@ -44,7 +44,7 @@ const fallbackStyle = {
   position: "fixed",
   inset: 0,
   background: "#050505",
-  color: "#00f2ff",
+  color: "#ffffff",
   fontFamily: "monospace",
   display: "flex",
   flexDirection: "column",
@@ -58,7 +58,7 @@ const messageStyle = { margin: 0, color: "#888", maxWidth: "400px", textAlign: "
 const buttonStyle = {
   marginTop: "8px",
   padding: "10px 20px",
-  background: "#00f2ff",
+  background: "#ffffff",
   color: "#000",
   border: "none",
   fontWeight: "bold",

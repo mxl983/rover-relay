@@ -167,8 +167,8 @@ export const KeyboardControlCluster = ({
           width: 46px; 
           height: 46px; 
           background: rgba(0,0,0,0.8); 
-          color: #00f2ff; 
-          border: 1px solid #00f2ff; 
+          color: #ffffff; 
+          border: 1px solid #ffffff; 
           cursor: pointer; 
           display: flex; 
           flex-direction: column; 
@@ -187,7 +187,7 @@ export const KeyboardControlCluster = ({
           user-select: none;
           touch-action: none;
         }
-        .active { background: #00f2ff !important; color: #000 !important; }
+        .active { background: #ffffff !important; color: #000 !important; }
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
         .laser-on { background: #ff4444 !important; color: #000; border-color: #ff4444; }
         .voice-on { background: #22c55e !important; color: #000; border-color: #22c55e; }

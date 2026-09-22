@@ -4,6 +4,8 @@ import {
   powerOffPayload,
   powerOffDelayedPayload,
   publishPowerOn,
+  publishPing,
+  isEspPongPayload,
   recordPowerOnSent,
   getLastPowerOnAt,
   getBootProgressPercent,
@@ -25,6 +27,19 @@ describe("mqttPower", () => {
     expect(powerOnPayload(13)).toBe("ON GPIO13");
     expect(powerOffPayload(13)).toBe("OFF GPIO13");
     expect(powerOffDelayedPayload(15, 13)).toBe("OFF GPIO13 DELAY 15");
+  });
+
+  it("recognizes PONG payloads", () => {
+    expect(isEspPongPayload("PONG")).toBe(true);
+    expect(isEspPongPayload("pong")).toBe(true);
+    expect(isEspPongPayload("OK PONG")).toBe(true);
+    expect(isEspPongPayload("OK")).toBe(false);
+  });
+
+  it("publishes PING", () => {
+    const client = { publish: vi.fn() };
+    expect(publishPing(client)).toBe(true);
+    expect(client.publish).toHaveBeenCalledWith(MQTT_CMD_TOPIC, "PING", { qos: 0 });
   });
 
   it("defaults cmd topic to rover/web/cmd", () => {

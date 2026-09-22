@@ -16,7 +16,7 @@ const ROLL_INTERVAL_MS = 3800;
 const ROLL_DURATION_MS = 520;
 
 const palette = {
-  green: "#00f2ff",
+  green: "#ffffff",
   greenCharging: "#22c55e", // true green for charging blink
   yellow: "#ffd60a",
   red: "#ff453a",
@@ -153,10 +153,6 @@ export const RoverSchematic = ({
     };
   }, []);
 
-  const batteryColor = isOffline
-    ? palette.grey
-    : bandColor(chargeLevel, { good: 60, warn: 30 }, true);
-
   const cpuColor = isOffline
     ? palette.grey
     : bandColor(cpuTemp, { good: 60, warn: 75 });
@@ -174,11 +170,6 @@ export const RoverSchematic = ({
   const distColor = isOffline ? palette.grey : palette.green;
 
   const throttlePct = throttle != null ? Math.min(100, Math.max(0, throttle)) : 0;
-  const batteryText = hasBatteryData
-    ? `${Math.round(chargeLevel)}%`
-    : isOffline
-      ? "--"
-      : "…";
   const clockLabel = formatClockShort(clockNow);
 
   const secondaryMetrics = useMemo(() => {
@@ -369,14 +360,28 @@ export const RoverSchematic = ({
         }}
         aria-hidden
       >
-        <BatteryHero
-          level={hasBatteryData ? chargeLevel : null}
-          text={batteryText}
-          clockLabel={clockLabel}
-          color={isCharging && !isOffline ? palette.greenCharging : batteryColor}
-          isCharging={isCharging && !isOffline}
-          isOffline={isOffline}
-        />
+        <div
+          className="rover-metrics-clock"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-start",
+            minHeight: ROW_H,
+            padding: "1px 9px 4px",
+            marginBottom: 1,
+            borderBottom: "1px solid rgba(255,255,255,0.12)",
+            color: palette.label,
+            fontSize: 9,
+            letterSpacing: "0.04em",
+            fontWeight: 600,
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1,
+          }}
+          title={clockLabel}
+          aria-hidden
+        >
+          {clockLabel}
+        </div>
         <div
           style={{
             height: VIEWPORT_H,
@@ -454,119 +459,6 @@ export const RoverSchematic = ({
     </div>
   );
 };
-
-function BatteryHero({ level, text, clockLabel, color, isCharging, isOffline }) {
-  const fillPct = level == null ? 0 : Math.min(100, Math.max(0, level));
-  const low = !isOffline && level != null && level < 20 && !isCharging;
-  // iOS-like: green when healthy/charging, red when critically low, white/cyan otherwise.
-  const fillColor = isOffline
-    ? palette.grey
-    : isCharging
-      ? "#34c759"
-      : low
-        ? "#ff3b30"
-        : color === palette.green || color === palette.greenCharging
-          ? "#34c759"
-          : color;
-
-  return (
-    <div
-      className={[
-        "rover-battery-hero",
-        isCharging ? "rover-battery-hero--charging" : "",
-        low ? "rover-battery-hero--low" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 0,
-        minHeight: ROW_H,
-        minWidth: 0,
-        width: "100%",
-        boxSizing: "border-box",
-        padding: "1px 4px 6px",
-        marginBottom: 1,
-        borderBottom: "1px solid rgba(255,255,255,0.12)",
-      }}
-      title={`Battery ${text}${isCharging ? " · charging" : ""} · ${clockLabel}`}
-      aria-label={`Battery ${text}${isCharging ? ", charging" : ""}, ${clockLabel}`}
-    >
-      <div
-        style={{
-          color: palette.label,
-          fontSize: 9,
-          letterSpacing: "0.04em",
-          fontWeight: 600,
-          flexShrink: 0,
-          lineHeight: 1,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {clockLabel}
-      </div>
-
-      {/* iPhone status-bar battery */}
-      <svg
-        className="rover-battery-hero__icon"
-        width="27"
-        height="12"
-        viewBox="0 0 27 12"
-        aria-hidden
-        style={{ flexShrink: 0, display: "block" }}
-      >
-        <rect
-          x="0.5"
-          y="0.5"
-          width="22"
-          height="11"
-          rx="2.2"
-          ry="2.2"
-          fill="none"
-          stroke="rgba(255,255,255,0.55)"
-          strokeWidth="1"
-        />
-        <path
-          d="M24 3.8c.9.4 1.4 1.1 1.4 2.2s-.5 1.8-1.4 2.2V3.8z"
-          fill="rgba(255,255,255,0.45)"
-        />
-        <rect
-          className="rover-battery-hero__fill"
-          x="2"
-          y="2"
-          width={Math.max(0, (fillPct / 100) * 19)}
-          height="8"
-          rx="1.4"
-          ry="1.4"
-          fill={fillColor}
-          style={{ transition: "width 0.55s cubic-bezier(0.22, 1, 0.36, 1)" }}
-        />
-        {isCharging ? (
-          <path
-            className="rover-battery-hero__bolt"
-            d="M12.2 1.6L9.4 6.6h2.1l-.9 3.8 3.4-5.4h-2.2l1.4-3.4z"
-            fill="#0b1220"
-            stroke="none"
-          />
-        ) : null}
-        <text
-          x="12"
-          y="7"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#ffffff"
-          fontSize="6"
-          fontWeight="700"
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-        >
-          {text}
-        </text>
-      </svg>
-    </div>
-  );
-}
 
 function MetricRow({ label, value, color }) {
   return (

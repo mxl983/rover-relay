@@ -126,8 +126,8 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
 
       <style>{`
         .hud-input {
-          background: rgba(0, 242, 255, 0.05);
-          border: 1px solid #00f2ff33;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid #ffffff33;
           padding: 10px;
           color: #fff;
           fontSize: 12px;
@@ -135,8 +135,8 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
           outline: none;
         }
         .hud-input:focus {
-          border-color: #00f2ff;
-          box-shadow: 0 0 10px rgba(0, 242, 255, 0.2);
+          border-color: #ffffff;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
         }
       `}</style>
     </div>
@@ -157,7 +157,7 @@ const styles = {
   terminal: {
     width: "320px",
     padding: "30px",
-    border: "1px solid #00f2ff",
+    border: "1px solid #ffffff",
     background: "#050505",
     display: "flex",
     flexDirection: "column",
@@ -165,21 +165,21 @@ const styles = {
   },
   header: {
     marginBottom: "10px",
-    borderBottom: "1px solid #00f2ff44",
+    borderBottom: "1px solid #ffffff44",
     paddingBottom: "10px",
   },
   glitch: {
-    color: "#00f2ff",
+    color: "#ffffff",
     fontSize: "14px",
     fontWeight: "bold",
     letterSpacing: "2px",
   },
   subHeader: { color: "#666", fontSize: "9px", marginTop: "4px" },
   inputGroup: { display: "flex", flexDirection: "column", gap: "8px" },
-  label: { color: "#00f2ff", fontSize: "10px", letterSpacing: "1px" },
+  label: { color: "#ffffff", fontSize: "10px", letterSpacing: "1px" },
   button: {
     width: "100%",
-    background: "#00f2ff",
+    background: "#ffffff",
     color: "#000",
     border: "none",
     padding: "12px",

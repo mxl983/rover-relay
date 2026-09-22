@@ -60,4 +60,12 @@ describe("VideoStream", () => {
       expect(screen.getByText("50%")).toBeTruthy();
     });
   });
+
+  it("shows powered-off warning when ESP does not ack", async () => {
+    render(<VideoStream controlChannelReady={false} espPoweredOff />);
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/rover is powered off/i);
+    });
+    expect(document.querySelector(".boot-bounce-dots")).toBeNull();
+  });
 });

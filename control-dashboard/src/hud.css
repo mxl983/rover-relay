@@ -1,5 +1,5 @@
 :root {
-  --spacex-cyan: #00f2ff;
+  --spacex-cyan: #ffffff;
   --glass: rgba(0, 0, 0, 0.4);
   --border: rgba(255, 255, 255, 0.15);
   /* Keep side drawer / overlays below the HUD header row. */
@@ -87,6 +87,41 @@ html {
   background-size:
     100% 3px,
     3px 100%;
+}
+
+/* Viewport flash when pack is critically low (<15%). */
+.battery-critical-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 3px solid rgba(255, 59, 48, 0.92);
+  box-shadow:
+    inset 0 0 28px rgba(255, 59, 48, 0.45),
+    inset 0 0 72px rgba(255, 59, 48, 0.22),
+    0 0 24px rgba(255, 59, 48, 0.35);
+  animation: battery-critical-pulse 0.95s ease-in-out infinite;
+}
+
+@keyframes battery-critical-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    border-color: rgba(255, 59, 48, 0.55);
+    box-shadow:
+      inset 0 0 16px rgba(255, 59, 48, 0.28),
+      inset 0 0 48px rgba(255, 59, 48, 0.12),
+      0 0 12px rgba(255, 59, 48, 0.18);
+  }
+  50% {
+    opacity: 1;
+    border-color: rgba(255, 59, 48, 0.95);
+    box-shadow:
+      inset 0 0 36px rgba(255, 59, 48, 0.55),
+      inset 0 0 90px rgba(255, 59, 48, 0.28),
+      0 0 32px rgba(255, 59, 48, 0.45);
+  }
 }
 
 /* HUD LAYOUT */
@@ -181,20 +216,55 @@ html {
   justify-content: flex-end;
   align-items: center;
   align-self: center;
+  gap: 10px;
+  height: 28px;
   min-height: 28px;
   padding-right: 8px;
   pointer-events: none;
+  line-height: 0;
+}
+
+.hud-battery-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 28px;
+  pointer-events: none;
+  line-height: 0;
+}
+
+.hud-battery-badge__icon {
+  display: block;
+  vertical-align: middle;
+}
+
+.hud-battery-badge--charging .hud-battery-badge__fill {
+  animation: rover-battery-charge-glow 1.6s ease-in-out infinite;
+}
+
+.hud-battery-badge--charging .hud-battery-badge__bolt {
+  animation: rover-battery-bolt-pulse 1.2s ease-in-out infinite;
+}
+
+.hud-battery-badge--low .hud-battery-badge__fill {
+  animation: rover-battery-low-pulse 0.95s ease-in-out infinite;
 }
 
 .hud-indicator-slot--power-saving.hud-indicator-slot--active {
-  color: #7dd3fc;
+  color: #e8e8e8;
   width: auto;
   min-width: 28px;
   padding: 0 4px;
-  gap: 1px;
+  gap: 0;
+  overflow: visible;
 }
 
 .hud-indicator-ttl {
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 9px;
   font-weight: 600;
@@ -202,24 +272,30 @@ html {
   line-height: 1;
   color: inherit;
   opacity: 0.95;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .hud-indicator-strip {
   display: flex;
   align-items: center;
+  height: 28px;
   gap: 0;
+  line-height: 0;
 }
 
 .hud-indicator-slot {
+  position: relative;
   width: 28px;
-  height: auto;
+  height: 28px;
   min-height: 28px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 0;
   flex-shrink: 0;
+  line-height: 0;
 }
 
 .hud-indicator-slot--reserved {
@@ -280,6 +356,8 @@ html {
   border: 1px solid currentColor;
   border-radius: 4px;
   box-sizing: border-box;
+  line-height: 0;
+  flex-shrink: 0;
 }
 
 .hud-indicator-icon-wrap--charging {
@@ -296,26 +374,6 @@ html {
 
 .hud-indicator-icon-wrap--high-latency {
   color: #f59e0b;
-}
-
-.hud-indicator-icon-wrap--weak-wifi {
-  color: #ff9800;
-}
-
-.hud-indicator-icon-wrap--high-latency {
-  color: #f59e0b;
-}
-
-.hud-indicator-icon-wrap--charging {
-  color: #4ade80;
-}
-
-.hud-indicator-icon-wrap--low-battery {
-  color: #ff6b6b;
-}
-
-.hud-indicator-icon-wrap--sport {
-  color: #fbbf24;
 }
 
 .hud-indicator-icon-wrap--sport {
@@ -332,17 +390,6 @@ html {
 
 .hud-indicator-icon-wrap--collision {
   color: #ff6b6b;
-}
-
-.hud-indicator-icon-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  box-sizing: border-box;
 }
 
 .hud-indicator-icon-wrap--power-saving {
@@ -362,6 +409,7 @@ html {
 }
 
 .hud-indicator-icon {
+  display: block;
   flex-shrink: 0;
   width: 12px;
   height: 12px;
@@ -1788,12 +1836,35 @@ button:active {
   height: 18px;
 }
 
+.boot-power-off-warning {
+  max-width: min(360px, 86vw);
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(18, 18, 18, 0.92);
+  color: #f2f2f2;
+  text-align: center;
+  pointer-events: none;
+}
+
+.boot-power-off-warning__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.boot-power-off-warning__body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(242, 242, 242, 0.78);
+}
+
 .boot-bounce-dots span {
   display: block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #00f2ff;
+  background: #9a9a9a;
   opacity: 0.45;
   animation: boot-dot-bounce 1.05s ease-in-out infinite;
 }
@@ -1854,7 +1925,7 @@ button:active {
   transform: translateX(-50%);
   z-index: 1000;
   padding: 10px 16px;
-  border-color: rgba(0, 242, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.45);
   color: #a9f8ff;
   max-width: 90vw;
   text-align: center;
@@ -1898,7 +1969,7 @@ button:active {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: rgba(0, 242, 255, 0.72);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .hud-brand-distance {
@@ -1906,7 +1977,7 @@ button:active {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: lowercase;
-  color: rgba(0, 242, 255, 0.62);
+  color: rgba(255, 255, 255, 0.62);
   padding-left: 1px;
 }
 

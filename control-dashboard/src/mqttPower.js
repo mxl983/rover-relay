@@ -5,6 +5,7 @@
  *   ON GPIO13
  *   OFF GPIO13
  *   OFF GPIO13 DELAY 15
+ *   PING
  * Subscribe rover/web/status for replies (PONG, etc.).
  */
 
@@ -99,6 +100,23 @@ export function publishPowerOff(client, opts = { qos: 1 }) {
   if (!client?.publish) return false;
   client.publish(MQTT_CMD_TOPIC, powerOffPayload(), opts);
   return true;
+}
+
+/** Ask ESP for a liveness reply on the status topic (PONG). */
+export function publishPing(client, opts = { qos: 0 }) {
+  if (!client?.publish) return false;
+  client.publish(MQTT_CMD_TOPIC, "PING", opts);
+  return true;
+}
+
+/** True if a status payload looks like a PONG (or plain PONG). */
+export function isEspPongPayload(payload) {
+  const text = String(payload ?? "")
+    .trim()
+    .toUpperCase();
+  if (!text) return false;
+  if (text === "PONG") return true;
+  return /\bPONG\b/.test(text);
 }
 
 /** Cut after delay so the Pi can shut down cleanly first. */

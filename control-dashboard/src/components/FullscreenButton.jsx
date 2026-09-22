@@ -83,7 +83,7 @@ export const FullscreenButton = () => {
 
 const styles = {
   bareIcon: {
-    color: "#00f2ff",
+    color: "#ffffff",
     cursor: "pointer",
     opacity: 0.7,
     transition: "all 0.2s ease",

@@ -15,7 +15,7 @@ describe("RoverSchematic", () => {
     vi.useRealTimers();
   });
 
-  it("keeps battery visible and rolls secondary metrics", () => {
+  it("keeps clock visible and rolls secondary metrics (battery lives in top nav)", () => {
     const { container } = render(
       <RoverSchematic
         pan={90}
@@ -32,19 +32,13 @@ describe("RoverSchematic", () => {
 
     const clock = formatClockShort(new Date("2026-08-16T06:48:00"));
     expect(screen.getByText(clock)).toBeTruthy();
-    expect(screen.getAllByLabelText(/Battery 50%/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("50%", { selector: "text" })).toBeTruthy();
+    expect(screen.queryByText("50%", { selector: "text" })).toBeNull();
     expect(screen.queryByText("BAT")).toBeNull();
-    expect(screen.queryByText("TMP")).toBeNull();
     expect(screen.getAllByText("VOL").length).toBeGreaterThan(0);
     expect(screen.getAllByText("WIFI").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("LV2").length).toBeGreaterThan(0);
-    expect(screen.queryByText("AIR")).toBeNull();
     expect(screen.getAllByText("DST").length).toBeGreaterThan(0);
     expect(screen.getAllByText("LOAD").length).toBeGreaterThan(0);
     expect(screen.getAllByText("13km").length).toBeGreaterThan(0);
-    expect(screen.queryByText("ETA")).toBeNull();
-    expect(screen.queryByText("-70")).toBeNull();
 
     const track = container.querySelector('[style*="translateY"]');
     expect(track).toBeTruthy();
@@ -55,7 +49,6 @@ describe("RoverSchematic", () => {
     });
 
     expect(screen.getByText(clock)).toBeTruthy();
-    expect(screen.getAllByLabelText(/Battery 50%/i).length).toBeGreaterThan(0);
     expect(track.getAttribute("style") || "").toMatch(/translateY\(-20px\)/);
   });
 });
