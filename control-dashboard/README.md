@@ -66,19 +66,19 @@ Live URL: **[https://mxl983.github.io/rover-relay/](https://mxl983.github.io/rov
 
 Repo: **[mxl983/rover-relay](https://github.com/mxl983/rover-relay)**.
 
-### Recommended: GitHub Actions (use this if the site is 404)
+### Recommended: Actions builds → serve from `gh-pages`
 
-Branch-only publishing (**Settings → Pages → Deploy from branch → `gh-pages`**) sometimes never serves the site (**`404`** at `https://mxl983.github.io/rover-relay/` even when [commits exist on `gh-pages`](https://github.com/mxl983/rover-relay/commits/gh-pages)). The reliable fix is GitHub’s **Actions → GitHub Pages** integration:
+If Pages is pointed at **`liyang-dashboard`**, GitHub Jekyll-publishes the **README** (not the Vite app). The workflow builds the dashboard and pushes **`dist/`** to **`gh-pages`**.
 
-1. **Settings → Pages → Build and deployment → Source:** choose **GitHub Actions** (not “Deploy from a branch”).
-2. Push **`.github/workflows/deploy-github-pages.yml`** on **`liyang-dashboard`**. It installs **`control-dashboard`**, runs **`npm run build:github-pages`** with **`VITE_BASE_PATH=/rover-relay/`**, and deploys **`dist/`** on every push to that branch that touches the dashboard.
-3. Open **Actions**, run **Deploy GitHub Pages**, and approve the **`github-pages`** environment if GitHub asks on first run.
+1. **Settings → Pages → Build and deployment → Source:** **Deploy from a branch**
+2. **Branch:** **`gh-pages`** / **`/` (root)** — not `liyang-dashboard`, not `main`
+3. Push **`liyang-dashboard`** (or run **Actions → Deploy GitHub Pages → Run workflow**). The workflow runs **`npm run build:github-pages`** (`VITE_BASE_PATH=/rover-relay/`) and updates **`gh-pages`**.
 
-After a green run, the live URL should respond (**may take a minute**).
+After a green run, the live URL should be the SPA (**may take a minute**).
 
 ### Optional: publish from your machine (`gh-pages` branch)
 
-You can still run **`npm run deploy`** from **`control-dashboard/`** — it uses [gh-pages](https://github.com/tschaub/gh-pages) to push **`dist/`** to the **`gh-pages`** branch (`--nojekyll`, **`--remove "**/*"`**). That only affects the branch; **GitHub will only serve it if Pages source is still “Deploy from branch.”** If you switched to **GitHub Actions**, use pushes to **`liyang-dashboard`** (or **workflow_dispatch**) instead.
+You can still run **`npm run deploy`** from **`control-dashboard/`** — it uses [gh-pages](https://github.com/tschaub/gh-pages) to push **`dist/`** to the **`gh-pages`** branch (`--nojekyll`, **`--remove "**/*"`**). Same Pages setting as above (**branch `gh-pages`**).
 
 **Relay CORS** — In relay `.env`, include **`https://mxl983.github.io`** in **`CORS_ORIGINS`**.
 
@@ -96,7 +96,7 @@ To deploy into a **different** repo, set **`git remote origin`** to that repo (o
    You need **push** access to whatever repo **`origin`** points to (expected: **`mxl983/rover-relay`**). If you changed remotes or see **“Remote url mismatch”** from `gh-pages`, run **`npx gh-pages-clean`** (or delete **`node_modules/.cache/gh-pages`**) and deploy again.
 
 3. **Turn on GitHub Pages** — repo **`rover-relay`**  
-   Prefer **Source: GitHub Actions** (see above). Legacy option: **branch `gh-pages`**, folder **`/ (root)`** — if you still get **404** on the live URL, switch to **Actions**.
+   **Source: Deploy from a branch** → **`gh-pages`** / **`(root)`**. If you pick **`liyang-dashboard`**, you get the README via Jekyll, not the app.
 
 4. **Run deploy from `control-dashboard/`**  
    So `dist/` is built in the right place.
