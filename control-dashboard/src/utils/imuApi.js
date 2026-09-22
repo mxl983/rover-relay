@@ -6,7 +6,11 @@ import { normalizeImuSample } from "./imuData.js";
  * @returns {Promise<import("./imuData").ImuSample | null>}
  */
 export async function fetchImuSample() {
-  const res = await fetch(PI_IMU_ENDPOINT, { cache: "no-store" });
+  const url = typeof PI_IMU_ENDPOINT === "string" ? PI_IMU_ENDPOINT.trim() : "";
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return null;
+  }
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`IMU HTTP ${res.status}`);
   }

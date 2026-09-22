@@ -2,6 +2,7 @@ import { useState } from "react";
 import mqtt from "mqtt";
 import PropTypes from "prop-types";
 import { MQTT_HOST } from "../config";
+import { publishPowerOn } from "../mqttPower";
 
 const DASHBOARD_BASE_PATH = import.meta.env.BASE_URL || "/";
 
@@ -56,7 +57,7 @@ export const LoginOverlay = ({ onLoginSuccess }) => {
 
       // Fire-and-forget Pi boot only from an active visible dashboard tab.
       if (canWakeNow()) {
-        client.publish("rover/power/pi", "On", { qos: 1 });
+        publishPowerOn(client);
       }
 
       // Close this temporary client shortly after; App will create its own via useEspMqtt.

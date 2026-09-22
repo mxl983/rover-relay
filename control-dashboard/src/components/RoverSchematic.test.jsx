@@ -21,12 +21,10 @@ describe("RoverSchematic", () => {
         pan={90}
         battery={50}
         cpuTemp={40}
-        ambientTempC={22}
         latencyMs={10}
         voltage={11.8}
         wifiSignal={-70}
         distanceMeters={12500}
-        pressureHpa={1013.2}
         cpuLoad={35}
         isCharging={false}
       />,
@@ -37,14 +35,14 @@ describe("RoverSchematic", () => {
     expect(screen.getAllByLabelText(/Battery 50%/i).length).toBeGreaterThan(0);
     expect(screen.getByText("50%", { selector: "text" })).toBeTruthy();
     expect(screen.queryByText("BAT")).toBeNull();
-    expect(screen.getAllByText("TMP").length).toBeGreaterThan(0);
+    expect(screen.queryByText("TMP")).toBeNull();
     expect(screen.getAllByText("VOL").length).toBeGreaterThan(0);
     expect(screen.getAllByText("WIFI").length).toBeGreaterThan(0);
     expect(screen.getAllByText("LV2").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("AIR").length).toBeGreaterThan(0);
+    expect(screen.queryByText("AIR")).toBeNull();
     expect(screen.getAllByText("DST").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("LOAD").length).toBeGreaterThan(0);
     expect(screen.getAllByText("13km").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
     expect(screen.queryByText("ETA")).toBeNull();
     expect(screen.queryByText("-70")).toBeNull();
 

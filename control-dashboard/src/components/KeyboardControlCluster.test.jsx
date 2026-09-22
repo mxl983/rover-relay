@@ -9,15 +9,10 @@ describe("KeyboardControlCluster", () => {
     const { container } = render(
       <KeyboardControlCluster
         onDrive={noop}
-        onLightToggle={noop}
-        onLaserToggle={noop}
         onVoiceStart={noop}
         onVoiceStop={noop}
         onCapture={noop}
         onReset={noop}
-        onLookDown={noop}
-        usbPower
-        laserOn={false}
         voiceSupported={false}
         voiceListening={false}
         isCapturing={false}
@@ -26,26 +21,26 @@ describe("KeyboardControlCluster", () => {
     expect(container.querySelector(".wasd-controls")).toBeTruthy();
   });
 
-  it("fills the park slot next to reset", () => {
+  it("renders drive and remaining action keys without treat/park/laser/light", () => {
     const { container } = render(
       <KeyboardControlCluster
         onDrive={noop}
-        onLightToggle={noop}
-        onLaserToggle={noop}
         onVoiceStart={noop}
         onVoiceStop={noop}
         onCapture={noop}
         onReset={noop}
-        onLookDown={noop}
-        usbPower
-        laserOn={false}
         voiceSupported={false}
         voiceListening={false}
         isCapturing={false}
       />,
     );
     const buttons = [...container.querySelectorAll(".wasd-controls .btn")];
-    expect(buttons).toHaveLength(16);
-    expect(buttons.some((btn) => btn.textContent.includes("PRK"))).toBe(true);
+    const labels = buttons.map((btn) => btn.textContent);
+    expect(labels.some((t) => t.includes("TRT"))).toBe(false);
+    expect(labels.some((t) => t.includes("PRK"))).toBe(false);
+    expect(labels.some((t) => t.includes("LZR"))).toBe(false);
+    expect(labels.some((t) => t.includes("RST"))).toBe(true);
+    expect(labels.some((t) => t.startsWith("Q"))).toBe(true);
+    expect(labels.some((t) => t.startsWith("E"))).toBe(true);
   });
 });

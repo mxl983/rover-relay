@@ -1,23 +1,13 @@
 {
-  "name": "rover-relay",
+  "name": "rover-dashboard",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "description": "Rover mission-control dashboard (drive + WebRTC). Talks directly to the Pi over Tailscale.",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "better-sqlite3": "^11.10.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "mqtt": "^5.15.0",
-    "ws": "^8.20.0"
-  },
-  "devDependencies": {
-    "supertest": "^7.0.0",
-    "vitest": "^3.0.5"
+    "dev": "npm --prefix control-dashboard run dev",
+    "build": "npm --prefix control-dashboard run build",
+    "preview": "npm --prefix control-dashboard run preview",
+    "test": "npm --prefix control-dashboard run test",
+    "lint": "npm --prefix control-dashboard run lint"
   }
 }

@@ -5,12 +5,21 @@
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 1;
 
+/** Reject empty/relative URLs that would hit the Vite page (e.g. http://localhost:5173/). */
+function assertAbsoluteApiUrl(url) {
+  const s = typeof url === "string" ? url.trim() : "";
+  if (!s || !/^https?:\/\//i.test(s)) {
+    throw new Error(`API URL missing or not absolute: ${JSON.stringify(url)}`);
+  }
+}
+
 /**
  * @param {string} url
  * @param {RequestInit & { timeout?: number; retries?: number }} [options]
  * @returns {Promise<Response>}
  */
 export async function apiFetch(url, options = {}) {
+  assertAbsoluteApiUrl(url);
   const { timeout = DEFAULT_TIMEOUT_MS, retries = DEFAULT_RETRIES, ...fetchOptions } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);

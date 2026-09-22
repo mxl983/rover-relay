@@ -2,6 +2,8 @@
   --spacex-cyan: #00f2ff;
   --glass: rgba(0, 0, 0, 0.4);
   --border: rgba(255, 255, 255, 0.15);
+  /* Keep side drawer / overlays below the HUD header row. */
+  --hud-header-clearance: max(68px, calc(env(safe-area-inset-top) + 52px));
 }
 
 body,
@@ -170,6 +172,8 @@ html {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 10000;
 }
 
 .hud-header-center {
@@ -180,6 +184,24 @@ html {
   min-height: 28px;
   padding-right: 8px;
   pointer-events: none;
+}
+
+.hud-indicator-slot--power-saving.hud-indicator-slot--active {
+  color: #7dd3fc;
+  width: auto;
+  min-width: 28px;
+  padding: 0 4px;
+  gap: 1px;
+}
+
+.hud-indicator-ttl {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.95;
 }
 
 .hud-indicator-strip {
@@ -520,7 +542,10 @@ html {
 
 .settings-drawer-backdrop {
   position: fixed;
-  inset: 0;
+  top: var(--hud-header-clearance);
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 9998;
   background: transparent;
   pointer-events: auto;
@@ -540,19 +565,22 @@ html {
   overflow-x: hidden;
   overflow-y: auto;
   border-radius: 0 !important;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+  padding: 12px max(12px, env(safe-area-inset-right))
     max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   transition: transform 220ms ease-out;
 }
 
 div[data-radix-popper-content-wrapper] {
   position: fixed !important;
-  inset: 0 0 0 auto !important;
+  top: var(--hud-header-clearance) !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: auto !important;
   width: min(340px, 88vw) !important;
   min-width: 0 !important;
   max-width: min(340px, 88vw) !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
+  height: calc(100dvh - var(--hud-header-clearance)) !important;
+  max-height: calc(100dvh - var(--hud-header-clearance)) !important;
   box-sizing: border-box !important;
   z-index: 9999 !important;
   pointer-events: none;
@@ -1930,6 +1958,37 @@ button:active {
   border: none;
   padding: 0;
   margin-right: 20px;
+}
+
+/* Settings gear is a <button>; strip global/hud-overlay button chrome so it
+   shares only the parent .glass-card shadow with the fullscreen icon. */
+.hud-header-actions button {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 !important;
+  margin: 0;
+  border: none !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.hud-header-actions button:hover,
+.hud-header-actions button:active,
+.hud-header-actions button.active-glow {
+  background: transparent !important;
+  color: inherit;
+  box-shadow: none !important;
+  transform: none;
 }
 
 .logout-btn {

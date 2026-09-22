@@ -77,14 +77,32 @@ function LowBatteryIndicator({ enabled }) {
   );
 }
 
-function PowerSavingIndicator({ enabled }) {
+function formatTtl(ttlMs) {
+  if (ttlMs == null || !Number.isFinite(Number(ttlMs))) return null;
+  const totalSec = Math.max(0, Math.ceil(Number(ttlMs) / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function PowerSavingIndicator({ enabled, ttlMs = null }) {
   if (!enabled) return null;
+  const ttlLabel = formatTtl(ttlMs);
 
   return (
     <div
-      className="hud-indicator-slot hud-indicator-slot--power-saving"
+      className="hud-indicator-slot hud-indicator-slot--power-saving hud-indicator-slot--active"
       role="status"
-      aria-label="Idle shutdown enabled"
+      aria-label={
+        ttlLabel
+          ? `Idle shutdown in ${ttlLabel}`
+          : "Idle shutdown enabled"
+      }
+      title={
+        ttlLabel
+          ? `Power-saving TTL ${ttlLabel}`
+          : "Idle shutdown enabled"
+      }
     >
       <IndicatorIcon toneClass="hud-indicator-icon-wrap--power-saving">
         <Clock
@@ -92,6 +110,11 @@ function PowerSavingIndicator({ enabled }) {
           {...indicatorIconProps}
         />
       </IndicatorIcon>
+      {ttlLabel ? (
+        <span className="hud-indicator-ttl" aria-hidden>
+          {ttlLabel}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -222,6 +245,7 @@ export function HudIndicatorStrip({
   driveAssistEnabled,
   driveAssistUpdate,
   powerSavingEnabled = false,
+  powerSavingTtlMs = null,
   quietMode = true,
   isCharging = false,
   isLowBattery = false,
@@ -235,7 +259,7 @@ export function HudIndicatorStrip({
 
   return (
     <div className="hud-indicator-strip" aria-label="Status indicators">
-      <PowerSavingIndicator enabled={powerSavingEnabled} />
+      <PowerSavingIndicator enabled={powerSavingEnabled} ttlMs={powerSavingTtlMs} />
       <SportModeIndicator enabled={sportModeEnabled} />
       <DriveAssistIndicator enabled={driveAssistEnabled} />
       <CollisionIndicator update={driveAssistUpdate} enabled={driveAssistEnabled} />

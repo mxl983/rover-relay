@@ -10,9 +10,20 @@ describe("api client", () => {
     const mockRes = { ok: true, text: () => Promise.resolve("") };
     fetch.mockResolvedValue(mockRes);
 
-    const res = await apiFetch("/api/foo", { method: "GET", timeout: 100 });
-    expect(fetch).toHaveBeenCalledWith("/api/foo", expect.objectContaining({ method: "GET" }));
+    const res = await apiFetch("https://example.test/api/foo", {
+      method: "GET",
+      timeout: 100,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://example.test/api/foo",
+      expect.objectContaining({ method: "GET" }),
+    );
     expect(res).toBe(mockRes);
+  });
+
+  it("apiFetch rejects empty URLs that would hit the page origin", async () => {
+    await expect(apiFetch("", { timeout: 100 })).rejects.toThrow(/absolute/);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("apiPostJson throws on non-ok response", async () => {
@@ -23,7 +34,9 @@ describe("api client", () => {
       text: () => Promise.resolve("error body"),
     });
 
-    await expect(apiPostJson("/api/foo", {})).rejects.toThrow(/500/);
+    await expect(apiPostJson("https://example.test/api/foo", {})).rejects.toThrow(
+      /500/,
+    );
   });
 
   it("apiPostJson returns parsed JSON on ok", async () => {
@@ -32,13 +45,13 @@ describe("api client", () => {
       text: () => Promise.resolve(JSON.stringify({ id: 1 })),
     });
 
-    const out = await apiPostJson("/api/foo", {});
+    const out = await apiPostJson("https://example.test/api/foo", {});
     expect(out).toEqual({ id: 1 });
   });
 
   it("apiPost returns null for empty response", async () => {
     fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve("") });
-    const out = await apiPost("/api/foo");
+    const out = await apiPost("https://example.test/api/foo");
     expect(out).toBeNull();
   });
 });

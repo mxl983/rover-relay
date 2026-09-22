@@ -38,12 +38,14 @@ describe("HudIndicatorStrip", () => {
         driveAssistEnabled
         driveAssistUpdate={null}
         powerSavingEnabled
+        powerSavingTtlMs={125000}
       />,
     );
     const slots = container.querySelectorAll(".hud-indicator-slot");
     expect(slots).toHaveLength(6);
     expect(slots[0]).toHaveClass("hud-indicator-slot--power-saving");
-    expect(screen.getByLabelText("Idle shutdown enabled").querySelector(".hud-indicator-icon--power-saving")).toBeTruthy();
+    expect(screen.getByLabelText("Idle shutdown in 2:05").querySelector(".hud-indicator-icon--power-saving")).toBeTruthy();
+    expect(screen.getByText("2:05")).toBeTruthy();
   });
 
   it("shows zap icon in sport mode", () => {

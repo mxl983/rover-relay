@@ -3,7 +3,6 @@ import {
   VIDEO_STREAM_HOST,
   AUDIO_STREAM_HOST,
   AUDIO_TALK_HOST,
-  ROVER_STATE_ENDPOINT,
 } from "../config";
 import { apiFetch } from "../api/client";
 import { VideoLoadingScene } from "./VideoLoadingScene.jsx";
@@ -15,7 +14,7 @@ export const VideoStream = ({
   dashMicEnabled = false,
   backupStreamUrl = "",
   showBackupView = false,
-  /** Same shape as GET /api/rover/state response body when from relay `wss://.../ws/rover` (optional). */
+  /** Optional boot-progress payload (legacy relay shape). Unused by App. */
   relayRoverPayload = null,
   onHardPowerOff,
 }) => {
@@ -111,8 +110,7 @@ export const VideoStream = ({
 
   useEffect(() => {
     if (!isLoading) return undefined;
-    let cancelled = false;
-    let inFlight = false;
+    if (!relayRoverPayload?.rover) return undefined;
 
     const parsePercent = (data) => {
       if (!data || typeof data !== "object") return null;
@@ -125,71 +123,26 @@ export const VideoStream = ({
         asNum(data.bootPercent) ??
         asNum(data.progressPct) ??
         asNum(data.progress) ??
-          asNum(data?.rover?.bootProgressPct) ??
-          asNum(data?.rover?.bootPercentage) ??
-          asNum(data?.rover?.bootPercent) ??
-          asNum(data?.rover?.progressPct) ??
-          asNum(data?.rover?.progress) ??
+        asNum(data?.rover?.bootProgressPct) ??
+        asNum(data?.rover?.bootPercentage) ??
+        asNum(data?.rover?.bootPercent) ??
+        asNum(data?.rover?.progressPct) ??
+        asNum(data?.rover?.progress) ??
         asNum(data?.state?.bootPercentage) ??
         asNum(data?.state?.bootPercent)
       );
     };
 
-    const applyBootPercentFromData = (data) => {
-      const pct = parsePercent(data);
-      if (pct != null && !cancelled) {
-        const now = Date.now();
-        const current = Number.isFinite(loadingPercentRef.current) ? loadingPercentRef.current : pct;
-        loadingInterpFromRef.current = current;
-        loadingPercentTargetRef.current = pct;
-        loadingInterpStartMsRef.current = now;
-        loadingInterpDurationMsRef.current = 900;
-        if (!Number.isFinite(loadingPercentRef.current)) setLoadingPercent(pct);
-      }
-    };
-
-    if (relayRoverPayload?.rover) {
-      applyBootPercentFromData(relayRoverPayload);
-      return undefined;
-    }
-
-    const poll = async () => {
-      if (cancelled || inFlight) return;
-      inFlight = true;
-      try {
-        // Relay GET /api/rover/state can exceed 1s cold (getRoverState + backup-cam env fetch, each with its own timeouts).
-        // apiFetch aborts on timeout → DevTools shows "canceled"; keep this comfortably above worst-case.
-        const res = await apiFetch(ROVER_STATE_ENDPOINT, {
-          method: "GET",
-          timeout: 8000,
-          retries: 0,
-        });
-        if (!res.ok) return;
-        const text = await res.text();
-        if (!text) return;
-        const data = JSON.parse(text);
-        applyBootPercentFromData(data);
-      } catch {
-        // Relay unavailable: keep loader functional without percentage.
-        if (!cancelled) {
-          loadingPercentTargetRef.current = null;
-          loadingInterpFromRef.current = null;
-          setLoadingPercent(null);
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void poll();
-    const timer = setInterval(() => {
-      void poll();
-    }, 1000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
+    const pct = parsePercent(relayRoverPayload);
+    if (pct == null) return undefined;
+    const now = Date.now();
+    const current = Number.isFinite(loadingPercentRef.current) ? loadingPercentRef.current : pct;
+    loadingInterpFromRef.current = current;
+    loadingPercentTargetRef.current = pct;
+    loadingInterpStartMsRef.current = now;
+    loadingInterpDurationMsRef.current = 900;
+    if (!Number.isFinite(loadingPercentRef.current)) setLoadingPercent(pct);
+    return undefined;
   }, [isLoading, relayRoverPayload]);
 
   useEffect(() => {

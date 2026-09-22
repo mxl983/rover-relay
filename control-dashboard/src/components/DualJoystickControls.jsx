@@ -83,14 +83,14 @@ function deadzone2d(x, y, dead) {
 const GAMEPAD_DEAD_ZONE = 0.14;
 const GIMBAL_LINEAR_SCALE = 0.58;
 const TRIGGER_HELD_THRESHOLD = 0.45;
-/** Max WS rate while the stick is *changing* (~20 Hz). */
-const ANALOG_SEND_MIN_INTERVAL_MS = 50;
+/** Max WS rate while the stick is *changing* (~50 Hz). */
+const ANALOG_SEND_MIN_INTERVAL_MS = 20;
 /**
  * Re-send held non-zero drive/gimbal so the Pi command watchdog does not
  * time out. Keyboard keys latch on the Pi; analog vectors expire without refresh.
- * Keep well under typical ~300–600 ms stale windows.
+ * MentorPi WATCHDOG_TIMEOUT is 0.5s; gimbal hold window ~0.4s.
  */
-export const ANALOG_KEEPALIVE_MS = 200;
+export const ANALOG_KEEPALIVE_MS = 150;
 /** Gimbal outbound snap step. */
 const GIMBAL_ANALOG_STEP = 0.03;
 /**
@@ -116,15 +116,22 @@ export function snapAnalogPair({ x = 0, y = 0 }, step = GIMBAL_ANALOG_STEP) {
 export function prepareDriveVector(raw) {
   const x = clamp1(Number(raw?.x) || 0);
   const y = clamp1(Number(raw?.y) || 0);
+  const strafe = clamp1(Number(raw?.strafe) || 0);
   return {
     x: Math.abs(x) < 1e-4 ? 0 : x,
     y: Math.abs(y) < 1e-4 ? 0 : y,
+    strafe: Math.abs(strafe) < 1e-4 ? 0 : strafe,
   };
 }
 
-/** Drive vector actually sent over WS — snapped so constant stick → constant command. */
+/** Drive vector actually sent — snapped so constant stick → constant command. */
 export function prepareOutboundDriveVector(raw) {
-  return snapAnalogPair(prepareDriveVector(raw), DRIVE_ANALOG_STEP);
+  const base = prepareDriveVector(raw);
+  const snapped = snapAnalogPair(base, DRIVE_ANALOG_STEP);
+  return {
+    ...snapped,
+    strafe: quantizeAnalog(base.strafe, DRIVE_ANALOG_STEP),
+  };
 }
 
 /**
@@ -174,7 +181,8 @@ function mergeTouchAndGamepad(touch, ignoreGamepadRef) {
 
   let drive = { ...touch.drive };
   if (leftMag > 0) {
-    drive = applyDriveCurve(leftRaw);
+    const curved = applyDriveCurve(leftRaw);
+    drive = { ...curved, strafe: Number(touch.drive?.strafe) || 0 };
   }
 
   let gimbal = { ...touch.gimbal };
@@ -200,12 +208,12 @@ export const DualJoystickControls = ({
   onVoiceStop: _onVoiceStop,
   voiceSupported: _voiceSupported,
   voiceListening: _voiceListening,
-  onToggleBackupView,
-  backupViewEnabled,
-  onTreat,
   onToggleFullscreen,
-  onToggleMap,
   onToggleMetrics,
+  onNVToggle,
+  nvActive = false,
+  onCapture,
+  isCapturing = false,
   immersive = false,
   children,
 }) => {
@@ -215,11 +223,11 @@ export const DualJoystickControls = ({
 
   const onDriveRef = useRef(onDrive);
   const touchAnalogRef = useRef({
-    drive: { x: 0, y: 0 },
+    drive: { x: 0, y: 0, strafe: 0 },
     gimbal: { x: 0, y: 0 },
   });
   const analogState = useRef({
-    drive: { x: 0, y: 0 },
+    drive: { x: 0, y: 0, strafe: 0 },
     gimbal: { x: 0, y: 0 },
   });
   const ignoreGamepadRef = useRef(false);
@@ -239,44 +247,28 @@ export const DualJoystickControls = ({
   const onLookDownRef = useRef(onLookDown);
   const onLaserToggleRef = useRef(onLaserToggle);
   const onHeadlightToggleRef = useRef(onHeadlightToggle);
-  const onToggleBackupViewRef = useRef(onToggleBackupView);
-  const onTreatRef = useRef(onTreat);
   const onToggleFullscreenRef = useRef(onToggleFullscreen);
-  const onToggleMapRef = useRef(onToggleMap);
   const onToggleMetricsRef = useRef(onToggleMetrics);
   useEffect(() => {
     onResetRef.current = onReset;
     onLookDownRef.current = onLookDown;
     onLaserToggleRef.current = onLaserToggle;
     onHeadlightToggleRef.current = onHeadlightToggle;
-    onToggleBackupViewRef.current = onToggleBackupView;
-    onTreatRef.current = onTreat;
     onToggleFullscreenRef.current = onToggleFullscreen;
-    onToggleMapRef.current = onToggleMap;
     onToggleMetricsRef.current = onToggleMetrics;
   }, [
     onReset,
     onLookDown,
     onLaserToggle,
     onHeadlightToggle,
-    onToggleBackupView,
-    onTreat,
     onToggleFullscreen,
-    onToggleMap,
     onToggleMetrics,
   ]);
 
   const gamepadButtonsPrevRef = useRef({
     lt: false,
-    rt: false,
-    lb: false,
-    rb: false,
-    l3: false,
-    /** Xbox Y / north face (index 3) — treat shortcut */
-    faceY: false,
-    /** Xbox A / south (0), B / east (1), X / west (2) */
+    /** Xbox A / south (0), X / west (2) */
     faceA: false,
-    faceB: false,
     faceX: false,
   });
   const gamepadLogRef = useRef({
@@ -291,18 +283,21 @@ export const DualJoystickControls = ({
     a === null ||
     b === null ||
     Math.abs((a.x ?? 0) - (b.x ?? 0)) > DRIVE_CHANGE_THRESHOLD ||
-    Math.abs((a.y ?? 0) - (b.y ?? 0)) > DRIVE_CHANGE_THRESHOLD;
+    Math.abs((a.y ?? 0) - (b.y ?? 0)) > DRIVE_CHANGE_THRESHOLD ||
+    Math.abs((a.strafe ?? 0) - (b.strafe ?? 0)) > DRIVE_CHANGE_THRESHOLD;
 
   const sendState = (drive, gimbal, updateLast = true) => {
     if (updateLast) lastSentRef.current = { drive: { ...drive }, gimbal: { ...gimbal } };
     if (JOYSTICK_DRIVE_DEBUG) {
       const x = Number(drive?.x ?? 0);
       const y = Number(drive?.y ?? 0);
-      if (x !== 0 || y !== 0) {
+      const strafe = Number(drive?.strafe ?? 0);
+      if (x !== 0 || y !== 0 || strafe !== 0) {
         // eslint-disable-next-line no-console
         console.log("[joystick→drive] speed vector", {
           x: x.toFixed(3),
           y: y.toFixed(3),
+          strafe: strafe.toFixed(3),
         });
       }
     }
@@ -318,10 +313,19 @@ export const DualJoystickControls = ({
 
   const sendDriveStop = () => {
     clearAnalogSendTimer();
-    touchAnalogRef.current.drive = { x: 0, y: 0 };
+    const prevStrafe = Number(touchAnalogRef.current.drive?.strafe) || 0;
+    touchAnalogRef.current.drive = { x: 0, y: 0, strafe: prevStrafe };
     const merged = mergeTouchAndGamepad(touchAnalogRef.current, ignoreGamepadRef);
     analogState.current = merged;
     sendState(merged.drive, merged.gimbal, true);
+  };
+
+  const setStrafe = (value) => {
+    touchAnalogRef.current.drive = {
+      ...touchAnalogRef.current.drive,
+      strafe: clamp1(Number(value) || 0),
+    };
+    syncMergedRef.current(Math.abs(value) < 1e-4);
   };
 
   const sendGimbalStop = () => {
@@ -335,9 +339,15 @@ export const DualJoystickControls = ({
   const sendAllStop = () => {
     clearAnalogSendTimer();
     ignoreGamepadRef.current = true;
-    touchAnalogRef.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
-    analogState.current = { drive: { x: 0, y: 0 }, gimbal: { x: 0, y: 0 } };
-    sendState({ x: 0, y: 0 }, { x: 0, y: 0 }, true);
+    touchAnalogRef.current = {
+      drive: { x: 0, y: 0, strafe: 0 },
+      gimbal: { x: 0, y: 0 },
+    };
+    analogState.current = {
+      drive: { x: 0, y: 0, strafe: 0 },
+      gimbal: { x: 0, y: 0 },
+    };
+    sendState({ x: 0, y: 0, strafe: 0 }, { x: 0, y: 0 }, true);
   };
 
   /** Unlock pad after safety stop — blur + BT drift previously left drive dead forever. */
@@ -364,7 +374,9 @@ export const DualJoystickControls = ({
       last.gimbal === null ||
       Math.abs((gimbal.x ?? 0) - (last.gimbal.x ?? 0)) > GIMBAL_CHANGE_THRESHOLD ||
       Math.abs((gimbal.y ?? 0) - (last.gimbal.y ?? 0)) > GIMBAL_CHANGE_THRESHOLD;
-    const driveActive = Math.hypot(drive.x ?? 0, drive.y ?? 0) > 1e-4;
+    const driveActive =
+      Math.hypot(drive.x ?? 0, drive.y ?? 0) > 1e-4 ||
+      Math.abs(drive.strafe ?? 0) > 1e-4;
     const gimbalActive = Math.hypot(gimbal.x ?? 0, gimbal.y ?? 0) > 1e-4;
     const holdActive = driveActive || gimbalActive;
     const now = performance.now();
@@ -478,7 +490,11 @@ export const DualJoystickControls = ({
     const toDriveAnalog = (data) => applyDriveCurve(toAnalog(data));
 
     driveManager.on("move", (evt, data) => {
-      touchAnalogRef.current.drive = toDriveAnalog(data);
+      const curved = toDriveAnalog(data);
+      touchAnalogRef.current.drive = {
+        ...curved,
+        strafe: Number(touchAnalogRef.current.drive?.strafe) || 0,
+      };
       syncMergedRef.current(false);
     });
 
@@ -602,13 +618,7 @@ export const DualJoystickControls = ({
         }
         gamepadButtonsPrevRef.current = {
           lt: false,
-          rt: false,
-          lb: false,
-          rb: false,
-          l3: false,
-          faceY: false,
           faceA: false,
-          faceB: false,
           faceX: false,
         };
       } else {
@@ -658,22 +668,15 @@ export const DualJoystickControls = ({
 
         const pads = active.buttonPads;
         // Xbox standard button indices.
-        // A=fullscreen, B=map, X=metrics, Y=treat
-        // LT=reset, RT=look down, LB=laser, RB=headlight, L3=backup
+        // A=fullscreen, X=metrics, LT=reset
         const lt = anyPadButtonHeld(pads, 6, TRIGGER_HELD_THRESHOLD);
-        const rt = anyPadButtonHeld(pads, 7, TRIGGER_HELD_THRESHOLD);
-        const lb = anyPadButtonHeld(pads, 4, TRIGGER_HELD_THRESHOLD);
-        const rb = anyPadButtonHeld(pads, 5, TRIGGER_HELD_THRESHOLD);
-        const l3 = anyPadButtonHeld(pads, 10, TRIGGER_HELD_THRESHOLD);
         const faceA = anyPadButtonHeld(pads, 0, TRIGGER_HELD_THRESHOLD);
-        const faceB = anyPadButtonHeld(pads, 1, TRIGGER_HELD_THRESHOLD);
         const faceX = anyPadButtonHeld(pads, 2, TRIGGER_HELD_THRESHOLD);
-        const faceY = anyPadButtonHeld(pads, 3, TRIGGER_HELD_THRESHOLD);
         // Any intentional button press re-arms after a safety stop (BT drift can
         // block the "sticks centered" unlock forever).
         if (
           ignoreGamepadRef.current &&
-          (lt || rt || lb || rb || l3 || faceA || faceB || faceX || faceY)
+          (lt || faceA || faceX)
         ) {
           rearmGamepad();
           if (JOYSTICK_DRIVE_DEBUG) {
@@ -694,24 +697,12 @@ export const DualJoystickControls = ({
             return false;
           };
           if (edge(lt, prev.lt, "LT")) onResetRef.current?.();
-          if (edge(rt, prev.rt, "RT")) onLookDownRef.current?.();
-          if (edge(lb, prev.lb, "LB")) onLaserToggleRef.current?.();
-          if (edge(rb, prev.rb, "RB")) onHeadlightToggleRef.current?.();
-          if (edge(l3, prev.l3, "L3")) onToggleBackupViewRef.current?.();
           if (edge(faceA, prev.faceA, "A")) onToggleFullscreenRef.current?.();
-          if (edge(faceB, prev.faceB, "B")) onToggleMapRef.current?.();
           if (edge(faceX, prev.faceX, "X")) onToggleMetricsRef.current?.();
-          if (edge(faceY, prev.faceY, "Y")) onTreatRef.current?.();
         }
         gamepadButtonsPrevRef.current = {
           lt,
-          rt,
-          lb,
-          rb,
-          l3,
-          faceY,
           faceA,
-          faceB,
           faceX,
         };
       }
@@ -908,10 +899,17 @@ export const DualJoystickControls = ({
           transform: translateX(-50%) scale(0.9);
         }
 
-        .gimbal-bottom-left {
+        .drive-bottom-left {
           top: auto;
           bottom: -8px;
           left: -8px;
+        }
+
+        .drive-bottom-right {
+          top: auto;
+          bottom: -8px;
+          left: auto;
+          right: -8px;
         }
 
         .gimbal-bottom-right {
@@ -920,11 +918,11 @@ export const DualJoystickControls = ({
           left: auto;
           right: -8px;
         }
-        .gimbal-bottom-center {
-          top: auto;
-          bottom: -8px;
-          left: 50%;
-          transform: translateX(-50%);
+
+        .nv-on {
+          border-color: #8b5cf6 !important;
+          color: #f3e8ff !important;
+          background: rgba(139, 92, 246, 0.8) !important;
         }
 
         /* Schematic sits bottom-center between sticks (compact HUD layout). */
@@ -976,57 +974,66 @@ export const DualJoystickControls = ({
           color: #f3e8ff !important;
           background: rgba(139, 92, 246, 0.8) !important;
         }
-        .laser-on {
-          border-color: #8b5cf6 !important;
-          color: #f3e8ff !important;
-          background: rgba(139, 92, 246, 0.8) !important;
-        }
-        .headlight-on {
-          border-color: #8b5cf6 !important;
-          color: #f3e8ff !important;
-          background: rgba(139, 92, 246, 0.8) !important;
-        }
       `}</style>
 
-      {/* LEFT JOYSTICK: DRIVE */}
+      {/* LEFT JOYSTICK: DRIVE + lateral strafe (lower corners) */}
       <div className="joystick-wrapper">
         <div ref={leftZoneRef} className="j-zone">
           <div className="j-label">Drive</div>
         </div>
 
-        {onTreat && (
-          <button
-            type="button"
-            className="reset-btn-sibling drive-top-center"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onTreat();
-            }}
-            style={{ borderRadius: "20px" }}
-            onPointerDown={(e) => e.stopPropagation()}
-            aria-label="Dispense treat"
-            title="Treat (keyboard T · gamepad Y)"
-          >
-            TRT
-          </button>
-        )}
+        <button
+          type="button"
+          className="reset-btn-sibling drive-bottom-left"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+            setStrafe(-1);
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setStrafe(0);
+          }}
+          onPointerCancel={() => setStrafe(0)}
+          style={{ borderRadius: "20px" }}
+          aria-label="Strafe left"
+          title="Strafe left (keyboard Q)"
+        >
+          ◀
+        </button>
 
         <button
           type="button"
-          className={`reset-btn-sibling drive-bottom-center${backupViewEnabled ? " backup-on" : ""}`}
-          onClick={(e) => {
+          className="reset-btn-sibling drive-bottom-right"
+          onPointerDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onToggleBackupView?.();
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+            setStrafe(1);
           }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setStrafe(0);
+          }}
+          onPointerCancel={() => setStrafe(0)}
           style={{ borderRadius: "20px" }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="Toggle backup camera view"
-          title="Backup camera view"
+          aria-label="Strafe right"
+          title="Strafe right (keyboard E)"
         >
-          BKP
+          ▶
         </button>
+
       </div>
 
       {/* HUD CENTER: (Schematics, Status, etc.) */}
@@ -1034,7 +1041,7 @@ export const DualJoystickControls = ({
         {children}
       </div>
 
-      {/* RIGHT JOYSTICK: GIMBAL + RST (left) + PRK (right) */}
+      {/* RIGHT JOYSTICK: GIMBAL + RST / NV / CAP */}
       <div className="joystick-wrapper">
         <div ref={rightZoneRef} className="j-zone">
           <div className="j-label">Gimbal</div>
@@ -1051,59 +1058,49 @@ export const DualJoystickControls = ({
           style={{ borderRadius: "20px" }}
           onPointerDown={(e) => e.stopPropagation()}
           aria-label="Center camera"
+          title="Center camera (RST)"
         >
           RST
         </button>
 
-        <button
-          type="button"
-          className="reset-btn-sibling sibling-btn-right"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onLookDown?.();
-          }}
-          style={{ borderRadius: "20px" }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="Park camera (downward)"
-          title="PRK (park mode: look down)"
-        >
-          PRK
-        </button>
-
-        {onLaserToggle && (
+        {onNVToggle && (
           <button
             type="button"
-            className={`reset-btn-sibling gimbal-bottom-left${laserOn ? " laser-on" : ""}`}
+            className={`reset-btn-sibling sibling-btn-right${nvActive ? " nv-on" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onLaserToggle();
+              onNVToggle();
             }}
             style={{ borderRadius: "20px" }}
             onPointerDown={(e) => e.stopPropagation()}
-            aria-label={laserOn ? "Laser on" : "Laser off"}
-            title="Laser (KY-008 on GPIO17)"
+            aria-label={nvActive ? "Night vision on — tap to disable" : "Night vision off — tap to enable"}
+            aria-pressed={nvActive}
+            title={nvActive ? "Night vision ON (tap to turn off)" : "Night vision OFF (tap to turn on)"}
           >
-            LZR
+            NV
           </button>
         )}
 
-        {onHeadlightToggle && (
+        {onCapture && (
           <button
             type="button"
-            className={`reset-btn-sibling gimbal-bottom-right${headlightOn ? " headlight-on" : ""}`}
+            className="reset-btn-sibling gimbal-bottom-right"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onHeadlightToggle();
+              if (!isCapturing) onCapture();
             }}
-            style={{ borderRadius: "20px" }}
+            style={{
+              borderRadius: "20px",
+              opacity: isCapturing ? 0.5 : 1,
+            }}
             onPointerDown={(e) => e.stopPropagation()}
-            aria-label={headlightOn ? "Headlight on" : "Headlight off"}
-            title="Headlight"
+            disabled={isCapturing}
+            aria-label={isCapturing ? "Capturing photo" : "Take hi-res photo"}
+            title={isCapturing ? "Capturing…" : "Hi-res capture"}
           >
-            HL
+            CAP
           </button>
         )}
       </div>
@@ -1123,12 +1120,12 @@ DualJoystickControls.propTypes = {
   onVoiceStop: PropTypes.func,
   voiceSupported: PropTypes.bool,
   voiceListening: PropTypes.bool,
-  onToggleBackupView: PropTypes.func,
-  backupViewEnabled: PropTypes.bool,
-  onTreat: PropTypes.func,
   onToggleFullscreen: PropTypes.func,
-  onToggleMap: PropTypes.func,
   onToggleMetrics: PropTypes.func,
+  onNVToggle: PropTypes.func,
+  nvActive: PropTypes.bool,
+  onCapture: PropTypes.func,
+  isCapturing: PropTypes.bool,
   immersive: PropTypes.bool,
   children: PropTypes.node,
 };

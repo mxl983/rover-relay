@@ -1,22 +1,19 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 const CONTROL_CONFIG = [
-  { key: "t", label: "🦴", grid: 1, type: "action", hint: "TRT" },
+  { key: "q", label: "Q", grid: 1, hint: "←" },
   { key: "w", label: "W", grid: 2 },
-  { key: "v", label: "🎤", grid: 3, type: "action", hint: "PTT" },
-  { key: "b", label: "📷", grid: 4, type: "action", hint: "BKP" },
+  { key: "e", label: "E", grid: 3, hint: "→" },
+  { key: "v", label: "🎤", grid: 4, type: "action", hint: "PTT" },
   { key: "a", label: "A", grid: 5 },
   { key: "s", label: "S", grid: 6 },
   { key: "d", label: "D", grid: 7 },
+  { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
   { key: "arrowup", label: "▲", grid: 10, python: "ArrowUp", hint: "UP" },
   { key: "r", label: "⟲", grid: 11, type: "action", hint: "RST" },
-  { key: "p", label: "P", grid: 12, type: "action", hint: "PRK" },
   { key: "arrowleft", label: "◀", grid: 13, python: "ArrowLeft", hint: "L" },
   { key: "arrowdown", label: "▼", grid: 14, python: "ArrowDown", hint: "DN" },
   { key: "arrowright", label: "▶", grid: 15, python: "ArrowRight", hint: "R" },
-  { key: "f", label: "💡", grid: 16, type: "action", hint: "F" },
-  { key: "l", label: "🔴", grid: 8, type: "action", hint: "LZR" },
-  { key: "c", label: "📸", grid: 9, type: "action", hint: "C" },
 ];
 
 const KEYBOARD_DRIVE_CONFIG = CONTROL_CONFIG.filter((config) => config.type !== "action");
@@ -31,29 +28,33 @@ export function keyboardDrivePayload(keys) {
 
 export const KeyboardControlCluster = ({
   onDrive,
-  onLightToggle,
-  onLaserToggle,
   onVoiceStart,
   onVoiceStop,
   onCapture,
   onReset,
-  onLookDown,
-  usbPower,
-  laserOn,
   voiceSupported,
   voiceListening,
-  onToggleBackupView,
-  backupViewEnabled,
-  onTreat,
   isCapturing: _isCapturing,
 }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
   const prevKeysRef = useRef("");
+  const activeKeysRef = useRef(activeKeys);
   const onDriveRef = useRef(onDrive);
 
   useEffect(() => {
     onDriveRef.current = onDrive;
   }, [onDrive]);
+
+  useEffect(() => {
+    activeKeysRef.current = activeKeys;
+  }, [activeKeys]);
+
+  const publishKeys = useCallback((keys) => {
+    const activeList = keyboardDrivePayload(keys);
+    const keysString = activeList.join("");
+    onDriveRef.current(activeList);
+    prevKeysRef.current = keysString;
+  }, []);
 
   const updateAction = useCallback(
     (key, isDown) => {
@@ -69,23 +70,17 @@ export const KeyboardControlCluster = ({
           return;
         }
         if (!isDown) return;
-        if (key === "f") onLightToggle();
-        if (key === "l") onLaserToggle?.();
         if (key === "c") onCapture();
         if (key === "r") onReset();
-        if (key === "p") onLookDown?.();
-        if (key === "b") onToggleBackupView?.();
-        if (key === "t") onTreat?.();
         return;
       }
 
-      // Handle Drive Keys
+      // Handle Drive / Gimbal Keys
       setActiveKeys((prev) => {
         const next = new Set(prev);
         isDown ? next.add(key) : next.delete(key);
 
         const activeList = keyboardDrivePayload(next);
-
         const keysString = activeList.join("");
         if (keysString !== prevKeysRef.current) {
           onDriveRef.current(activeList);
@@ -95,16 +90,11 @@ export const KeyboardControlCluster = ({
       });
     },
     [
-      onLightToggle,
-      onLaserToggle,
       onVoiceStart,
       onVoiceStop,
       onCapture,
       onReset,
-      onLookDown,
       voiceSupported,
-      onToggleBackupView,
-      onTreat,
     ],
   );
 
@@ -112,6 +102,17 @@ export const KeyboardControlCluster = ({
   useEffect(() => {
     updateActionRef.current = updateAction;
   }, [updateAction]);
+
+  // MentorPi cmd_vel / gimbal expire quickly — re-send while keys stay held.
+  useEffect(() => {
+    if (activeKeys.size === 0) return undefined;
+    const id = setInterval(() => {
+      const held = activeKeysRef.current;
+      if (!held || held.size === 0) return;
+      publishKeys(held);
+    }, 200);
+    return () => clearInterval(id);
+  }, [activeKeys, publishKeys]);
 
   useEffect(() => {
     const handleKeyEvent = (e) => {
@@ -190,7 +191,6 @@ export const KeyboardControlCluster = ({
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
         .laser-on { background: #ff4444 !important; color: #000; border-color: #ff4444; }
         .voice-on { background: #22c55e !important; color: #000; border-color: #22c55e; }
-        .backup-on { background: #8b5cf6 !important; color: #fff; border-color: #8b5cf6; }
         .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; pointer-events: none; -webkit-user-select: none;}
       `}</style>
 
@@ -202,10 +202,7 @@ export const KeyboardControlCluster = ({
           <button
             key={i}
             className={`btn ${activeKeys.has(conf.key) ? "active" : ""} 
-              ${conf.key === "f" && usbPower === "on" ? "light-on" : ""}
-              ${conf.key === "l" && laserOn ? "laser-on" : ""}
-              ${conf.key === "v" && voiceListening ? "voice-on" : ""}
-              ${conf.key === "b" && backupViewEnabled ? "backup-on" : ""}`}
+              ${conf.key === "v" && voiceListening ? "voice-on" : ""}`}
             // Mouse Handlers
             onMouseDown={() => updateAction(conf.key, true)}
             onMouseUp={() => updateAction(conf.key, false)}

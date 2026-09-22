@@ -1,7 +1,7 @@
 import React from "react";
 
-/** Default 🐱 — also try 😺 😸 🐈 🐈‍⬛ */
-export function BrandCatIcon({ emoji = "🐱", size = 18, className = "" }) {
+/** Default 🐈‍⬛ — also try 😺 😸 🐈 🐱 */
+export function BrandCatIcon({ emoji = "🐈‍⬛", size = 18, className = "" }) {
   return (
     <span
       className={`hud-brand-emoji ${className}`.trim()}

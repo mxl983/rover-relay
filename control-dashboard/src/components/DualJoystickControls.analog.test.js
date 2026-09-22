@@ -87,6 +87,7 @@ describe("joystick drive curve", () => {
     expect(prepareDriveVector({ x: 0.123, y: -0.456 })).toEqual({
       x: 0.123,
       y: -0.456,
+      strafe: 0,
     });
   });
 
@@ -94,7 +95,7 @@ describe("joystick drive curve", () => {
     const a = prepareOutboundDriveVector({ x: 0.48, y: -0.01 });
     const b = prepareOutboundDriveVector({ x: 0.52, y: 0.01 });
     expect(a).toEqual(b);
-    expect(a).toEqual({ x: 0.5, y: 0 });
+    expect(a).toEqual({ x: 0.5, y: 0, strafe: 0 });
   });
 
   it("keepalives held analog well under a typical Pi command stale window", () => {

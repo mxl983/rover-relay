@@ -8,17 +8,12 @@ describe("SystemControls", () => {
     const { container } = render(
       <SystemControls
         isPowered={false}
-        nvActive={false}
         resMode="720p"
-        focusMode="far"
-        isCapturing={false}
         quietMode={false}
         powerSavingEnabled
         onQuietModeChange={vi.fn()}
         onPowerSavingChange={vi.fn()}
-        onNVToggle={vi.fn()}
         onResChange={vi.fn()}
-        onFocusChange={vi.fn()}
         onAction={vi.fn()}
         controlMode="keyboard"
         onControlModeChange={vi.fn()}
@@ -30,20 +25,17 @@ describe("SystemControls", () => {
   it("opens menu when powered", async () => {
     const user = userEvent.setup();
     const onAction = vi.fn();
+    const onPowerSavingChange = vi.fn();
     render(
       <SystemControls
         isPowered
-        nvActive={false}
         resMode="720p"
-        focusMode="far"
-        isCapturing={false}
         quietMode={false}
         powerSavingEnabled
+        powerSavingTimeoutMinutes={5}
         onQuietModeChange={vi.fn()}
-        onPowerSavingChange={vi.fn()}
-        onNVToggle={vi.fn()}
+        onPowerSavingChange={onPowerSavingChange}
         onResChange={vi.fn()}
-        onFocusChange={vi.fn()}
         onAction={onAction}
         controlMode="keyboard"
         onControlModeChange={vi.fn()}
@@ -60,10 +52,19 @@ describe("SystemControls", () => {
       "data-state",
       "open",
     );
-    expect(document.querySelector(".settings-capture-button")).toBeTruthy();
+    expect(document.querySelector(".settings-capture-button")).toBeNull();
     expect(document.body.textContent).toMatch(
-      /Stream|Night|720|Focus|PSM|On|Off|Driving|Control|Mode|ECO|Sport|Assist|Map|Metrics|View telemetry|Reboot|Shutdown/i,
+      /Res|PSM|Off|5m|10m|30m|Driving|Control|Speed|Slow|Mid|Fast|Mode|ECO|Sport|Assist|Metrics|Reboot|Shutdown/i,
     );
+    expect(document.body.textContent).not.toMatch(/\bNV\b|Focus|Stream/i);
+    await user.click(document.querySelector('[aria-label="10m"]'));
+    expect(onPowerSavingChange).toHaveBeenCalledWith({
+      enabled: true,
+      timeoutMinutes: 10,
+    });
+    await user.click(document.querySelector('[aria-label="Off"]'));
+    expect(onPowerSavingChange).toHaveBeenCalledWith({ enabled: false });
+
     await user.click(document.querySelector(".settings-drawer-backdrop"));
     expect(document.querySelector(".settings-menu-drawer")).toHaveAttribute(
       "data-state",

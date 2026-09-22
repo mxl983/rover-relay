@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { keyboardDrivePayload } from "./KeyboardControlCluster.jsx";
-import { buildDriveWebSocketMessage } from "../hooks/usePiWebSocket.js";
+import { stickToCmdVel } from "../config.js";
 
 describe("keyboard drive protocol", () => {
   it("preserves W/S/A/D direction keys", () => {
@@ -8,42 +8,46 @@ describe("keyboard drive protocol", () => {
     expect(keyboardDrivePayload(["s"])).toEqual(["s"]);
     expect(keyboardDrivePayload(["a"])).toEqual(["a"]);
     expect(keyboardDrivePayload(["d"])).toEqual(["d"]);
+    expect(keyboardDrivePayload(["q", "e"])).toEqual(["e", "q"]);
   });
 
   it("sends an empty keyboard payload for release", () => {
     expect(keyboardDrivePayload([])).toEqual([]);
     expect(keyboardDrivePayload(new Set(["w"]))).toEqual(["w"]);
-    expect(buildDriveWebSocketMessage([])).toEqual({
-      type: "DRIVE",
-      payload: [],
-    });
   });
 });
 
-describe("WebSocket manual drive protocol", () => {
-  it("keeps joystick drive and gimbal at the top level", () => {
-    expect(
-      buildDriveWebSocketMessage({
-        drive: { x: -0.25, y: -0.6 },
-        gimbal: { x: 0, y: 0 },
-      }),
-    ).toEqual({
-      type: "DRIVE",
-      drive: { x: -0.25, y: -0.6 },
-      gimbal: { x: 0, y: 0 },
+describe("MentorPi stick → cmd_vel mapping", () => {
+  it("maps joystick forward (y=-1) to +linear_x", () => {
+    const twist = stickToCmdVel({ x: 0, y: -1 });
+    expect(twist.linear_x).toBeGreaterThan(0);
+    expect(twist.linear_y).toBe(0);
+    expect(twist.angular_z).toBe(0);
+  });
+
+  it("maps joystick right (x=+1) to -angular_z (turn right)", () => {
+    const twist = stickToCmdVel({ x: 1, y: 0 });
+    expect(twist.linear_x).toBe(0);
+    expect(twist.angular_z).toBeLessThan(0);
+  });
+
+  it("maps neutral stick to zero twist", () => {
+    expect(stickToCmdVel({ x: 0, y: 0 })).toEqual({
+      linear_x: 0,
+      linear_y: 0,
+      angular_z: 0,
     });
   });
 
-  it("represents a joystick neutral stop without REST", () => {
-    expect(
-      buildDriveWebSocketMessage({
-        drive: { x: 0, y: 0 },
-        gimbal: { x: 0, y: 0 },
-      }),
-    ).toEqual({
-      type: "DRIVE",
-      drive: { x: 0, y: 0 },
-      gimbal: { x: 0, y: 0 },
-    });
+  it("maps strafe left (strafe=-1) to +linear_y", () => {
+    const twist = stickToCmdVel({ x: 0, y: 0, strafe: -1 });
+    expect(twist.linear_x).toBe(0);
+    expect(twist.linear_y).toBeGreaterThan(0);
+    expect(twist.angular_z).toBe(0);
+  });
+
+  it("maps strafe right (strafe=+1) to -linear_y", () => {
+    const twist = stickToCmdVel({ x: 0, y: 0, strafe: 1 });
+    expect(twist.linear_y).toBeLessThan(0);
   });
 });

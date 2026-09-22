@@ -75,8 +75,14 @@ export function useVoiceAssistant({ onAction } = {}) {
       setLastTranscript(transcript);
       setIsThinking(true);
       try {
+        const voiceUrl =
+          typeof PI_VOICE_ENDPOINT === "string" ? PI_VOICE_ENDPOINT.trim() : "";
+        if (!voiceUrl || !/^https?:\/\//i.test(voiceUrl)) {
+          setAssistantReply("Voice backend not configured.");
+          return;
+        }
         const data = await apiPostJson(
-          PI_VOICE_ENDPOINT,
+          voiceUrl,
           { transcript },
           { retries: 0, timeout: 18_000 },
         );

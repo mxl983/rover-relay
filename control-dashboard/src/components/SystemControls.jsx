@@ -3,23 +3,16 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Power,
   RefreshCw,
-  Moon,
-  Sun,
   Settings,
-  Focus,
-  ChevronLeft,
   Video,
-  Check,
-  Aperture,
   Footprints,
   Zap,
   Keyboard,
   Gamepad2,
-  BarChart3,
-  Map as MapIcon,
   ShieldAlert,
   Glasses,
   Gauge,
+  Rabbit,
   Volume2,
   Mic,
 } from "lucide-react";
@@ -30,7 +23,26 @@ const CONTROL_MODE_OPTIONS = [
   { value: "immersive", label: "Immersive", icon: <Glasses size={10} strokeWidth={2.25} /> },
 ];
 
+const RESOLUTION_OPTIONS = [
+  { value: "480p", label: "480p" },
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p" },
+];
+
+/** Match MentorPi web_car SPEED_LEVELS (slow / normal / fast). */
+const SPEED_OPTIONS = [
+  { value: "slow", label: "Slow" },
+  { value: "normal", label: "Mid" },
+  { value: "fast", label: "Fast" },
+];
+
 const SEGMENT_TOGGLE_WIDTH = "88px";
+const POWER_SAVING_OPTIONS = [
+  { value: "off", label: "Off" },
+  { value: "5", label: "5m" },
+  { value: "10", label: "10m" },
+  { value: "30", label: "30m" },
+];
 
 function SegmentedToggle({
   options,
@@ -39,10 +51,11 @@ function SegmentedToggle({
   ariaLabel,
   uppercase = true,
   iconMode = false,
+  width = SEGMENT_TOGGLE_WIDTH,
 }) {
   return (
     <div
-      style={styles.segmentGroup}
+      style={{ ...styles.segmentGroup, width }}
       role="group"
       aria-label={ariaLabel}
       onPointerDown={(event) => event.stopPropagation()}
@@ -90,26 +103,29 @@ function SettingsToggleRow({ icon, label, children, title }) {
   );
 }
 
+function powerSavingModeValue(enabled, timeoutMinutes) {
+  if (!enabled) return "off";
+  const mins = Number(timeoutMinutes);
+  if (mins === 10 || mins === 30) return String(mins);
+  return "5";
+}
+
 export const SystemControls = ({
   isPowered,
-  nvActive,
   resMode,
-  focusMode,
-  isCapturing,
   quietMode,
   driveAssistEnabled,
   powerSavingEnabled,
+  powerSavingTimeoutMinutes = 5,
   onQuietModeChange,
   onDriveAssistChange,
   onPowerSavingChange,
-  onNVToggle,
   onResChange,
-  onFocusChange,
   onAction,
   controlMode,
   onControlModeChange,
-  slamMapEnabled = false,
-  onSlamMapChange,
+  driveSpeed = "fast",
+  onDriveSpeedChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
   roverSpeakerEnabled = true,
@@ -119,6 +135,11 @@ export const SystemControls = ({
 }) => {
   const [open, setOpen] = React.useState(false);
   if (!isPowered) return null;
+
+  const powerSavingMode = powerSavingModeValue(
+    powerSavingEnabled,
+    powerSavingTimeoutMinutes,
+  );
 
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
@@ -155,106 +176,40 @@ export const SystemControls = ({
             sideOffset={0}
             avoidCollisions={false}
           >
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger style={styles.menuItem}>
-              <Video size={14} /> <span>Stream</span>
-              <ChevronLeft
-                size={12}
-                style={{ marginLeft: "auto", opacity: 0.5 }}
-              />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.SubContent
-                style={styles.menuContent}
-                sideOffset={2}
-                alignOffset={-5}
-              >
-                <DropdownMenu.Label style={styles.menuLabel}>
-                  Resolution
-                </DropdownMenu.Label>
-                {["240p", "480p", "720p", "1080p"].map((res) => (
-                  <DropdownMenu.CheckboxItem
-                    key={res}
-                    style={styles.menuItem}
-                    checked={resMode === res}
-                    onCheckedChange={() => onResChange(res)}
-                  >
-                    {res.toUpperCase()}
-                    <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
-                      <Check size={12} color="#00f2ff" />
-                    </DropdownMenu.ItemIndicator>
-                  </DropdownMenu.CheckboxItem>
-                ))}
-                <DropdownMenu.Separator style={styles.separator} />
-                <DropdownMenu.Item
-                  style={styles.menuItem}
-                  onSelect={() => onNVToggle(!nvActive)}
-                >
-                  {nvActive ? <Moon size={12} /> : <Sun size={12} />}
-                  <span>
-                    NV mode is {nvActive ? "ON" : "OFF"}
-                  </span>
-                </DropdownMenu.Item>
-              </DropdownMenu.SubContent>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Sub>
+          <SettingsToggleRow icon={<Video size={12} />} label="Res">
+            <SegmentedToggle
+              ariaLabel="Stream resolution"
+              uppercase={false}
+              value={resMode}
+              options={RESOLUTION_OPTIONS}
+              onChange={onResChange}
+            />
+          </SettingsToggleRow>
 
-          {/* FOCUS SUBMENU */}
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger style={styles.menuItem}>
-              <Focus size={14} /> <span>Focus</span>
-              <ChevronLeft
-                size={12}
-                style={{ marginLeft: "auto", opacity: 0.5 }}
-              />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.SubContent
-                style={styles.menuContent}
-                sideOffset={2}
-              >
-                {[
-                  { label: "Auto Focus", value: "auto" },
-                  { label: "Near", value: "near" },
-                  { label: "Mid", value: "normal" },
-                  { label: "Far", value: "far" },
-                ].map((f) => (
-                  <DropdownMenu.CheckboxItem
-                    key={f.value}
-                    style={styles.menuItem}
-                    checked={focusMode === f.value}
-                    onCheckedChange={() => onFocusChange(f.value)}
-                  >
-                    {f.label}
-                    <DropdownMenu.ItemIndicator style={{ marginLeft: "auto" }}>
-                      <Check size={12} color="#00f2ff" />
-                    </DropdownMenu.ItemIndicator>
-                  </DropdownMenu.CheckboxItem>
-                ))}
-              </DropdownMenu.SubContent>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Sub>
 
           <DropdownMenu.Separator style={styles.separator} />
 
           <SettingsToggleRow
             icon={<Power size={12} />}
             label="PSM"
-            title={
-              powerSavingEnabled
-                ? "Power saving on; disables idle shutdown when off."
-                : "Power saving off; re-enables idle shutdown when on."
-            }
+            title="Idle shutdown: Off, or auto power-off after 5 / 10 / 30 minutes of inactivity"
           >
             <SegmentedToggle
-              ariaLabel="Power saving"
+              ariaLabel="Power saving idle timeout"
               uppercase={false}
-              value={powerSavingEnabled ? "on" : "off"}
-              options={[
-                { label: "Off", value: "off" },
-                { label: "On", value: "on" },
-              ]}
-              onChange={(mode) => onPowerSavingChange?.(mode === "on")}
+              width="118px"
+              value={powerSavingMode}
+              options={POWER_SAVING_OPTIONS}
+              onChange={(mode) => {
+                if (mode === "off") {
+                  onPowerSavingChange?.({ enabled: false });
+                  return;
+                }
+                onPowerSavingChange?.({
+                  enabled: true,
+                  timeoutMinutes: Number(mode),
+                });
+              }}
             />
           </SettingsToggleRow>
 
@@ -282,6 +237,20 @@ export const SystemControls = ({
               value={controlMode}
               options={CONTROL_MODE_OPTIONS}
               onChange={onControlModeChange}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow
+            icon={<Rabbit size={12} />}
+            label="Speed"
+            title="MentorPi drive speed (slow / normal / fast)"
+          >
+            <SegmentedToggle
+              ariaLabel="Drive speed"
+              uppercase={false}
+              value={driveSpeed}
+              options={SPEED_OPTIONS}
+              onChange={(level) => onDriveSpeedChange?.(level)}
             />
           </SettingsToggleRow>
 
@@ -328,22 +297,6 @@ export const SystemControls = ({
           </SettingsToggleRow>
 
           <SettingsToggleRow
-            icon={<MapIcon size={12} />}
-            label="SLAM"
-            title="Cartographer occupancy map"
-          >
-            <SegmentedToggle
-              ariaLabel="SLAM map"
-              value={slamMapEnabled ? "on" : "off"}
-              options={[
-                { label: "OFF", value: "off" },
-                { label: "ON", value: "on" },
-              ]}
-              onChange={(mode) => onSlamMapChange?.(mode === "on")}
-            />
-          </SettingsToggleRow>
-
-          <SettingsToggleRow
             icon={<Volume2 size={12} />}
             label="Speaker"
             title="Hear rover microphone audio"
@@ -377,15 +330,6 @@ export const SystemControls = ({
 
           <DropdownMenu.Separator style={styles.separator} />
 
-          <DropdownMenu.Item
-            style={styles.menuItem}
-            onSelect={() => onAction("telemetry")}
-          >
-            <BarChart3 size={14} /> <span>View telemetry</span>
-          </DropdownMenu.Item>
-
-          <DropdownMenu.Separator style={styles.separator} />
-
           {/* SYSTEM ACTIONS */}
           <DropdownMenu.Item
             style={styles.menuItem}
@@ -401,23 +345,6 @@ export const SystemControls = ({
             <Power size={14} /> <span>Shutdown</span>
           </DropdownMenu.Item>
 
-          <DropdownMenu.Item
-            className="settings-capture-button"
-            style={{
-              ...styles.captureButton,
-              opacity: isCapturing ? 0.5 : 1,
-            }}
-            onSelect={() => !isCapturing && onAction("capture")}
-            disabled={isCapturing}
-            aria-label={isCapturing ? "Capturing photo" : "Take hi-res photo"}
-            title={isCapturing ? "Capturing..." : "Take hi-res photo"}
-          >
-            <Aperture
-              size={60}
-              strokeWidth={1.5}
-              style={isCapturing ? { animation: "spin 2s linear infinite" } : {}}
-            />
-          </DropdownMenu.Item>
           </DropdownMenu.Content>
         </>
       </DropdownMenu.Portal>
@@ -471,23 +398,6 @@ const styles = {
     cursor: "pointer",
     outline: "none",
     transition: "background 0.2s",
-  },
-  captureButton: {
-    alignSelf: "center",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "76px",
-    height: "76px",
-    minHeight: "76px",
-    boxSizing: "border-box",
-    margin: "auto 0 12px",
-    padding: 0,
-    border: "3px solid #ffffff",
-    borderRadius: "50%",
-    background: "rgba(255, 255, 255, 0.08)",
-    color: "#ffffff",
-    transition: "background 0.2s, transform 0.2s",
   },
   toggleRow: {
     fontSize: "11px",

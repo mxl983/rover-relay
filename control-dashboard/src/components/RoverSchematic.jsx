@@ -88,20 +88,6 @@ function formatDistanceShort(meters, isOffline) {
   return `${Math.round(km)}km`;
 }
 
-const STANDARD_PRESSURE_HPA = 1013.25;
-
-function formatPressureDeltaShort(pressureHpa, isOffline) {
-  if (pressureHpa == null || !Number.isFinite(Number(pressureHpa))) {
-    return isOffline ? "--" : "…";
-  }
-  // Upstream is hPa; show signed kPa offset from standard sea-level pressure.
-  const deltaKpa = (Number(pressureHpa) - STANDARD_PRESSURE_HPA) / 10;
-  if (Math.abs(deltaKpa) < 0.05) return "0";
-  const rounded = Math.round(deltaKpa * 10) / 10;
-  const body = Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
-  return rounded > 0 ? `+${body}` : body;
-}
-
 function formatWifiShort(dbm, isOffline) {
   const level = getWifiLevel(dbm);
   if (level == null) return isOffline ? "--" : "…";
@@ -139,13 +125,11 @@ export const RoverSchematic = ({
   pan = 90,
   battery = null,
   cpuTemp = null,
-  ambientTempC = null,
   latencyMs = null,
   throttle = null,
   voltage = null,
   wifiSignal = null,
   distanceMeters = null,
-  pressureHpa = null,
   cpuLoad = null,
   isOffline = false,
   isCharging = false,
@@ -180,25 +164,14 @@ export const RoverSchematic = ({
   const latencyColor = isOffline
     ? palette.grey
     : bandColor(latencyMs, { good: 80, warn: 200 });
-  const ambientColor = isOffline
-    ? palette.grey
-    : bandColor(ambientTempC, { good: 32, warn: 40 });
   const voltageColor = isOffline
     ? palette.grey
-    : bandColor(voltage, { good: 11.4, warn: 10.5 }, true);
+    : bandColor(voltage, { good: 11.7, warn: 10.5 }, true);
   const wifiColor = wifiStrengthColor(wifiSignal, isOffline);
   const loadColor = isOffline
     ? palette.grey
     : bandColor(cpuLoad, { good: 55, warn: 80 });
   const distColor = isOffline ? palette.grey : palette.green;
-  const pressureColor = isOffline
-    ? palette.grey
-    : bandColor(
-        pressureHpa != null && Number.isFinite(Number(pressureHpa))
-          ? Math.abs(Number(pressureHpa) - STANDARD_PRESSURE_HPA) / 10
-          : null,
-        { good: 0.5, warn: 1.5 },
-      );
 
   const throttlePct = throttle != null ? Math.min(100, Math.max(0, throttle)) : 0;
   const batteryText = hasBatteryData
@@ -211,12 +184,6 @@ export const RoverSchematic = ({
   const secondaryMetrics = useMemo(() => {
     /** @type {{ key: string; label: string; value: string; color: string }[]} */
     const rows = [
-      {
-        key: "tmp",
-        label: "TMP",
-        value: formatMetricValue(ambientTempC, "°", isOffline),
-        color: ambientColor,
-      },
       {
         key: "cpu",
         label: "CPU",
@@ -248,12 +215,6 @@ export const RoverSchematic = ({
         color: distColor,
       },
       {
-        key: "air",
-        label: "AIR",
-        value: formatPressureDeltaShort(pressureHpa, isOffline),
-        color: pressureColor,
-      },
-      {
         key: "load",
         label: "LOAD",
         value: formatMetricValue(cpuLoad, "%", isOffline),
@@ -262,8 +223,6 @@ export const RoverSchematic = ({
     ];
     return rows;
   }, [
-    ambientTempC,
-    ambientColor,
     cpuTemp,
     cpuColor,
     latencyMs,
@@ -274,8 +233,6 @@ export const RoverSchematic = ({
     wifiColor,
     distanceMeters,
     distColor,
-    pressureHpa,
-    pressureColor,
     cpuLoad,
     loadColor,
     isOffline,
@@ -319,7 +276,6 @@ export const RoverSchematic = ({
   const labelParts = [];
   if (hasBatteryData) labelParts.push(`battery ${Math.round(chargeLevel)}%`);
   if (cpuTemp != null) labelParts.push(`CPU ${Math.round(cpuTemp)}°C`);
-  if (ambientTempC != null) labelParts.push(`ambient ${Math.round(ambientTempC)}°C`);
   if (latencyMs != null) labelParts.push(`latency ${Math.round(latencyMs)}ms`);
   if (voltage != null) labelParts.push(`voltage ${Number(voltage).toFixed(1)}V`);
   if (wifiSignal != null) {
@@ -328,10 +284,6 @@ export const RoverSchematic = ({
     labelParts.push(`wifi level ${tier} (${Math.round(wifiSignal)} dBm)`);
   }
   if (distanceMeters != null) labelParts.push(`distance ${Math.round(distanceMeters)}m`);
-  if (pressureHpa != null) {
-    const deltaKpa = (Number(pressureHpa) - STANDARD_PRESSURE_HPA) / 10;
-    labelParts.push(`pressure ${deltaKpa >= 0 ? "+" : ""}${deltaKpa.toFixed(1)} kPa from standard`);
-  }
   if (cpuLoad != null) labelParts.push(`load ${Math.round(cpuLoad)}%`);
   labelParts.push(`throttle ${Math.round(throttlePct)}%`);
   if (pan != null) labelParts.push(`pan ${Math.round(pan)}°`);
@@ -690,13 +642,11 @@ RoverSchematic.propTypes = {
   pan: PropTypes.number,
   battery: PropTypes.number,
   cpuTemp: PropTypes.number,
-  ambientTempC: PropTypes.number,
   latencyMs: PropTypes.number,
   throttle: PropTypes.number,
   voltage: PropTypes.number,
   wifiSignal: PropTypes.number,
   distanceMeters: PropTypes.number,
-  pressureHpa: PropTypes.number,
   cpuLoad: PropTypes.number,
   isOffline: PropTypes.bool,
   isCharging: PropTypes.bool,

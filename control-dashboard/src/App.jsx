@@ -1,22 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { VideoStream } from "./components/VideoStream";
 import { KeyboardControlCluster } from "./components/KeyboardControlCluster";
-import {
-  PI_SYSTEM_ENDPOINT,
-  PI_CAMERA_ENDPOINT,
-  PI_HI_RES_CAPTURE_ENDPOINT,
-  BACKUP_STREAM_ENDPOINT,
-  CAMERA_SECRET,
-  VOICE_DRIVE_DEBUG,
-  DRIVE_ASSIST_DEBUG,
-  JOYSTICK_DRIVE_DEBUG,
-  IMU_DEBUG,
-  getRelayRoverHeartbeatWebSocketUrl,
-  ROVER_CLIENT_DISTANCE_ENDPOINT,
-  ROVER_SITE_COORDS,
-  ROVER_CHARGING_ENDPOINT,
-  ROVER_STATE_ENDPOINT,
-} from "./config";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
 import { GimbalTiltHud } from "./components/GimbalTiltHud";
@@ -26,29 +10,43 @@ import { DualJoystickControls } from "./components/DualJoystickControls";
 import { MouseGimbalLayer } from "./components/MouseGimbalLayer";
 import { MobileTouchGimbalLayer } from "./components/MobileTouchGimbalLayer";
 import { AssistantPanel } from "./components/AssistantPanel";
-import { SlamMap } from "./components/SlamMap";
 import { BrandCatIcon } from "./components/BrandCatIcon";
 import { HudIndicatorStrip } from "./components/HudIndicatorStrip";
 import { useIsMobile, getIsMobileSnapshot } from "./hooks/useIsMobile";
 import { useFullscreen } from "./hooks/useFullscreen";
-import { usePiWebSocket } from "./hooks/usePiWebSocket";
+import { useMentorPiControl } from "./hooks/useMentorPiControl";
 import { useEspMqtt } from "./hooks/useEspMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
-import { useSlamMap } from "./hooks/useSlamMap";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/captureUrl";
-import { formatClientSiteDistance } from "./utils/formatClientSiteDistance.js";
-import { distanceMeters as haversineMeters } from "./utils/geoDistance.js";
-import { deriveRoverCharging } from "./utils/deriveRoverCharging.js";
 import {
-  fetchDriveAssistStatus,
   postDriveAssist,
   readDriveAssistEnabled,
 } from "./utils/driveAssistApi.js";
 import { logImuDebug } from "./utils/imuDebugLog.js";
 import { playRoverChime } from "./utils/chimeApi.js";
 import { toggleDocumentFullscreen } from "./utils/fullscreen.js";
+import {
+  PI_SYSTEM_ENDPOINT,
+  CAMERA_SECRET,
+  VOICE_DRIVE_DEBUG,
+  DRIVE_ASSIST_DEBUG,
+  JOYSTICK_DRIVE_DEBUG,
+  IMU_DEBUG,
+  MENTOR_BEEP_ENDPOINT,
+  MENTOR_GIMBAL_ENDPOINT,
+  PI_CAMERA_ENDPOINT,
+  PI_NIGHTVISION_ENDPOINT,
+  PI_RESOLUTION_ENDPOINT,
+  PI_HI_RES_CAPTURE_ENDPOINT,
+} from "./config";
+import {
+  MQTT_POWER_OFF_DELAY_SEC,
+  publishPowerOff,
+  publishPowerOffDelayed,
+  publishPowerOn,
+} from "./mqttPower";
 
 /** Set true to show the floating voice-assistant panel again. */
 const SHOW_ASSISTANT_AGENT_UI = false;
@@ -75,7 +73,7 @@ const CONTROL_MODE_STORAGE_KEY = "rover-dashboard-control-mode";
 const METRICS_PANEL_STORAGE_KEY = "rover-dashboard-metrics-panel";
 const ROVER_SPEAKER_STORAGE_KEY = "rover-dashboard-rover-speaker";
 const DASH_MIC_STORAGE_KEY = "rover-dashboard-dash-mic";
-const CONTROL_INTERVAL_WS_MS = 16; // ~60Hz for low-latency websocket control
+const CONTROL_INTERVAL_WS_MS = 8; // ~125Hz coalesce before MentorPi HTTP
 
 function readInitialControlMode() {
   if (typeof window === "undefined") return "keyboard";
@@ -136,8 +134,8 @@ function formatRemainingTime(minutes) {
 
 export default function App() {
   const { isAuthenticated, sessionCreds, login } = useRoverSession();
-  const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl } =
-    usePiWebSocket();
+  const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl, speedLevel, setSpeedLevel } =
+    useMentorPiControl();
   const [driveAssistEnabled, setDriveAssistEnabled] = useState(false);
   const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
 
@@ -175,28 +173,15 @@ export default function App() {
 
   const [isPowered, setIsPowered] = useState(true);
   const [nvActive, setNvActive] = useState(false);
+  const nvActiveRef = useRef(false);
+  const nvInFlightRef = useRef(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [resMode, setResMode] = useState("720p");
   const [focusMode, setFocusMode] = useState("far");
   const [controlMode, setControlModeState] = useState(readInitialControlMode);
-  const [showBackupView, setShowBackupView] = useState(false);
-  const [showSlamMap, setShowSlamMapState] = useState(false);
   const [showMetricsPanel, setShowMetricsPanelState] = useState(readInitialMetricsPanel);
   const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(readInitialRoverSpeaker);
   const [dashMicEnabled, setDashMicEnabledState] = useState(readInitialDashMic);
-
-  const toggleSlamMap = () => {
-    setShowSlamMapState((prev) => {
-      const next = !prev;
-      void playRoverChime();
-      return next;
-    });
-  };
-
-  const setShowSlamMap = (enabled) => {
-    setShowSlamMapState(enabled);
-    void playRoverChime();
-  };
 
   const setShowMetricsPanel = (enabled) => {
     setShowMetricsPanelState(enabled);
@@ -257,230 +242,62 @@ export default function App() {
   const [, setCameraLoading] = useState(false);
   const [isPointerLocked, setIsPointerLocked] = useState(false);
   const [videoStreamReady, setVideoStreamReady] = useState(false);
-  const [relayCharging, setRelayCharging] = useState(null);
-  const [relayBatteryPct, setRelayBatteryPct] = useState(null);
-  const [relayTemperatureC, setRelayTemperatureC] = useState(null);
-  const [relayPressureHpa, setRelayPressureHpa] = useState(null);
-  const [relayBatteryMinutesRemaining, setRelayBatteryMinutesRemaining] = useState(null);
-  /** Same shape as GET /api/rover/state `data` for VideoStream boot loader (from relay WS). */
-  const [relayRoverPayload, setRelayRoverPayload] = useState(null);
-  const [relayDistanceMeters, setRelayDistanceMeters] = useState(null);
   const [powerSavingEnabled, setPowerSavingEnabled] = useState(true);
+  const [powerSavingTimeoutMinutes, setPowerSavingTimeoutMinutes] = useState(5);
   const [lowBatteryGlowArmed, setLowBatteryGlowArmed] = useState(false);
-  const slamSubscribed = isAuthenticated && showSlamMap;
-  const { map: slamMap, isLive: slamLive, error: slamError } = useSlamMap(slamSubscribed);
 
   useEffect(() => {
-    let cancelled = false;
-    let ws = null;
-    let reconnectTimer = null;
-
-    const connect = () => {
-      if (cancelled) return;
-      const url = getRelayRoverHeartbeatWebSocketUrl(showBackupView);
-      try {
-        ws = new WebSocket(url);
-      } catch {
-        reconnectTimer = setTimeout(connect, 2500);
-        return;
-      }
-
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.type !== "relay.rover.heartbeat" || !msg.success || !msg.rover) return;
-          const rover = msg.rover;
-          setRelayCharging(deriveRoverCharging(rover));
-          const pct = Number(rover?.battery?.currentPct);
-          setRelayBatteryPct(Number.isFinite(pct) ? pct : null);
-          const minsRemaining = Number(rover?.battery?.estimatedMinutesRemainingActiveVideo);
-          setRelayBatteryMinutesRemaining(Number.isFinite(minsRemaining) ? minsRemaining : null);
-          const tempC = Number(rover?.environment?.temperatureC);
-          setRelayTemperatureC(Number.isFinite(tempC) ? tempC : null);
-          const pressureHpa = Number(rover?.environment?.pressureHpa);
-          setRelayPressureHpa(Number.isFinite(pressureHpa) ? pressureHpa : null);
-          // Only adopt distance when present — do not clear a value from geolocation/POST.
-          const dist = Number(rover?.clientLocation?.distanceMeters);
-          if (Number.isFinite(dist)) setRelayDistanceMeters(dist);
-          setRelayRoverPayload({ rover });
-        } catch {
-          /* ignore */
-        }
-      };
-
-      ws.onerror = () => {
-        try {
-          ws?.close();
-        } catch {
-          /* ignore */
-        }
-      };
-
-      ws.onclose = () => {
-        if (cancelled) return;
-        setRelayRoverPayload(null);
-        setRelayPressureHpa(null);
-        reconnectTimer = setTimeout(connect, 2500);
-      };
-    };
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      try {
-        ws?.close();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [showBackupView]);
-
-  /** Charging HUD: poll relay when logged in (WS is primary; HTTP backs up flaky WS). */
-  useEffect(() => {
-    if (!isAuthenticated) return undefined;
-
-    let cancelled = false;
-
-    const applyFromState = (rover) => {
-      if (cancelled || !rover) return;
-      setRelayCharging(deriveRoverCharging(rover));
-    };
-
-    const poll = async () => {
-      try {
-        const res = await apiFetch(ROVER_STATE_ENDPOINT, {
-          method: "GET",
-          timeout: 8000,
-          retries: 0,
-        });
-        if (!res.ok || cancelled) return;
-        const body = await res.json();
-        applyFromState(body?.rover ?? body?.data?.rover);
-      } catch {
-        try {
-          const res = await apiFetch(ROVER_CHARGING_ENDPOINT, {
-            method: "GET",
-            timeout: 5000,
-            retries: 0,
-          });
-          if (!res.ok || cancelled) return;
-          const body = await res.json();
-          applyFromState({ charging: body?.charging ?? body?.data?.charging });
-        } catch {
-          /* ignore */
-        }
-      }
-    };
-
-    void poll();
-    const timer = setInterval(() => {
-      void poll();
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [isAuthenticated]);
+    if (typeof stats?.powerSavingEnabled === "boolean") {
+      setPowerSavingEnabled(stats.powerSavingEnabled);
+    }
+  }, [stats?.powerSavingEnabled]);
 
   useEffect(() => {
-    if (!isAuthenticated || !navigator.geolocation?.watchPosition) return undefined;
-    let watchId = null;
-
-    const reportLocation = (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
-
-      // Local haversine when rover site is configured in the dashboard env (dev fallback).
-      if (ROVER_SITE_COORDS) {
-        const local = haversineMeters(
-          { latitude, longitude },
-          ROVER_SITE_COORDS,
-        );
-        if (Number.isFinite(local)) {
-          setRelayDistanceMeters(Math.round(local * 10) / 10);
-        }
-      }
-
-      void apiPostJson(ROVER_CLIENT_DISTANCE_ENDPOINT, { latitude, longitude, accuracy }, {
-        timeout: 8000,
-        retries: 0,
-      })
-        .then((data) => {
-          const dist = Number(data?.distanceMeters);
-          if (Number.isFinite(dist)) setRelayDistanceMeters(dist);
-        })
-        .catch((err) => {
-          // Relay must have ROVER_LATITUDE / ROVER_LONGITUDE set, or DST stays empty.
-          console.warn(
-            "[dst] client-distance failed — set ROVER_LATITUDE/ROVER_LONGITUDE on the relay (or VITE_ROVER_* locally)",
-            err?.status ?? err?.message ?? err,
-          );
-        });
-    };
-
-    watchId = navigator.geolocation.watchPosition(
-      reportLocation,
-      (err) => {
-        console.warn("[dst] geolocation unavailable — allow location for DST", err?.message ?? err);
-      },
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
-    );
-
-    return () => {
-      if (watchId != null) navigator.geolocation.clearWatch(watchId);
-    };
-  }, [isAuthenticated]);
+    const mins = Number(stats?.powerSavingTimeoutMinutes);
+    if (mins === 5 || mins === 10 || mins === 30) {
+      setPowerSavingTimeoutMinutes(mins);
+    }
+  }, [stats?.powerSavingTimeoutMinutes]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
 
-    const fetchPowerSaving = async () => {
+    const fetchNightVision = async () => {
       try {
-        const res = await apiFetch(`${PI_SYSTEM_ENDPOINT}/power-saving`, {
+        const res = await apiFetch(PI_NIGHTVISION_ENDPOINT, {
           timeout: 2500,
           retries: 0,
         });
         if (!res.ok) return;
         const json = await res.json();
-        if (!cancelled && typeof json?.enabled === "boolean") {
-          setPowerSavingEnabled(json.enabled);
+        if (!cancelled && typeof json?.nightVision === "boolean") {
+          nvActiveRef.current = json.nightVision;
+          setNvActive(json.nightVision);
         }
       } catch {
-        // Keep the existing value when fetch fails.
+        /* optional */
       }
     };
 
-    void fetchPowerSaving();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let cancelled = false;
-
-    const fetchDriveAssist = async () => {
+    const fetchResolution = async () => {
       try {
-        const status = await fetchDriveAssistStatus();
-        if (!cancelled) {
-          const enabled = readDriveAssistEnabled(status);
-          if (enabled != null) setDriveAssistEnabled(enabled);
-          if (DRIVE_ASSIST_DEBUG) {
-            console.log("[drive-assist] GET /drive-assist", JSON.stringify(status, null, 2));
-          }
+        const res = await apiFetch(PI_RESOLUTION_ENDPOINT, {
+          timeout: 2500,
+          retries: 0,
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && typeof json?.resolution === "string") {
+          setResMode(json.resolution);
         }
-      } catch (err) {
-        if (!cancelled && DRIVE_ASSIST_DEBUG) {
-          console.log("[drive-assist] status fetch failed", err?.message ?? err);
-        }
+      } catch {
+        /* optional */
       }
     };
 
-    void fetchDriveAssist();
+    void fetchNightVision();
+    void fetchResolution();
     return () => {
       cancelled = true;
     };
@@ -491,24 +308,23 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  const displayStats =
-    relayDistanceMeters != null
-      ? { ...stats, distance: relayDistanceMeters }
-      : stats;
-
-  // Realtime Pi WebSocket health (voltage → %) takes priority; relay /state poll is fallback only.
-  const batteryPct =
-    Number.isFinite(Number(stats?.battery))
-      ? Number(stats.battery)
-      : relayBatteryPct != null
-        ? relayBatteryPct
-        : null;
+  const batteryPct = Number.isFinite(Number(stats?.battery))
+    ? Number(stats.battery)
+    : null;
   const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
-  const effectiveIsCharging = relayCharging === true;
+  const effectiveIsCharging =
+    stats?.isCharging === true ||
+    stats?.charging === true ||
+    stats?.charging?.isCharging === true;
+  const distanceMeters = (() => {
+    const v = Number(stats?.distance);
+    return Number.isFinite(v) ? v : null;
+  })();
 
   const isMobile = useIsMobile();
   const isFullscreen = useFullscreen();
   const viewportRef = useRef(null);
+  const mountedAtRef = useRef(Date.now());
   const lastDriveRef = useRef({ x: 0, y: 0 });
   const lastGimbalRef = useRef({ x: 0, y: 0 });
   const pendingControlRef = useRef(null);
@@ -555,7 +371,7 @@ export default function App() {
     }
     const startupGraceActive = Date.now() - mountedAtRef.current < 15000;
     if (hasEverConnected || !startupGraceActive) {
-      setActionError("Control channel offline (WebSocket reconnecting)");
+      setActionError("Control channel offline (MentorPi API unreachable)");
     }
     return Promise.resolve();
   };
@@ -630,17 +446,15 @@ export default function App() {
     ) {
       return;
     }
-    mqttClientRef.current?.publish("rover/power/pi", "Off", { qos: 1 });
-    mqttClientRef.current?.publish("rover/power/aux", "Off", { qos: 1 });
+    publishPowerOff(mqttClientRef.current);
     setIsPowered(false);
-    showActionToast("Hard reset sent (power Off)");
+    showActionToast("Hard reset sent (OFF GPIO13)");
   };
 
   const handleSystemAction = async (type) => {
     // 1. Intercept Boot
     if (type === "boot") {
-      mqttClientRef.current?.publish("rover/power/pi", "On", { qos: 1 });
-      mqttClientRef.current?.publish("rover/power/aux", "On", { qos: 1 });
+      publishPowerOn(mqttClientRef.current);
       setIsPowered(true);
       return;
     }
@@ -653,21 +467,15 @@ export default function App() {
 
     // 3. Rover sound action over control channel.
     if (type === "meow") {
-      await sendControlNow({ command: "meow" });
+      try {
+        await apiPostJson(MENTOR_BEEP_ENDPOINT, {}, { timeout: 3000, retries: 0 });
+      } catch (err) {
+        setActionError(err.message ?? "Beep failed");
+      }
       return;
     }
 
-    // 4. Open relay telemetry dashboard.
-    if (type === "telemetry") {
-      window.open(
-        "https://jjcloud.tail9d0237.ts.net:8787/dashboard",
-        "_blank",
-        "noopener,noreferrer",
-      );
-      return;
-    }
-
-    // 5. Handle generic system commands (Reboot/Shutdown)
+    // 4. Handle generic system commands (Reboot/Shutdown)
     if (!window.confirm(`Confirm ${type}?`)) return;
 
     setSystemLoading(true);
@@ -677,10 +485,15 @@ export default function App() {
       await apiPostJson(endpoint, {});
 
       if (type === "shutdown") {
-        mqttClientRef.current?.publish("rover/power/pi", "Off 15000", {
-          qos: 1,
-        });
+        // Pi OS shutdown first (API above); ESP cuts GPIO after delay.
+        publishPowerOffDelayed(
+          mqttClientRef.current,
+          MQTT_POWER_OFF_DELAY_SEC,
+        );
         setIsPowered(false);
+        showActionToast(
+          `Power cut scheduled (OFF GPIO13 DELAY ${MQTT_POWER_OFF_DELAY_SEC}s)`,
+        );
       }
     } catch (err) {
       setActionError(err.message ?? `System ${type} failed`);
@@ -690,19 +503,59 @@ export default function App() {
   };
 
   const handleNVToggle = async (requestedState) => {
+    if (nvInFlightRef.current) return;
+
+    // Explicit bool (voice/settings) wins; button taps flip. Ignore click events.
+    const hasExplicit = typeof requestedState === "boolean";
+    const optimistic = hasExplicit ? requestedState : !nvActiveRef.current;
+    if (hasExplicit && optimistic === nvActiveRef.current) return;
+
+    nvInFlightRef.current = true;
+    nvActiveRef.current = optimistic;
+    setNvActive(optimistic);
     setCameraLoading(true);
     setActionError(null);
     try {
-      await apiPostJson(`${PI_CAMERA_ENDPOINT}/nightvision`, {
-        active: requestedState,
-        ...(CAMERA_SECRET ? { secret: CAMERA_SECRET } : {}),
-      });
-      setNvActive(requestedState);
-      showActionToast(`Night mode ${requestedState ? "enabled" : "disabled"}`);
+      // Server-side flip for button taps so a second press always turns OFF,
+      // even if the client briefly lost track of state.
+      const json = await apiPostJson(
+        PI_NIGHTVISION_ENDPOINT,
+        {
+          ...(hasExplicit ? { active: requestedState } : { toggle: true }),
+          ...(CAMERA_SECRET ? { secret: CAMERA_SECRET } : {}),
+        },
+        { timeout: 25_000, retries: 0 },
+      );
+      const applied =
+        typeof json?.nightVision === "boolean" ? json.nightVision : optimistic;
+      nvActiveRef.current = applied;
+      setNvActive(applied);
+      showActionToast(`Night mode ${applied ? "enabled" : "disabled"}`);
       void playRoverChime();
     } catch (err) {
+      // Re-sync — request may have applied before the response failed.
+      try {
+        const res = await apiFetch(PI_NIGHTVISION_ENDPOINT, {
+          timeout: 2500,
+          retries: 0,
+        });
+        if (res.ok) {
+          const status = await res.json();
+          if (typeof status?.nightVision === "boolean") {
+            nvActiveRef.current = status.nightVision;
+            setNvActive(status.nightVision);
+          }
+        } else {
+          nvActiveRef.current = !optimistic;
+          setNvActive(!optimistic);
+        }
+      } catch {
+        nvActiveRef.current = !optimistic;
+        setNvActive(!optimistic);
+      }
       setActionError(err.message ?? "Night vision toggle failed");
     } finally {
+      nvInFlightRef.current = false;
       setCameraLoading(false);
     }
   };
@@ -711,10 +564,14 @@ export default function App() {
     setCameraLoading(true);
     setActionError(null);
     try {
-      await apiPostJson(`${PI_CAMERA_ENDPOINT}/resolution`, {
-        mode: newMode,
-        ...(CAMERA_SECRET ? { secret: CAMERA_SECRET } : {}),
-      });
+      await apiPostJson(
+        PI_RESOLUTION_ENDPOINT,
+        {
+          mode: newMode,
+          ...(CAMERA_SECRET ? { secret: CAMERA_SECRET } : {}),
+        },
+        { timeout: 20_000, retries: 0 },
+      );
       setResMode(newMode);
       showActionToast(`Resolution set to ${newMode.toUpperCase()}`);
       void playRoverChime();
@@ -782,9 +639,16 @@ export default function App() {
     }
   };
 
-  const setPowerSaving = async (enabled) => {
-    if (!enabled && powerSavingEnabled) {
-      const estimated = formatRemainingTime(relayBatteryMinutesRemaining);
+  const setPowerSaving = async ({ enabled, timeoutMinutes } = {}) => {
+    const nextEnabled = Boolean(enabled);
+    const nextTimeout =
+      timeoutMinutes === 5 || timeoutMinutes === 10 || timeoutMinutes === 30
+        ? timeoutMinutes
+        : powerSavingTimeoutMinutes;
+
+    if (!nextEnabled && powerSavingEnabled) {
+      const mins = Number(stats?.batteryMinutesRemaining);
+      const estimated = formatRemainingTime(Number.isFinite(mins) ? mins : null);
       const confirmed = window.confirm(
         `Disabling power saving may cause rover to run out of battery in ${estimated}.\n\nDo you want to continue?`,
       );
@@ -793,9 +657,21 @@ export default function App() {
 
     setActionError(null);
     try {
-      await apiPostJson(`${PI_SYSTEM_ENDPOINT}/power-saving`, { enabled });
-      setPowerSavingEnabled(enabled);
-      showActionToast(`Power saving ${enabled ? "enabled" : "disabled"}`);
+      const body = { enabled: nextEnabled };
+      if (nextEnabled) body.timeoutMinutes = nextTimeout;
+      const res = await apiPostJson(`${PI_SYSTEM_ENDPOINT}/power-saving`, body);
+      setPowerSavingEnabled(nextEnabled);
+      const appliedTimeout = Number(res?.timeoutMinutes);
+      if (appliedTimeout === 5 || appliedTimeout === 10 || appliedTimeout === 30) {
+        setPowerSavingTimeoutMinutes(appliedTimeout);
+      } else if (nextEnabled) {
+        setPowerSavingTimeoutMinutes(nextTimeout);
+      }
+      showActionToast(
+        nextEnabled
+          ? `Idle shutdown: ${nextTimeout} min`
+          : "Idle shutdown off",
+      );
       void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Power-saving update failed");
@@ -806,14 +682,28 @@ export default function App() {
     setIsCapturing(true);
     setActionError(null);
     try {
-      const data = await apiPost(PI_HI_RES_CAPTURE_ENDPOINT);
-      const url = data?.url;
+      const data = await apiPost(PI_HI_RES_CAPTURE_ENDPOINT, {
+        timeout: 90_000,
+        retries: 0,
+      });
+      const url =
+        typeof data?.url === "string"
+          ? data.url
+          : data?.name
+            ? `${new URL(PI_HI_RES_CAPTURE_ENDPOINT).origin}/photos/${encodeURIComponent(data.name)}`
+            : null;
       if (url && isAllowedCaptureUrl(url)) {
         window.open(url, "_blank", "noopener,noreferrer");
+        showActionToast(
+          data?.width && data?.height
+            ? `Photo saved (${data.width}×${data.height})`
+            : "Photo saved",
+        );
       } else if (url) {
-        setActionError("Invalid capture URL");
+        window.open(url, "_blank", "noopener,noreferrer");
+        showActionToast("Photo saved");
       } else {
-        setActionError("No capture URL returned");
+        setActionError(data?.error || "No capture URL returned");
       }
     } catch (err) {
       setActionError(err.message ?? "Capture failed");
@@ -824,12 +714,20 @@ export default function App() {
 
   const handleCameraReset = async () => {
     setActionError(null);
-    await sendControlNow({ command: "reset_servos" });
+    try {
+      await apiPostJson(MENTOR_GIMBAL_ENDPOINT, { action: "center" });
+    } catch (err) {
+      setActionError(err.message ?? "Gimbal center failed");
+    }
   };
 
   const handleLookDown = async () => {
     setActionError(null);
-    await sendControlNow({ command: "look_down" });
+    try {
+      await apiPostJson(MENTOR_GIMBAL_ENDPOINT, { action: "down" });
+    } catch (err) {
+      setActionError(err.message ?? "Look down failed");
+    }
   };
 
   const handleQuickTurn = async (dir) => {
@@ -849,10 +747,6 @@ export default function App() {
     setActionError(null);
     await sendControlNow({ command: "feeder_treat" });
     showActionToast("Treat");
-  };
-
-  const handleToggleBackupView = () => {
-    setShowBackupView((prev) => !prev);
   };
 
   const runAssistantAction = async (action) => {
@@ -993,9 +887,6 @@ export default function App() {
         controlChannelReady={piOnline}
         roverSpeakerEnabled={roverSpeakerEnabled}
         dashMicEnabled={dashMicEnabled}
-        backupStreamUrl={BACKUP_STREAM_ENDPOINT}
-        showBackupView={showBackupView}
-        relayRoverPayload={relayRoverPayload}
         onHardPowerOff={handleHardPowerOff}
       />
       <GimbalTiltHud pan={stats.pan} tilt={stats.tilt} />
@@ -1036,12 +927,13 @@ export default function App() {
             toggleLight(nextState);
           }}
           headlightOn={stats.usbPower === "on"}
-          onToggleBackupView={handleToggleBackupView}
-          backupViewEnabled={showBackupView}
           onTreat={handleFeederTreat}
           onToggleFullscreen={toggleDocumentFullscreen}
-          onToggleMap={toggleSlamMap}
           onToggleMetrics={toggleMetricsPanel}
+          onNVToggle={handleNVToggle}
+          nvActive={nvActive}
+          onCapture={handleCapture}
+          isCapturing={isCapturing}
         />
       )}
 
@@ -1050,30 +942,32 @@ export default function App() {
           <HudHeader
             wifiSignal={stats?.wifiSignal}
             latencyMs={stats?.latency}
-            distanceMeters={relayDistanceMeters}
             isPowered={isPowered}
-            nvActive={nvActive}
             resMode={resMode}
-            isCapturing={isCapturing}
-            focusMode={focusMode}
             quietMode={stats?.quietMode}
             driveAssistEnabled={driveAssistEnabled}
             driveAssistUpdate={driveAssistHudUpdate}
             powerSavingEnabled={powerSavingEnabled}
+            powerSavingTimeoutMinutes={powerSavingTimeoutMinutes}
+            powerSavingTtlMs={
+              stats?.displayTtlMs != null ? stats.displayTtlMs : stats?.ttlMs
+            }
             isCharging={effectiveIsCharging}
             isLowBattery={isLowBattery}
             lowBatteryIndicatorArmed={lowBatteryGlowArmed}
             onQuietModeChange={setQuietMode}
             onDriveAssistChange={setDriveAssist}
             onPowerSavingChange={setPowerSaving}
-            onNVToggle={handleNVToggle}
             onResChange={handleResChange}
             onAction={handleSystemAction}
-            onFocusChange={handleFocusChange}
             controlMode={controlMode}
             onControlModeChange={setControlMode}
-            slamMapEnabled={showSlamMap}
-            onSlamMapChange={setShowSlamMap}
+            driveSpeed={speedLevel}
+            onDriveSpeedChange={(level) => {
+              setSpeedLevel(level);
+              const label = level === "slow" ? "Slow" : level === "fast" ? "Fast" : "Mid";
+              showActionToast(`Drive speed: ${label}`);
+            }}
             metricsPanelEnabled={showMetricsPanel}
             onMetricsPanelChange={setShowMetricsPanel}
             roverSpeakerEnabled={roverSpeakerEnabled}
@@ -1082,28 +976,14 @@ export default function App() {
             onDashMicChange={setDashMicEnabled}
           />
 
-          {showSlamMap && (
-            <div className="slam-map-float slam-map-float--solo">
-              <SlamMap
-                map={slamMap}
-                isLive={slamLive}
-                error={slamError}
-                driveAssistEnabled={driveAssistEnabled}
-                driveAssistUpdate={driveAssistHudUpdate}
-              />
-            </div>
-          )}
-
           <HudFooter
             isMobile={isMobile}
             controlMode={controlMode}
             metricsPanelEnabled={showMetricsPanel}
-            stats={displayStats}
+            stats={stats}
             batteryPct={batteryPct}
             isCharging={effectiveIsCharging}
-            ambientTemperatureC={relayTemperatureC}
-            pressureHpa={relayPressureHpa}
-            distanceMeters={relayDistanceMeters}
+            distanceMeters={distanceMeters}
             piOnline={piOnline}
             isEspOnline={isEspOnline}
             onDrive={handleDriveUpdate}
@@ -1118,12 +998,11 @@ export default function App() {
             onToggleLight={toggleLight}
             onCapture={handleCapture}
             isCapturing={isCapturing}
-            onToggleBackupView={handleToggleBackupView}
-            backupViewEnabled={showBackupView}
             onFeederTreat={handleFeederTreat}
             onToggleFullscreen={toggleDocumentFullscreen}
-            onToggleMap={toggleSlamMap}
             onToggleMetrics={toggleMetricsPanel}
+            onNVToggle={handleNVToggle}
+            nvActive={nvActive}
           />
         </div>
       )}
@@ -1160,30 +1039,26 @@ function ActionToast({ message }) {
 function HudHeader({
   wifiSignal,
   latencyMs,
-  distanceMeters,
   isPowered,
-  nvActive,
   resMode,
-  isCapturing,
-  focusMode,
   quietMode,
   driveAssistEnabled,
   driveAssistUpdate,
   powerSavingEnabled,
+  powerSavingTimeoutMinutes = 5,
+  powerSavingTtlMs = null,
   isCharging,
   isLowBattery,
   lowBatteryIndicatorArmed,
   onQuietModeChange,
   onDriveAssistChange,
   onPowerSavingChange,
-  onNVToggle,
   onResChange,
   onAction,
-  onFocusChange,
   controlMode,
   onControlModeChange,
-  slamMapEnabled,
-  onSlamMapChange,
+  driveSpeed = "fast",
+  onDriveSpeedChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
   roverSpeakerEnabled = true,
@@ -1191,8 +1066,6 @@ function HudHeader({
   dashMicEnabled = false,
   onDashMicChange,
 }) {
-  const distanceLabel = formatClientSiteDistance(distanceMeters);
-
   return (
     <div className="hud-header">
       <div className="glass-card hud-header-brand">
@@ -1201,14 +1074,6 @@ function HudHeader({
             <BrandCatIcon size={18} />
             <span className="hud-brand-version">v2</span>
           </div>
-          {distanceLabel ? (
-            <div
-              className="hud-brand-distance"
-              title="Your distance from the rover (when location is shared)"
-            >
-              {distanceLabel}
-            </div>
-          ) : null}
         </div>
       </div>
       <div className="hud-header-center">
@@ -1216,6 +1081,7 @@ function HudHeader({
           driveAssistEnabled={driveAssistEnabled}
           driveAssistUpdate={driveAssistUpdate}
           powerSavingEnabled={powerSavingEnabled}
+          powerSavingTtlMs={powerSavingTtlMs}
           quietMode={quietMode}
           isCharging={isCharging}
           isLowBattery={isLowBattery}
@@ -1227,24 +1093,20 @@ function HudHeader({
       <div className="glass-card hud-header-actions">
         <SystemControls
           isPowered={isPowered}
-          nvActive={nvActive}
           resMode={resMode}
-          isCapturing={isCapturing}
           quietMode={quietMode}
           driveAssistEnabled={driveAssistEnabled}
           powerSavingEnabled={powerSavingEnabled}
+          powerSavingTimeoutMinutes={powerSavingTimeoutMinutes}
           onQuietModeChange={onQuietModeChange}
           onDriveAssistChange={onDriveAssistChange}
           onPowerSavingChange={onPowerSavingChange}
-          onNVToggle={onNVToggle}
           onResChange={onResChange}
           onAction={onAction}
-          focusMode={focusMode}
-          onFocusChange={onFocusChange}
           controlMode={controlMode}
           onControlModeChange={onControlModeChange}
-          slamMapEnabled={slamMapEnabled}
-          onSlamMapChange={onSlamMapChange}
+          driveSpeed={driveSpeed}
+          onDriveSpeedChange={onDriveSpeedChange}
           metricsPanelEnabled={metricsPanelEnabled}
           onMetricsPanelChange={onMetricsPanelChange}
           roverSpeakerEnabled={roverSpeakerEnabled}
@@ -1265,8 +1127,6 @@ function HudFooter({
   stats,
   batteryPct,
   isCharging,
-  ambientTemperatureC,
-  pressureHpa = null,
   distanceMeters = null,
   piOnline,
   isEspOnline,
@@ -1282,12 +1142,11 @@ function HudFooter({
   onToggleLight,
   onCapture,
   isCapturing,
-  onToggleBackupView,
-  backupViewEnabled,
   onFeederTreat,
   onToggleFullscreen,
-  onToggleMap,
   onToggleMetrics,
+  onNVToggle,
+  nvActive = false,
 }) {
   const joystickProps = {
     onDrive,
@@ -1304,12 +1163,13 @@ function HudFooter({
       onToggleLight(nextState);
     },
     headlightOn: stats.usbPower === "on",
-    onToggleBackupView,
-    backupViewEnabled,
     onTreat: onFeederTreat,
     onToggleFullscreen,
-    onToggleMap,
     onToggleMetrics,
+    onNVToggle,
+    nvActive,
+    onCapture,
+    isCapturing,
   };
 
   const schematic = metricsPanelEnabled ? (
@@ -1322,11 +1182,9 @@ function HudFooter({
       voltage={stats.voltage}
       wifiSignal={stats.wifiSignal}
       distanceMeters={distanceMeters}
-      pressureHpa={pressureHpa}
       cpuLoad={stats.cpuLoad}
       isOffline={!piOnline}
       isCharging={isCharging}
-      ambientTempC={ambientTemperatureC}
     />
   ) : null;
 
@@ -1350,8 +1208,6 @@ function HudFooter({
       isCapturing={isCapturing}
       onReset={onResetCamera}
       onLookDown={onLookDown}
-      onToggleBackupView={onToggleBackupView}
-      backupViewEnabled={backupViewEnabled}
       onTreat={onFeederTreat}
     />
   );
