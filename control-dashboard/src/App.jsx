@@ -4,6 +4,7 @@ import { KeyboardControlCluster } from "./components/KeyboardControlCluster";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
 import { GimbalTiltHud } from "./components/GimbalTiltHud";
+import { PassageGuideOverlay } from "./components/PassageGuideOverlay";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/DualJoystickControls";
@@ -22,6 +23,7 @@ import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/captureUrl";
 import {
+  fetchDriveAssistStatus,
   postDriveAssist,
   readDriveAssistEnabled,
 } from "./utils/driveAssistApi.js";
@@ -97,9 +99,11 @@ export default function App() {
   const viewportRef = useRef(null);
   const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl, speedLevel, setSpeedLevel } =
     useMentorPiControl();
+  // Optimistic default matches Mentori (on). Overwritten by status / GET sync.
   const [driveAssistEnabled, setDriveAssistEnabledState] = useState(() =>
-    readPrefBool(PREF_KEYS.driveAssist, false),
+    readPrefBool(PREF_KEYS.driveAssist, true),
   );
+  const driveAssistIgnoreStatusUntilRef = useRef(0);
   const [quietMode, setQuietModeState] = useState(() =>
     readPrefBool(PREF_KEYS.quietMode, true),
   );
@@ -110,8 +114,8 @@ export default function App() {
     console.log(
       "[drive-assist]",
       driveAssistEnabled
-        ? "WS collision updates active (DRIVE_ASSIST_UPDATE)"
-        : 'idle — turn Assist ON in Settings (gear icon → Driving → Assist)',
+        ? "pre-collision stop ON (Mentori lidar gate)"
+        : "pre-collision stop OFF — Settings → Pre-collision stop",
     );
   }, [isAuthenticated, driveAssistEnabled]);
 
@@ -157,6 +161,9 @@ export default function App() {
   const [dashMicEnabled, setDashMicEnabledState] = useState(() =>
     readPrefBool(PREF_KEYS.dashMic, false),
   );
+  const [referenceLinesEnabled, setReferenceLinesEnabledState] = useState(() =>
+    readPrefBool(PREF_KEYS.referenceLines, false),
+  );
 
   // If form-factor flips and that form-factor has no saved mode yet, apply defaults.
   useEffect(() => {
@@ -176,6 +183,12 @@ export default function App() {
       void playRoverChime();
       return next;
     });
+  };
+
+  const setReferenceLinesEnabled = (enabled) => {
+    setReferenceLinesEnabledState(enabled);
+    writePrefBool(PREF_KEYS.referenceLines, enabled);
+    void playRoverChime();
   };
 
   const setRoverSpeakerEnabled = (enabled) => {
@@ -215,9 +228,30 @@ export default function App() {
     }
   }, [stats?.powerSavingTimeoutMinutes]);
 
+  // Keep settings toggle in sync with Mentori pre-collision stop.
+  useEffect(() => {
+    if (typeof stats?.driveAssistEnabled !== "boolean") return;
+    if (Date.now() < driveAssistIgnoreStatusUntilRef.current) return;
+    setDriveAssistEnabledState(stats.driveAssistEnabled);
+    writePrefBool(PREF_KEYS.driveAssist, stats.driveAssistEnabled);
+  }, [stats?.driveAssistEnabled]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
+
+    const syncDriveAssist = async () => {
+      try {
+        const json = await fetchDriveAssistStatus();
+        const enabled = readDriveAssistEnabled(json);
+        if (!cancelled && enabled != null) {
+          setDriveAssistEnabledState(enabled);
+          writePrefBool(PREF_KEYS.driveAssist, enabled);
+        }
+      } catch {
+        /* optional until Mentori is up */
+      }
+    };
 
     const fetchNightVision = async () => {
       try {
@@ -253,6 +287,7 @@ export default function App() {
       }
     };
 
+    void syncDriveAssist();
     void fetchNightVision();
     void fetchResolution();
     return () => {
@@ -268,13 +303,21 @@ export default function App() {
   const batteryPct = Number.isFinite(Number(stats?.battery))
     ? Number(stats.battery)
     : null;
+  const voltageV = Number.isFinite(Number(stats?.voltage))
+    ? Number(stats.voltage)
+    : null;
+  // 0 / missing telemetry is "unknown", not empty — don't flash critical UI.
+  const hasBatteryTelemetry =
+    Number.isFinite(batteryPct) &&
+    batteryPct > 0 &&
+    (voltageV == null || voltageV > 0);
   const effectiveIsCharging =
     stats?.isCharging === true ||
     stats?.charging === true ||
     stats?.charging?.isCharging === true;
-  const isLowBattery = Number.isFinite(batteryPct) && batteryPct < 20;
+  const isLowBattery = hasBatteryTelemetry && batteryPct < 20;
   const isCriticalBattery =
-    Number.isFinite(batteryPct) && batteryPct < 15 && !effectiveIsCharging;
+    hasBatteryTelemetry && batteryPct < 15 && !effectiveIsCharging;
   const distanceMeters = (() => {
     const v = Number(stats?.distance);
     return Number.isFinite(v) ? v : null;
@@ -591,6 +634,7 @@ export default function App() {
   const setDriveAssist = async (enabled) => {
     setActionError(null);
     const previousEnabled = driveAssistEnabled;
+    driveAssistIgnoreStatusUntilRef.current = Date.now() + 4000;
     setDriveAssistEnabledState(enabled);
     writePrefBool(PREF_KEYS.driveAssist, enabled);
     try {
@@ -600,12 +644,14 @@ export default function App() {
         setDriveAssistEnabledState(nextEnabled);
         writePrefBool(PREF_KEYS.driveAssist, nextEnabled);
       }
-      showActionToast(`Drive assist ${enabled ? "enabled" : "disabled"}`);
+      showActionToast(
+        `Pre-collision stop ${enabled ? "enabled" : "disabled"}`,
+      );
       void playRoverChime();
     } catch (err) {
       setDriveAssistEnabledState(previousEnabled);
       writePrefBool(PREF_KEYS.driveAssist, previousEnabled);
-      setActionError(err.message ?? "Drive assist update failed");
+      setActionError(err.message ?? "Pre-collision stop update failed");
       if (DRIVE_ASSIST_DEBUG) {
         console.log("[drive-assist] toggle failed", err?.message ?? err);
       }
@@ -864,14 +910,24 @@ export default function App() {
         espPoweredOff={espPoweredOff}
       />
       <GimbalTiltHud pan={stats.pan} tilt={stats.tilt} />
+      {isAuthenticated && (
+        <PassageGuideOverlay enabled={referenceLinesEnabled} />
+      )}
 
-      {isAuthenticated && isMobile && controlMode !== "immersive" && (
+      {isAuthenticated &&
+        piOnline &&
+        isMobile &&
+        controlMode !== "immersive" && (
         <MobileTouchGimbalLayer
           onGimbal={handleGimbalUpdate}
         />
       )}
 
-      {isAuthenticated && isFullscreen && !isMobile && controlMode !== "immersive" && (
+      {isAuthenticated &&
+        piOnline &&
+        isFullscreen &&
+        !isMobile &&
+        controlMode !== "immersive" && (
         <MouseGimbalLayer
           viewportRef={viewportRef}
           isFullscreen={isFullscreen}
@@ -884,7 +940,7 @@ export default function App() {
 
       {/* Gamepad bridge when on-screen joysticks are not mounted (keyboard / immersive).
           Xbox controller via USB or Bluetooth (Standard Gamepad mapping). */}
-      {isAuthenticated && controlMode !== "joystick" && (
+      {isAuthenticated && piOnline && controlMode !== "joystick" && (
         <DualJoystickControls
           immersive
           onDrive={handleDriveUpdate}
@@ -955,6 +1011,8 @@ export default function App() {
             }}
             metricsPanelEnabled={showMetricsPanel}
             onMetricsPanelChange={setShowMetricsPanel}
+            referenceLinesEnabled={referenceLinesEnabled}
+            onReferenceLinesChange={setReferenceLinesEnabled}
             roverSpeakerEnabled={roverSpeakerEnabled}
             onRoverSpeakerChange={setRoverSpeakerEnabled}
             dashMicEnabled={dashMicEnabled}
@@ -1047,6 +1105,8 @@ function HudHeader({
   onDriveSpeedChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
+  referenceLinesEnabled = false,
+  onReferenceLinesChange,
   roverSpeakerEnabled = true,
   onRoverSpeakerChange,
   dashMicEnabled = false,
@@ -1056,9 +1116,9 @@ function HudHeader({
     <div className="hud-header">
       <div className="glass-card hud-header-brand">
         <div className="hud-brand-stack">
-          <div className="hud-brand-title" aria-label="芒果号 v2" title="芒果号 v2">
+          <div className="hud-brand-title" aria-label="芒果号 🎾" title="芒果号 🎾">
             <BrandCatIcon size={18} />
-            <span className="hud-brand-version">v2</span>
+            <span className="hud-brand-version">🎾</span>
           </div>
         </div>
       </div>
@@ -1100,6 +1160,8 @@ function HudHeader({
           onDriveSpeedChange={onDriveSpeedChange}
           metricsPanelEnabled={metricsPanelEnabled}
           onMetricsPanelChange={onMetricsPanelChange}
+          referenceLinesEnabled={referenceLinesEnabled}
+          onReferenceLinesChange={onReferenceLinesChange}
           roverSpeakerEnabled={roverSpeakerEnabled}
           onRoverSpeakerChange={onRoverSpeakerChange}
           dashMicEnabled={dashMicEnabled}
@@ -1186,10 +1248,6 @@ function HudFooter({
       onDrive={onDrive}
       usbPower={stats.usbPower}
       laserOn={laserOn}
-      onVoiceStart={onVoiceStart}
-      onVoiceStop={onVoiceStop}
-      voiceSupported={voiceSupported}
-      voiceListening={voiceListening}
       onLightToggle={() => {
         const nextState = stats.usbPower === "on" ? "off" : "on";
         onToggleLight(nextState);
@@ -1211,7 +1269,7 @@ function HudFooter({
     <div className="hud-footer">
       {!isMobile && controlMode === "keyboard" && schematic}
 
-      {isMobile && controlMode === "joystick" && (
+      {piOnline && isMobile && controlMode === "joystick" && (
         <DualJoystickControls {...joystickProps}>{joystickCenter}</DualJoystickControls>
       )}
 

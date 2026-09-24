@@ -4,7 +4,6 @@ const CONTROL_CONFIG = [
   { key: "q", label: "Q", grid: 1, hint: "←" },
   { key: "w", label: "W", grid: 2 },
   { key: "e", label: "E", grid: 3, hint: "→" },
-  { key: "v", label: "🎤", grid: 4, type: "action", hint: "PTT" },
   { key: "a", label: "A", grid: 5 },
   { key: "s", label: "S", grid: 6 },
   { key: "d", label: "D", grid: 7 },
@@ -28,12 +27,8 @@ export function keyboardDrivePayload(keys) {
 
 export const KeyboardControlCluster = ({
   onDrive,
-  onVoiceStart,
-  onVoiceStop,
   onCapture,
   onReset,
-  voiceSupported,
-  voiceListening,
   isCapturing: _isCapturing,
 }) => {
   const [activeKeys, setActiveKeys] = useState(new Set());
@@ -63,12 +58,6 @@ export const KeyboardControlCluster = ({
 
       // Handle Action Buttons (Toggles/Captures)
       if (conf.type === "action") {
-        if (key === "v") {
-          if (!voiceSupported) return;
-          if (isDown) onVoiceStart?.();
-          else onVoiceStop?.();
-          return;
-        }
         if (!isDown) return;
         if (key === "c") onCapture();
         if (key === "r") onReset();
@@ -89,13 +78,7 @@ export const KeyboardControlCluster = ({
         return next;
       });
     },
-    [
-      onVoiceStart,
-      onVoiceStop,
-      onCapture,
-      onReset,
-      voiceSupported,
-    ],
+    [onCapture, onReset],
   );
 
   const updateActionRef = useRef(updateAction);
@@ -190,7 +173,6 @@ export const KeyboardControlCluster = ({
         .active { background: #ffffff !important; color: #000 !important; }
         .light-on { background: #ffea00 !important; color: #000; border-color: #ffea00; }
         .laser-on { background: #ff4444 !important; color: #000; border-color: #ff4444; }
-        .voice-on { background: #22c55e !important; color: #000; border-color: #22c55e; }
         .hint { font-size: 8px; opacity: 0.5; margin-top: 1px; pointer-events: none; pointer-events: none; -webkit-user-select: none;}
       `}</style>
 
@@ -201,8 +183,7 @@ export const KeyboardControlCluster = ({
         return (
           <button
             key={i}
-            className={`btn ${activeKeys.has(conf.key) ? "active" : ""} 
-              ${conf.key === "v" && voiceListening ? "voice-on" : ""}`}
+            className={`btn ${activeKeys.has(conf.key) ? "active" : ""}`}
             // Mouse Handlers
             onMouseDown={() => updateAction(conf.key, true)}
             onMouseUp={() => updateAction(conf.key, false)}

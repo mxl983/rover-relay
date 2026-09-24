@@ -46,12 +46,14 @@ export const VideoStream = ({
     }
   }, [backupStreamUrl]);
 
-  /** Debounced loader visibility to avoid flashing on brief WebRTC hiccups. */
+  /** Debounced loader visibility to avoid flashing on brief WebRTC hiccups.
+   *  Control-channel readiness is separate — do not block the HUD forever when
+   *  Mentori is slow/offline while video already plays (common on phones). */
   const LOADER_SHOW_DEBOUNCE_MS = 180;
   const LOADER_HIDE_DEBOUNCE_MS = 320;
   const loaderShowTimerRef = useRef(null);
   const loaderHideTimerRef = useRef(null);
-  const rawNeedsLoader = isLoading || !controlChannelReady;
+  const rawNeedsLoader = isLoading;
   const [loaderOverlayVisible, setLoaderOverlayVisible] = useState(rawNeedsLoader);
   const loaderHasEverBeenShownRef = useRef(rawNeedsLoader);
 
@@ -98,7 +100,7 @@ export const VideoStream = ({
     };
   }, [rawNeedsLoader]);
 
-  // Progress from last MQTT power-on, assuming ~50s rover boot.
+  // Progress from last MQTT power-on, assuming ~40s rover boot.
   useEffect(() => {
     if (!loaderOverlayVisible) {
       setLoadingPercent(null);
@@ -361,15 +363,16 @@ export const VideoStream = ({
                 </div>
               </div>
             ) : (
-              <div style={loaderProgressRow} aria-live="polite">
+              <div className="boot-loader-stack" aria-live="polite">
                 <span className="boot-bounce-dots" aria-hidden="true">
                   <span />
                   <span />
                   <span />
                 </span>
                 {loadingPercent != null ? (
-                  <span style={loaderPercentStyle}>{loadingPercent}%</span>
+                  <span className="boot-loader-percent">{loadingPercent}%</span>
                 ) : null}
+                <span className="boot-loader-label">Booting up computer</span>
               </div>
             )}
           </div>
@@ -474,21 +477,4 @@ const loaderForeground = {
   justifyContent: "center",
   pointerEvents: "none",
   padding: "0 16px",
-};
-
-const loaderProgressRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "14px",
-  minHeight: "28px",
-};
-
-const loaderPercentStyle = {
-  color: "#9a9a9a",
-  fontSize: "18px",
-  fontWeight: 600,
-  fontVariantNumeric: "tabular-nums",
-  letterSpacing: "0.04em",
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
 };

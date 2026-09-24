@@ -148,7 +148,7 @@ function DriveAssistIndicator({ enabled }) {
         enabled ? " hud-indicator-slot--drive-assist" : " hud-indicator-slot--reserved"
       }`}
       role={enabled ? "status" : undefined}
-      aria-label={enabled ? "Drive assist on" : undefined}
+      aria-label={enabled ? "Pre-collision stop on" : undefined}
       aria-hidden={enabled ? undefined : true}
     >
       {enabled ? (

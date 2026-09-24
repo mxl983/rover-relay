@@ -5,14 +5,33 @@ import { getWifiLevel } from "../utils/wifiSignal.js";
 const TOUCH_TARGET_MIN = 44;
 /** Fixed panel width — sized for longest metrics (e.g. 999ms, 12.6V, +12.3). */
 const SIZE = 104;
+/** Compact width for short landscape viewports (phones held sideways). */
+const SIZE_LANDSCAPE = 78;
 const VISIBLE_SECONDARY = 3;
 /** Row box must clear 13px glyphs + antialiasing; was 13 and clipped values. */
 const ROW_H = 16;
+const ROW_H_LANDSCAPE = 13;
 const ROW_GAP = 4;
-const ROLL_STEP_PX = ROW_H + ROW_GAP;
-const VIEWPORT_H =
-  VISIBLE_SECONDARY * ROW_H + (VISIBLE_SECONDARY - 1) * ROW_GAP;
 const ROLL_INTERVAL_MS = 3800;
+
+function useLandscapeCompact() {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia(
+      "(orientation: landscape) and (max-height: 520px)",
+    );
+    const apply = () => setCompact(Boolean(mq.matches));
+    apply();
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+    mq.addListener(apply);
+    return () => mq.removeListener(apply);
+  }, []);
+  return compact;
+}
 const ROLL_DURATION_MS = 520;
 
 const palette = {
@@ -135,6 +154,14 @@ export const RoverSchematic = ({
   isCharging = false,
   handleClick,
 }) => {
+  const landscapeCompact = useLandscapeCompact();
+  const size = landscapeCompact ? SIZE_LANDSCAPE : SIZE;
+  const rowH = landscapeCompact ? ROW_H_LANDSCAPE : ROW_H;
+  const rollStepPx = rowH + ROW_GAP;
+  const viewportH =
+    VISIBLE_SECONDARY * rowH + (VISIBLE_SECONDARY - 1) * ROW_GAP;
+  const labelFontSize = landscapeCompact ? 8 : 9;
+  const valueFontSize = landscapeCompact ? 10 : 12;
   const hasBatteryData = battery !== null && battery !== undefined;
   const chargeLevel = hasBatteryData ? Math.min(Math.max(battery, 0), 100) : 0;
   const [clockNow, setClockNow] = useState(() => new Date());
@@ -298,10 +325,10 @@ export const RoverSchematic = ({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 6,
-        width: SIZE + 8,
-        minWidth: SIZE + 8,
-        maxWidth: SIZE + 8,
+        gap: landscapeCompact ? 4 : 6,
+        width: size + 8,
+        minWidth: size + 8,
+        maxWidth: size + 8,
         pointerEvents: "auto",
         zIndex: 10,
       }}
@@ -311,11 +338,11 @@ export const RoverSchematic = ({
         tabIndex={isInteractive ? 0 : undefined}
         aria-label={`${labelParts.join(", ")}. Tap to expand.`}
         style={{
-          width: SIZE,
-          minWidth: SIZE,
-          maxWidth: SIZE,
+          width: size,
+          minWidth: size,
+          maxWidth: size,
           height: "auto",
-          minHeight: TOUCH_TARGET_MIN,
+          minHeight: landscapeCompact ? 36 : TOUCH_TARGET_MIN,
           boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
@@ -336,9 +363,9 @@ export const RoverSchematic = ({
       >
       <div
         style={{
-          width: SIZE,
-          minWidth: SIZE,
-          maxWidth: SIZE,
+          width: size,
+          minWidth: size,
+          maxWidth: size,
           height: "auto",
           boxSizing: "border-box",
           borderRadius: 8,
@@ -352,7 +379,7 @@ export const RoverSchematic = ({
           flexDirection: "column",
           justifyContent: "flex-start",
           gap: ROW_GAP,
-          padding: "6px 0 8px",
+          padding: landscapeCompact ? "4px 0 6px" : "6px 0 8px",
           pointerEvents: "none",
           fontFamily:
             "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
@@ -366,12 +393,12 @@ export const RoverSchematic = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-start",
-            minHeight: ROW_H,
-            padding: "1px 9px 4px",
+            minHeight: rowH,
+            padding: landscapeCompact ? "1px 7px 3px" : "1px 9px 4px",
             marginBottom: 1,
             borderBottom: "1px solid rgba(255,255,255,0.12)",
             color: palette.label,
-            fontSize: 9,
+            fontSize: labelFontSize,
             letterSpacing: "0.04em",
             fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
@@ -384,10 +411,10 @@ export const RoverSchematic = ({
         </div>
         <div
           style={{
-            height: VIEWPORT_H,
+            height: viewportH,
             overflow: "hidden",
             position: "relative",
-            padding: "0 9px",
+            padding: landscapeCompact ? "0 7px" : "0 9px",
             boxSizing: "border-box",
             // Keep a hair of vertical room so glyph edges aren't clipped mid-roll.
             marginBlock: 1,
@@ -398,7 +425,7 @@ export const RoverSchematic = ({
               display: "flex",
               flexDirection: "column",
               gap: ROW_GAP,
-              transform: `translateY(-${(canRoll ? rollIndex : 0) * ROLL_STEP_PX}px)`,
+              transform: `translateY(-${(canRoll ? rollIndex : 0) * rollStepPx}px)`,
               transition: rollAnimating
                 ? `transform ${ROLL_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
                 : "none",
@@ -411,6 +438,9 @@ export const RoverSchematic = ({
                 label={metric.label}
                 value={metric.value}
                 color={metric.color}
+                rowH={rowH}
+                labelFontSize={labelFontSize}
+                valueFontSize={valueFontSize}
               />
             ))}
           </div>
@@ -460,7 +490,14 @@ export const RoverSchematic = ({
   );
 };
 
-function MetricRow({ label, value, color }) {
+function MetricRow({
+  label,
+  value,
+  color,
+  rowH = ROW_H,
+  labelFontSize = 9,
+  valueFontSize = 12,
+}) {
   return (
     <div
       style={{
@@ -468,9 +505,9 @@ function MetricRow({ label, value, color }) {
         alignItems: "center",
         justifyContent: "space-between",
         gap: 6,
-        height: ROW_H,
-        minHeight: ROW_H,
-        maxHeight: ROW_H,
+        height: rowH,
+        minHeight: rowH,
+        maxHeight: rowH,
         minWidth: 0,
         width: "100%",
         overflow: "hidden",
@@ -482,7 +519,7 @@ function MetricRow({ label, value, color }) {
           alignItems: "center",
           gap: 5,
           color: palette.label,
-          fontSize: 9,
+          fontSize: labelFontSize,
           letterSpacing: "0.08em",
           fontWeight: 600,
           flexShrink: 0,
@@ -504,8 +541,8 @@ function MetricRow({ label, value, color }) {
       <div
         style={{
           color: palette.text,
-          fontSize: 12,
-          lineHeight: `${ROW_H}px`,
+          fontSize: valueFontSize,
+          lineHeight: `${rowH}px`,
           fontWeight: 700,
           letterSpacing: "0.01em",
           flex: "1 1 auto",
@@ -528,6 +565,9 @@ MetricRow.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.string.isRequired,
   color: PropTypes.string.isRequired,
+  rowH: PropTypes.number,
+  labelFontSize: PropTypes.number,
+  valueFontSize: PropTypes.number,
 };
 
 RoverSchematic.propTypes = {

@@ -1,20 +1,19 @@
 import { apiFetch, apiPostJson } from "../api/client.js";
-import { PI_SYSTEM_ENDPOINT } from "../config.js";
+import { MENTOR_API_BASE } from "../config.js";
 
-const DRIVE_ASSIST_ENDPOINT = `${PI_SYSTEM_ENDPOINT}/drive-assist`;
+const DRIVE_ASSIST_ENDPOINT = `${MENTOR_API_BASE.replace(/\/$/, "")}/api/drive_assist`;
 
 /**
- * Drive-assist collision + maneuvering runs on the Pi rover
- * (/api/system/drive-assist). This dashboard only toggles assist and shows HUD
- * state from DRIVE_ASSIST_UPDATE — it does not throttle drive commands.
+ * Pre-collision stop runs inside MentorPi web_car. The dashboard toggles it
+ * and mirrors enabled state from /api/status — it does not filter drive cmds.
  */
 
-/** POST /drive-assist — turn assist on or off. Returns the same shape as /info. */
+/** POST /api/drive_assist — turn pre-collision stop on or off. */
 export async function postDriveAssist(enabled) {
   return apiPostJson(DRIVE_ASSIST_ENDPOINT, { enabled });
 }
 
-/** GET /drive-assist — lightweight { success, enabled } toggle check. */
+/** GET /api/drive_assist — { ok, success, enabled }. */
 export async function fetchDriveAssistStatus() {
   const res = await apiFetch(DRIVE_ASSIST_ENDPOINT, {
     timeout: 2500,
@@ -26,21 +25,25 @@ export async function fetchDriveAssistStatus() {
   return res.json();
 }
 
-/** GET /drive-assist/info — full debug snapshot (lidar, obstacles, braking). */
+/** @deprecated Mentori has no /info; returns GET status instead. */
 export async function fetchDriveAssistInfo() {
-  const res = await apiFetch(`${DRIVE_ASSIST_ENDPOINT}/info`, {
-    timeout: 2500,
-    retries: 0,
-  });
-  if (!res.ok) {
-    throw new Error(`drive-assist/info ${res.status}`);
-  }
-  return res.json();
+  return fetchDriveAssistStatus();
 }
 
 /** @param {unknown} response */
 export function readDriveAssistEnabled(response) {
-  return typeof response?.enabled === "boolean" ? response.enabled : null;
+  if (typeof response?.enabled === "boolean") return response.enabled;
+  if (typeof response?.preCollisionStop === "boolean") {
+    return response.preCollisionStop;
+  }
+  if (typeof response?.driveAssist === "boolean") return response.driveAssist;
+  if (typeof response?.drive_assist_enabled === "boolean") {
+    return response.drive_assist_enabled;
+  }
+  if (typeof response?.pre_collision_stop === "boolean") {
+    return response.pre_collision_stop;
+  }
+  return null;
 }
 
 /** Whether the collision HUD should show from a WS DRIVE_ASSIST_UPDATE payload. */

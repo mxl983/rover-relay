@@ -52,12 +52,13 @@ describe("VideoStream", () => {
     await waitFor(() => expect(globalThis.RTCPeerConnection).toHaveBeenCalled());
   });
 
-  it("shows bouncing dots and boot percent from last MQTT ON", async () => {
-    recordPowerOnSent(Date.now() - 25_000);
+  it("shows bouncing dots, boot percent, and booting label", async () => {
+    recordPowerOnSent(Date.now() - 20_000);
     render(<VideoStream controlChannelReady={false} />);
     await waitFor(() => {
       expect(document.querySelector(".boot-bounce-dots")).toBeTruthy();
       expect(screen.getByText("50%")).toBeTruthy();
+      expect(screen.getByText("Booting up computer")).toBeTruthy();
     });
   });
 

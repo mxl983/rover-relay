@@ -8,7 +8,7 @@ export function HudBatteryBadge({
   isCharging = false,
   isOffline = false,
 }) {
-  const hasData = level != null && Number.isFinite(Number(level));
+  const hasData = level != null && Number.isFinite(Number(level)) && Number(level) > 0;
   const fillPct = hasData ? Math.min(100, Math.max(0, Number(level))) : 0;
   const low = hasData && !isOffline && fillPct < 20 && !isCharging;
   const text = hasData ? `${Math.round(fillPct)}%` : isOffline ? "--" : "…";

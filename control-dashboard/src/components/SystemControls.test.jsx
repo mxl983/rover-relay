@@ -54,7 +54,7 @@ describe("SystemControls", () => {
     );
     expect(document.querySelector(".settings-capture-button")).toBeNull();
     expect(document.body.textContent).toMatch(
-      /Res|PSM|Off|5m|10m|30m|Driving|Control|Speed|Slow|Mid|Fast|Mode|ECO|Sport|Assist|Metrics|Reboot|Shutdown/i,
+      /Res|PSM|Off|5m|10m|30m|Driving|Control|Speed|Slow|Mid|Fast|Mode|ECO|Sport|Pre-collision|Metrics|Reboot|Shutdown/i,
     );
     expect(document.body.textContent).not.toMatch(/\bNV\b|Focus|Stream/i);
     await user.click(document.querySelector('[aria-label="10m"]'));

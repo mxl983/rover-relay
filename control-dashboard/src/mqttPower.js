@@ -26,7 +26,7 @@ export const MQTT_POWER_OFF_DELAY_SEC =
   Number(import.meta.env.VITE_MQTT_POWER_OFF_DELAY_SEC) || 15;
 
 /** Assumed rover cold-boot duration used by the loading-screen progress bar. */
-export const ROVER_BOOT_DURATION_MS = 50_000;
+export const ROVER_BOOT_DURATION_MS = 40_000;
 
 const LAST_POWER_ON_AT_KEY = "rover:lastPowerOnAt";
 
@@ -44,6 +44,17 @@ export function recordPowerOnSent(at = Date.now()) {
   return ts;
 }
 
+/** Clear boot progress (e.g. after a prior session finished). */
+export function clearLastPowerOnAt() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(LAST_POWER_ON_AT_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /** @returns {number | null} epoch ms of last publishPowerOn, if known */
 export function getLastPowerOnAt() {
   try {
@@ -58,6 +69,8 @@ export function getLastPowerOnAt() {
 /**
  * Boot progress from last MQTT ON → now, assuming ROVER_BOOT_DURATION_MS.
  * Caps at 99 until the stream is actually ready.
+ * Returns null when there is no recent power-on (avoids flashing 99% from a
+ * stale localStorage timestamp before a fresh ON is recorded).
  * @returns {number | null}
  */
 export function getBootProgressPercent(
@@ -68,6 +81,8 @@ export function getBootProgressPercent(
   if (at == null) return null;
   const duration = Math.max(1, Number(bootMs) || ROVER_BOOT_DURATION_MS);
   const elapsed = Math.max(0, now - at);
+  // Past expected boot → stale prior session (do not flash 99% before a fresh ON).
+  if (elapsed >= duration) return null;
   return Math.min(99, Math.max(0, Math.round((elapsed / duration) * 100)));
 }
 

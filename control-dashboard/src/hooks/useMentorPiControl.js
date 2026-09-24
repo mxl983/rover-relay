@@ -17,6 +17,8 @@ import { getBatteryPercentage } from "../utils/batteryFromVoltage.js";
 const STATUS_POLL_MS = 5000;
 const PANEL_POLL_MS = 5000;
 const TTL_POLL_MS = 5000;
+/** Dedicated Mentori RTT probe — not tied to drive/gimbal traffic. */
+const LATENCY_PING_MS = 3000;
 /** Keep idle timer alive while the dashboard tab is visible. */
 const VISIBLE_HEARTBEAT_MS = 5000;
 const ACTIVITY_TOUCH_MIN_MS = 4000;
@@ -127,22 +129,35 @@ export function useMentorPiControl() {
         setHasEverConnected(true);
         const pctReported = Number(body?.battery_percent);
         const mv = Number(body?.battery_mv);
-        const voltageV = Number.isFinite(mv) ? mv / 1000 : null;
+        // 0 mV / 0% means no reading yet — not an empty pack.
+        const voltageV =
+          Number.isFinite(mv) && mv > 0 ? mv / 1000 : null;
         const pctFromVoltage =
           voltageV != null ? getBatteryPercentage(voltageV) : null;
+        const driveAssistEnabled =
+          typeof body?.drive_assist_enabled === "boolean"
+            ? body.drive_assist_enabled
+            : typeof body?.pre_collision_stop === "boolean"
+              ? body.pre_collision_stop
+              : undefined;
+        const nextBattery =
+          pctFromVoltage != null && pctFromVoltage > 0
+            ? pctFromVoltage
+            : Number.isFinite(pctReported) && pctReported > 0
+              ? pctReported
+              : null;
+        const clearBattery = nextBattery == null && (!Number.isFinite(mv) || mv <= 0);
         setStats((prev) => ({
           ...prev,
-          battery:
-            pctFromVoltage != null
-              ? pctFromVoltage
-              : Number.isFinite(pctReported)
-                ? pctReported
-                : prev.battery,
-          voltage: voltageV != null ? voltageV : prev.voltage,
+          battery: nextBattery != null ? nextBattery : clearBattery ? null : prev.battery,
+          voltage: voltageV != null ? voltageV : clearBattery ? null : prev.voltage,
           trip_m: body?.trip_m,
           dirs: body?.dirs,
+          driveAssistEnabled:
+            driveAssistEnabled !== undefined
+              ? driveAssistEnabled
+              : prev.driveAssistEnabled,
           wifiSignal: prev.wifiSignal,
-          latency: prev.latency,
         }));
       } catch {
         if (!cancelled) setIsOnline(false);
@@ -152,6 +167,38 @@ export function useMentorPiControl() {
     };
 
     void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  // HUD latency: periodic GET /api/status — independent of cmd_vel / gimbal.
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+
+    const ping = async () => {
+      const t0 = performance.now();
+      try {
+        const res = await apiFetch(MENTOR_STATUS_ENDPOINT, {
+          timeout: 2500,
+          retries: 0,
+        });
+        if (!res.ok) throw new Error(`latency ping ${res.status}`);
+        // Drain body so keep-alive / proxy can reuse cleanly.
+        await res.text();
+        if (cancelled) return;
+        const ms = Math.round(performance.now() - t0);
+        setStats((prev) => ({ ...prev, latency: ms }));
+      } catch {
+        /* leave last latency; online flag comes from status poll */
+      } finally {
+        if (!cancelled) timer = setTimeout(ping, LATENCY_PING_MS);
+      }
+    };
+
+    void ping();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
@@ -374,14 +421,11 @@ export function useMentorPiControl() {
       angular_z: Number(twist.angular_z) || 0,
     };
     lastCmdRef.current = body;
-    const t0 = performance.now();
     try {
       const res = await apiPostJson(MENTOR_CMD_VEL_ENDPOINT, body, {
         timeout: 800,
         retries: 0,
       });
-      const ms = Math.round(performance.now() - t0);
-      setStats((prev) => ({ ...prev, latency: ms }));
       setIsOnline(true);
       setHasEverConnected(true);
       return res;

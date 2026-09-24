@@ -12,6 +12,8 @@ describe("driveAssistApi", () => {
   it("reads enabled from API responses", () => {
     expect(readDriveAssistEnabled({ success: true, enabled: true })).toBe(true);
     expect(readDriveAssistEnabled({ enabled: false })).toBe(false);
+    expect(readDriveAssistEnabled({ preCollisionStop: true })).toBe(true);
+    expect(readDriveAssistEnabled({ drive_assist_enabled: false })).toBe(false);
     expect(readDriveAssistEnabled({})).toBeNull();
   });
 

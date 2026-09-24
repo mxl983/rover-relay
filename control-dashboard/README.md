@@ -5,7 +5,7 @@ React dashboard for driving the rover and watching WebRTC video. Runs on **anoth
 | Path | Backend |
 |------|---------|
 | Video / mic / talk | pi-server MediaMTX (`https://<FQDN>:8889`) |
-| Drive / gimbal / status / photo | MentorPi `web_car` (`http://<FQDN>:5000`) |
+| Drive / gimbal / status / photo | Mentori via HTTPS pi-server proxy (`https://<FQDN>:3000/api/...`) |
 
 ## Setup
 

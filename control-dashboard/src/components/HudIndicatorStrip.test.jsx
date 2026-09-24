@@ -71,11 +71,11 @@ describe("HudIndicatorStrip", () => {
     expect(screen.queryByLabelText("Sport drive mode")).toBeNull();
   });
 
-  it("shows radar icon when drive assist is on", () => {
+  it("shows radar icon when pre-collision stop is on", () => {
     const { container } = render(
       <HudIndicatorStrip driveAssistEnabled driveAssistUpdate={null} />,
     );
-    expect(screen.getByLabelText("Drive assist on")).toBeTruthy();
+    expect(screen.getByLabelText("Pre-collision stop on")).toBeTruthy();
     expect(container.querySelector(".hud-indicator-icon--drive-assist")).toBeTruthy();
   });
 

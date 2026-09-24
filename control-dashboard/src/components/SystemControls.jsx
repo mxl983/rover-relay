@@ -15,6 +15,7 @@ import {
   Rabbit,
   Volume2,
   Mic,
+  Columns2,
 } from "lucide-react";
 
 const CONTROL_MODE_OPTIONS = [
@@ -36,7 +37,8 @@ const SPEED_OPTIONS = [
   { value: "fast", label: "Fast" },
 ];
 
-const SEGMENT_TOGGLE_WIDTH = "88px";
+/** Shared overall width so every settings segmented control lines up. */
+const SEGMENT_TOGGLE_WIDTH = "118px";
 const POWER_SAVING_OPTIONS = [
   { value: "off", label: "Off" },
   { value: "5", label: "5m" },
@@ -128,6 +130,8 @@ export const SystemControls = ({
   onDriveSpeedChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
+  referenceLinesEnabled = false,
+  onReferenceLinesChange,
   roverSpeakerEnabled = true,
   onRoverSpeakerChange,
   dashMicEnabled = false,
@@ -197,7 +201,6 @@ export const SystemControls = ({
             <SegmentedToggle
               ariaLabel="Power saving idle timeout"
               uppercase={false}
-              width="118px"
               value={powerSavingMode}
               options={POWER_SAVING_OPTIONS}
               onChange={(mode) => {
@@ -271,10 +274,11 @@ export const SystemControls = ({
 
           <SettingsToggleRow
             icon={<ShieldAlert size={12} />}
-            label="Assist"
+            label="Pre-collision"
+            title="Pre-collision stop: lidar blocks drive into nearby obstacles"
           >
             <SegmentedToggle
-              ariaLabel="Drive assist"
+              ariaLabel="Pre-collision stop"
               value={driveAssistEnabled ? "on" : "off"}
               options={[
                 { label: "OFF", value: "off" },
@@ -293,6 +297,22 @@ export const SystemControls = ({
                 { label: "ON", value: "on" },
               ]}
               onChange={(mode) => onMetricsPanelChange?.(mode === "on")}
+            />
+          </SettingsToggleRow>
+
+          <SettingsToggleRow
+            icon={<Columns2 size={12} />}
+            label="Guides"
+            title="Vertical passage guides at 40% / 60% of the video width"
+          >
+            <SegmentedToggle
+              ariaLabel="Passage reference lines"
+              value={referenceLinesEnabled ? "on" : "off"}
+              options={[
+                { label: "OFF", value: "off" },
+                { label: "ON", value: "on" },
+              ]}
+              onChange={(mode) => onReferenceLinesChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 

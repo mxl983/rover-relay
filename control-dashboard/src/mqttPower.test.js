@@ -60,14 +60,16 @@ describe("mqttPower", () => {
     expect(at).toBeLessThanOrEqual(Date.now());
   });
 
-  it("computes boot percent from last MQTT ON over 50s", () => {
-    expect(ROVER_BOOT_DURATION_MS).toBe(50_000);
+  it("computes boot percent from last MQTT ON over 40s", () => {
+    expect(ROVER_BOOT_DURATION_MS).toBe(40_000);
     expect(getBootProgressPercent()).toBeNull();
 
     recordPowerOnSent(1_000);
     expect(getBootProgressPercent(1_000)).toBe(0);
-    expect(getBootProgressPercent(1_000 + 25_000)).toBe(50);
-    expect(getBootProgressPercent(1_000 + 50_000)).toBe(99);
-    expect(getBootProgressPercent(1_000 + 90_000)).toBe(99);
+    expect(getBootProgressPercent(1_000 + 20_000)).toBe(50);
+    expect(getBootProgressPercent(1_000 + 39_600)).toBe(99);
+    // Stale / completed prior session — no percent until a fresh ON.
+    expect(getBootProgressPercent(1_000 + 40_000)).toBeNull();
+    expect(getBootProgressPercent(1_000 + 90_000)).toBeNull();
   });
 });

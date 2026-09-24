@@ -8,10 +8,56 @@ import {
 } from "../utils/gamepadInput.js";
 
 const ZONE_SIZE_PX = 100;
-const RESET_BTN_SIZE = 20; 
+const RESET_BTN_SIZE = 28;
 const NEUTRAL_BORDER = "rgba(255, 255, 255, 0.2)";
 const NEUTRAL_LABEL = "rgba(255, 255, 255, 0.75)";
-const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)"; 
+const NEUTRAL_BTN = "rgba(10, 10, 10, 0.9)";
+
+/** Tiny HUD glyphs (inline so stroke always follows button `color`). */
+function SiblingIcon({ children }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ display: "block", flexShrink: 0 }}
+    >
+      {children}
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <SiblingIcon>
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <circle cx="12" cy="13" r="3" />
+    </SiblingIcon>
+  );
+}
+
+function SunIcon() {
+  return (
+    <SiblingIcon>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </SiblingIcon>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <SiblingIcon>
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </SiblingIcon>
+  );
+} 
 
 function clamp1(v) {
   return Math.max(-1, Math.min(1, v));
@@ -866,6 +912,19 @@ export const DualJoystickControls = ({
           user-select: none;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
+          line-height: 0;
+          padding: 0;
+          overflow: visible;
+        }
+
+        .reset-btn-sibling svg {
+          display: block;
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+          stroke: currentColor;
+          fill: none;
+          overflow: visible;
         }
         
         .reset-btn-sibling:active {
@@ -1078,7 +1137,7 @@ export const DualJoystickControls = ({
             aria-pressed={nvActive}
             title={nvActive ? "Night vision ON (tap to turn off)" : "Night vision OFF (tap to turn on)"}
           >
-            NV
+            {nvActive ? <MoonIcon /> : <SunIcon />}
           </button>
         )}
 
@@ -1100,7 +1159,7 @@ export const DualJoystickControls = ({
             aria-label={isCapturing ? "Capturing photo" : "Take hi-res photo"}
             title={isCapturing ? "Capturing…" : "Hi-res capture"}
           >
-            CAP
+            <CameraIcon />
           </button>
         )}
       </div>

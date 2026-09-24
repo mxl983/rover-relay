@@ -30,9 +30,9 @@ const MENTOR_API_PORT = import.meta.env.VITE_MENTOR_API_PORT ?? "5000";
 export const WEBRTC_BASE =
   import.meta.env.VITE_WEBRTC_BASE ?? `https://${PI_FQDN}:${WEBRTC_PORT}`;
 
-/** MentorPi web_car Flask API (HTTP on :5000 today). */
+/** MentorPi web_car via HTTPS pi-server proxy (:3000). Phones already reach :3000. */
 export const MENTOR_API_BASE =
-  import.meta.env.VITE_MENTOR_API_BASE ?? `http://${PI_FQDN}:${MENTOR_API_PORT}`;
+  import.meta.env.VITE_MENTOR_API_BASE ?? `https://${PI_FQDN}:3000`;
 
 export const AUDIO_STREAM_HOST = `${WEBRTC_BASE.replace(/\/$/, "")}/mic/whep`;
 export const VIDEO_STREAM_HOST = `${WEBRTC_BASE.replace(/\/$/, "")}/cam/whep`;
