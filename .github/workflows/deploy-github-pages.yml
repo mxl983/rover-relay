@@ -37,6 +37,9 @@ jobs:
         working-directory: control-dashboard
         env:
           VITE_BASE_PATH: /rover-relay/
+          # Optional: repo Settings → Secrets → Actions (not committed)
+          VITE_ROVER_LAT: ${{ secrets.VITE_ROVER_LAT }}
+          VITE_ROVER_LON: ${{ secrets.VITE_ROVER_LON }}
         run: |
           npm ci
           npm run build:github-pages

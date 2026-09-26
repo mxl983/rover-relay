@@ -18,6 +18,7 @@ import { useFullscreen } from "./hooks/useFullscreen";
 import { useMentorPiControl } from "./hooks/useMentorPiControl";
 import { useEspMqtt } from "./hooks/useEspMqtt";
 import { useVoiceAssistant } from "./hooks/useVoiceAssistant";
+import { useClientToRoverDistance } from "./hooks/useClientToRoverDistance";
 import { useRoverSession } from "./context/RoverSessionContext";
 import { apiPostJson, apiPost, apiFetch } from "./api/client";
 import { isAllowedCaptureUrl } from "./api/captureUrl";
@@ -52,7 +53,10 @@ import {
   PI_AUTO_EXPOSURE_ENDPOINT,
   PI_RESOLUTION_ENDPOINT,
   PI_HI_RES_CAPTURE_ENDPOINT,
-} from "./config";
+  ROVER_LAT,
+  ROVER_LON,
+  ROVER_LOCATION_CONFIGURED,
+} from "./config.js";
 import {
   MQTT_POWER_OFF_DELAY_SEC,
   publishPowerOff,
@@ -99,6 +103,11 @@ export default function App() {
   const viewportRef = useRef(null);
   const { stats, driveAssistUpdate, imu, imuLive, isOnline: piOnline, hasEverConnected, sendControl, speedLevel, setSpeedLevel } =
     useMentorPiControl();
+  const clientToRoverDistanceM = useClientToRoverDistance({
+    lat: ROVER_LAT,
+    lon: ROVER_LON,
+    enabled: isAuthenticated && ROVER_LOCATION_CONFIGURED,
+  });
   // Optimistic default matches Mentori (on). Overwritten by status / GET sync.
   const [driveAssistEnabled, setDriveAssistEnabledState] = useState(() =>
     readPrefBool(PREF_KEYS.driveAssist, true),
@@ -335,6 +344,7 @@ export default function App() {
   const isCriticalBattery =
     hasBatteryTelemetry && batteryPct < 15 && !effectiveIsCharging;
   const distanceMeters = (() => {
+    if (Number.isFinite(clientToRoverDistanceM)) return clientToRoverDistanceM;
     const v = Number(stats?.distance);
     return Number.isFinite(v) ? v : null;
   })();

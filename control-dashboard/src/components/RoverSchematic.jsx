@@ -101,7 +101,7 @@ function formatDistanceShort(meters, isOffline) {
     return isOffline ? "--" : "…";
   }
   const m = Math.max(0, Number(meters));
-  if (m < 100) return "nearby";
+  if (m < 1000) return "nearby";
   const km = m / 1000;
   if (km < 10) return `${km.toFixed(1)}km`;
   return `${Math.round(km)}km`;

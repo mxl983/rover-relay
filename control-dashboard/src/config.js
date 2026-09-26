@@ -161,6 +161,26 @@ export const JOYSTICK_DRIVE_DEBUG =
   import.meta.env.VITE_JOYSTICK_DRIVE_DEBUG !== "false";
 export const IMU_DEBUG = import.meta.env.VITE_IMU_DEBUG !== "false";
 
+/**
+ * Fixed rover WGS84 position for DST (client ↔ rover distance).
+ * Set in control-dashboard/.env.local (gitignored) — never commit real coords.
+ *   VITE_ROVER_LAT=49.17…
+ *   VITE_ROVER_LON=-123.14…
+ */
+function parseCoord(raw) {
+  if (raw == null || String(raw).trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+export const ROVER_LAT = parseCoord(import.meta.env.VITE_ROVER_LAT);
+export const ROVER_LON = parseCoord(import.meta.env.VITE_ROVER_LON);
+export const ROVER_LOCATION_CONFIGURED =
+  ROVER_LAT != null &&
+  ROVER_LON != null &&
+  Math.abs(ROVER_LAT) <= 90 &&
+  Math.abs(ROVER_LON) <= 180;
+
 export function getAllowedCaptureOrigin() {
   try {
     return new URL(PI_CAMERA_ENDPOINT).origin;
