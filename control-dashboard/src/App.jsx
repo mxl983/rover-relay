@@ -4,7 +4,6 @@ import { KeyboardControlCluster } from "./components/KeyboardControlCluster";
 import { LoginOverlay } from "./components/LoginOverlay";
 import { SystemControls } from "./components/SystemControls";
 import { GimbalTiltHud } from "./components/GimbalTiltHud";
-import { PassageGuideOverlay } from "./components/PassageGuideOverlay";
 import { RoverSchematic } from "./components/RoverSchematic";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { DualJoystickControls } from "./components/DualJoystickControls";
@@ -50,6 +49,7 @@ import {
   MENTOR_GIMBAL_ENDPOINT,
   PI_CAMERA_ENDPOINT,
   PI_NIGHTVISION_ENDPOINT,
+  PI_AUTO_EXPOSURE_ENDPOINT,
   PI_RESOLUTION_ENDPOINT,
   PI_HI_RES_CAPTURE_ENDPOINT,
 } from "./config";
@@ -107,6 +107,9 @@ export default function App() {
   const [quietMode, setQuietModeState] = useState(() =>
     readPrefBool(PREF_KEYS.quietMode, true),
   );
+  const [autoExposureEnabled, setAutoExposureEnabledState] = useState(() =>
+    readPrefBool(PREF_KEYS.autoExposure, true),
+  );
   const driveAssistHudUpdate = driveAssistEnabled ? driveAssistUpdate : null;
 
   useEffect(() => {
@@ -146,6 +149,7 @@ export default function App() {
   const [nvActive, setNvActive] = useState(false);
   const nvActiveRef = useRef(false);
   const nvInFlightRef = useRef(false);
+  const [nvPending, setNvPending] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [resMode, setResMode] = useState(readInitialResMode);
   const [focusMode, setFocusMode] = useState("far");
@@ -161,10 +165,6 @@ export default function App() {
   const [dashMicEnabled, setDashMicEnabledState] = useState(() =>
     readPrefBool(PREF_KEYS.dashMic, false),
   );
-  const [referenceLinesEnabled, setReferenceLinesEnabledState] = useState(() =>
-    readPrefBool(PREF_KEYS.referenceLines, false),
-  );
-
   // If form-factor flips and that form-factor has no saved mode yet, apply defaults.
   useEffect(() => {
     setControlModeState(readInitialControlMode(isMobile));
@@ -183,12 +183,6 @@ export default function App() {
       void playRoverChime();
       return next;
     });
-  };
-
-  const setReferenceLinesEnabled = (enabled) => {
-    setReferenceLinesEnabledState(enabled);
-    writePrefBool(PREF_KEYS.referenceLines, enabled);
-    void playRoverChime();
   };
 
   const setRoverSpeakerEnabled = (enabled) => {
@@ -265,6 +259,27 @@ export default function App() {
           nvActiveRef.current = json.nightVision;
           setNvActive(json.nightVision);
         }
+        if (!cancelled && typeof json?.autoExposure === "boolean") {
+          setAutoExposureEnabledState(json.autoExposure);
+          writePrefBool(PREF_KEYS.autoExposure, json.autoExposure);
+        }
+      } catch {
+        /* optional */
+      }
+    };
+
+    const fetchAutoExposure = async () => {
+      try {
+        const res = await apiFetch(PI_AUTO_EXPOSURE_ENDPOINT, {
+          timeout: 2500,
+          retries: 0,
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && typeof json?.autoExposure === "boolean") {
+          setAutoExposureEnabledState(json.autoExposure);
+          writePrefBool(PREF_KEYS.autoExposure, json.autoExposure);
+        }
       } catch {
         /* optional */
       }
@@ -289,6 +304,7 @@ export default function App() {
 
     void syncDriveAssist();
     void fetchNightVision();
+    void fetchAutoExposure();
     void fetchResolution();
     return () => {
       cancelled = true;
@@ -519,9 +535,7 @@ export default function App() {
     if (hasExplicit && optimistic === nvActiveRef.current) return;
 
     nvInFlightRef.current = true;
-    nvActiveRef.current = optimistic;
-    setNvActive(optimistic);
-    setCameraLoading(true);
+    setNvPending(true);
     setActionError(null);
     try {
       // Server-side flip for button taps so a second press always turns OFF,
@@ -553,18 +567,14 @@ export default function App() {
             nvActiveRef.current = status.nightVision;
             setNvActive(status.nightVision);
           }
-        } else {
-          nvActiveRef.current = !optimistic;
-          setNvActive(!optimistic);
         }
       } catch {
-        nvActiveRef.current = !optimistic;
-        setNvActive(!optimistic);
+        /* keep last known nvActive */
       }
       setActionError(err.message ?? "Night vision toggle failed");
     } finally {
       nvInFlightRef.current = false;
-      setCameraLoading(false);
+      setNvPending(false);
     }
   };
 
@@ -628,6 +638,33 @@ export default function App() {
       void playRoverChime();
     } catch (err) {
       setActionError(err.message ?? "Drive mode update failed");
+    }
+  };
+
+  const setAutoExposure = async (enabled) => {
+    setActionError(null);
+    const previous = autoExposureEnabled;
+    setAutoExposureEnabledState(enabled);
+    writePrefBool(PREF_KEYS.autoExposure, enabled);
+    try {
+      const json = await apiPostJson(
+        PI_AUTO_EXPOSURE_ENDPOINT,
+        { enabled },
+        { timeout: 12_000, retries: 0 },
+      );
+      if (typeof json?.autoExposure === "boolean") {
+        setAutoExposureEnabledState(json.autoExposure);
+        writePrefBool(PREF_KEYS.autoExposure, json.autoExposure);
+      }
+      showActionToast(
+        json?.message ||
+          (enabled ? "Auto exposure on" : "Auto exposure off"),
+      );
+      void playRoverChime();
+    } catch (err) {
+      setAutoExposureEnabledState(previous);
+      writePrefBool(PREF_KEYS.autoExposure, previous);
+      setActionError(err.message ?? "Auto exposure update failed");
     }
   };
 
@@ -910,9 +947,6 @@ export default function App() {
         espPoweredOff={espPoweredOff}
       />
       <GimbalTiltHud pan={stats.pan} tilt={stats.tilt} />
-      {isAuthenticated && (
-        <PassageGuideOverlay enabled={referenceLinesEnabled} />
-      )}
 
       {isAuthenticated &&
         piOnline &&
@@ -962,6 +996,7 @@ export default function App() {
           onToggleMetrics={toggleMetricsPanel}
           onNVToggle={handleNVToggle}
           nvActive={nvActive}
+          nvPending={nvPending}
           onCapture={handleCapture}
           isCapturing={isCapturing}
         />
@@ -997,7 +1032,6 @@ export default function App() {
             isLowBattery={isLowBattery}
             lowBatteryIndicatorArmed={lowBatteryGlowArmed}
             batteryPct={batteryPct}
-            onQuietModeChange={setQuietMode}
             onDriveAssistChange={setDriveAssist}
             onPowerSavingChange={setPowerSaving}
             onResChange={handleResChange}
@@ -1012,8 +1046,8 @@ export default function App() {
             }}
             metricsPanelEnabled={showMetricsPanel}
             onMetricsPanelChange={setShowMetricsPanel}
-            referenceLinesEnabled={referenceLinesEnabled}
-            onReferenceLinesChange={setReferenceLinesEnabled}
+            autoExposureEnabled={autoExposureEnabled}
+            onAutoExposureChange={setAutoExposure}
             roverSpeakerEnabled={roverSpeakerEnabled}
             onRoverSpeakerChange={setRoverSpeakerEnabled}
             dashMicEnabled={dashMicEnabled}
@@ -1047,6 +1081,7 @@ export default function App() {
             onToggleMetrics={toggleMetricsPanel}
             onNVToggle={handleNVToggle}
             nvActive={nvActive}
+            nvPending={nvPending}
           />
         </div>
       )}
@@ -1096,7 +1131,6 @@ function HudHeader({
   isLowBattery,
   lowBatteryIndicatorArmed,
   batteryPct = null,
-  onQuietModeChange,
   onDriveAssistChange,
   onPowerSavingChange,
   onResChange,
@@ -1107,8 +1141,8 @@ function HudHeader({
   onDriveSpeedChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
-  referenceLinesEnabled = false,
-  onReferenceLinesChange,
+  autoExposureEnabled = true,
+  onAutoExposureChange,
   roverSpeakerEnabled = true,
   onRoverSpeakerChange,
   dashMicEnabled = false,
@@ -1152,7 +1186,6 @@ function HudHeader({
           driveAssistEnabled={driveAssistEnabled}
           powerSavingEnabled={powerSavingEnabled}
           powerSavingTimeoutMinutes={powerSavingTimeoutMinutes}
-          onQuietModeChange={onQuietModeChange}
           onDriveAssistChange={onDriveAssistChange}
           onPowerSavingChange={onPowerSavingChange}
           onResChange={onResChange}
@@ -1163,8 +1196,8 @@ function HudHeader({
           onDriveSpeedChange={onDriveSpeedChange}
           metricsPanelEnabled={metricsPanelEnabled}
           onMetricsPanelChange={onMetricsPanelChange}
-          referenceLinesEnabled={referenceLinesEnabled}
-          onReferenceLinesChange={onReferenceLinesChange}
+          autoExposureEnabled={autoExposureEnabled}
+          onAutoExposureChange={onAutoExposureChange}
           roverSpeakerEnabled={roverSpeakerEnabled}
           onRoverSpeakerChange={onRoverSpeakerChange}
           dashMicEnabled={dashMicEnabled}
@@ -1203,6 +1236,7 @@ function HudFooter({
   onToggleMetrics,
   onNVToggle,
   nvActive = false,
+  nvPending = false,
 }) {
   const joystickProps = {
     onDrive,
@@ -1224,6 +1258,7 @@ function HudFooter({
     onToggleMetrics,
     onNVToggle,
     nvActive,
+    nvPending,
     onCapture,
     isCapturing,
   };

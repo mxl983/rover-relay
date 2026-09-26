@@ -11,8 +11,8 @@ export const PREF_KEYS = {
   quietMode: "rover-dashboard-quiet-mode",
   driveAssist: "rover-dashboard-drive-assist",
   resMode: "rover-dashboard-res-mode",
-  /** Vertical passage guide lines over the video (40% / 60%). */
-  referenceLines: "rover-dashboard-reference-lines",
+  /** Day-mode camera auto exposure (aperture priority). */
+  autoExposure: "rover-dashboard-auto-exposure",
 };
 
 export function readPrefString(key) {

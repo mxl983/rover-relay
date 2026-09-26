@@ -11,7 +11,6 @@ describe("SystemControls", () => {
         resMode="720p"
         quietMode={false}
         powerSavingEnabled
-        onQuietModeChange={vi.fn()}
         onPowerSavingChange={vi.fn()}
         onResChange={vi.fn()}
         onAction={vi.fn()}
@@ -33,7 +32,6 @@ describe("SystemControls", () => {
         quietMode={false}
         powerSavingEnabled
         powerSavingTimeoutMinutes={5}
-        onQuietModeChange={vi.fn()}
         onPowerSavingChange={onPowerSavingChange}
         onResChange={vi.fn()}
         onAction={onAction}
@@ -54,9 +52,9 @@ describe("SystemControls", () => {
     );
     expect(document.querySelector(".settings-capture-button")).toBeNull();
     expect(document.body.textContent).toMatch(
-      /Res|PSM|Off|5m|10m|30m|Driving|Control|Speed|Slow|Mid|Fast|Mode|ECO|Sport|Pre-collision|Metrics|Reboot|Shutdown/i,
+      /Res|PSM|Off|5m|10m|30m|Driving|Control|Speed|Slow|Mid|Fast|Pre-collision|Metrics|Auto Exposure|Reboot|Shutdown/i,
     );
-    expect(document.body.textContent).not.toMatch(/\bNV\b|Focus|Stream/i);
+    expect(document.body.textContent).not.toMatch(/\bNV\b|Focus|Stream|\bMode\b|ECO|Sport/i);
     await user.click(document.querySelector('[aria-label="10m"]'));
     expect(onPowerSavingChange).toHaveBeenCalledWith({
       enabled: true,

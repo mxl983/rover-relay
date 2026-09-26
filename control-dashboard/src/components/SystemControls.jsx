@@ -5,8 +5,6 @@ import {
   RefreshCw,
   Settings,
   Video,
-  Footprints,
-  Zap,
   Keyboard,
   Gamepad2,
   ShieldAlert,
@@ -15,7 +13,7 @@ import {
   Rabbit,
   Volume2,
   Mic,
-  Columns2,
+  Aperture,
 } from "lucide-react";
 
 const CONTROL_MODE_OPTIONS = [
@@ -115,11 +113,9 @@ function powerSavingModeValue(enabled, timeoutMinutes) {
 export const SystemControls = ({
   isPowered,
   resMode,
-  quietMode,
   driveAssistEnabled,
   powerSavingEnabled,
   powerSavingTimeoutMinutes = 5,
-  onQuietModeChange,
   onDriveAssistChange,
   onPowerSavingChange,
   onResChange,
@@ -130,8 +126,8 @@ export const SystemControls = ({
   onDriveSpeedChange,
   metricsPanelEnabled,
   onMetricsPanelChange,
-  referenceLinesEnabled = false,
-  onReferenceLinesChange,
+  autoExposureEnabled = true,
+  onAutoExposureChange,
   roverSpeakerEnabled = true,
   onRoverSpeakerChange,
   dashMicEnabled = false,
@@ -258,21 +254,6 @@ export const SystemControls = ({
           </SettingsToggleRow>
 
           <SettingsToggleRow
-            icon={quietMode ? <Footprints size={12} /> : <Zap size={12} />}
-            label="Mode"
-          >
-            <SegmentedToggle
-              ariaLabel="Drive mode"
-              value={quietMode ? "eco" : "sport"}
-              options={[
-                { label: "ECO", value: "eco" },
-                { label: "Sport", value: "sport" },
-              ]}
-              onChange={(mode) => onQuietModeChange?.(mode === "eco")}
-            />
-          </SettingsToggleRow>
-
-          <SettingsToggleRow
             icon={<ShieldAlert size={12} />}
             label="Pre-collision"
             title="Pre-collision stop: lidar blocks drive into nearby obstacles"
@@ -301,18 +282,18 @@ export const SystemControls = ({
           </SettingsToggleRow>
 
           <SettingsToggleRow
-            icon={<Columns2 size={12} />}
-            label="Guides"
-            title="Vertical passage guides at 40% / 60% of the video width"
+            icon={<Aperture size={12} />}
+            label="Auto Exposure"
+            title="Day mode: camera auto exposure (dims in bright scenes, brightens in dark). Off = fixed drive-sharp shutter. Night vision always uses manual."
           >
             <SegmentedToggle
-              ariaLabel="Passage reference lines"
-              value={referenceLinesEnabled ? "on" : "off"}
+              ariaLabel="Auto exposure"
+              value={autoExposureEnabled ? "on" : "off"}
               options={[
                 { label: "OFF", value: "off" },
                 { label: "ON", value: "on" },
               ]}
-              onChange={(mode) => onReferenceLinesChange?.(mode === "on")}
+              onChange={(mode) => onAutoExposureChange?.(mode === "on")}
             />
           </SettingsToggleRow>
 

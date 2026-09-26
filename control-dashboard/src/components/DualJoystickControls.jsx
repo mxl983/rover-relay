@@ -57,7 +57,22 @@ function MoonIcon() {
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </SiblingIcon>
   );
-} 
+}
+
+function NvSpinnerIcon() {
+  return (
+    <SiblingIcon>
+      <path d="M12 2v4" />
+      <path d="M12 18v4" opacity="0.35" />
+      <path d="m4.93 4.93 2.83 2.83" opacity="0.7" />
+      <path d="m16.24 16.24 2.83 2.83" opacity="0.25" />
+      <path d="M2 12h4" opacity="0.55" />
+      <path d="M18 12h4" opacity="0.2" />
+      <path d="m4.93 19.07 2.83-2.83" opacity="0.4" />
+      <path d="m16.24 7.76 2.83-2.83" opacity="0.85" />
+    </SiblingIcon>
+  );
+}
 
 function clamp1(v) {
   return Math.max(-1, Math.min(1, v));
@@ -258,6 +273,7 @@ export const DualJoystickControls = ({
   onToggleMetrics,
   onNVToggle,
   nvActive = false,
+  nvPending = false,
   onCapture,
   isCapturing = false,
   immersive = false,
@@ -984,6 +1000,19 @@ export const DualJoystickControls = ({
           background: rgba(139, 92, 246, 0.8) !important;
         }
 
+        .nv-pending {
+          opacity: 0.85;
+          cursor: wait;
+        }
+
+        .nv-pending svg {
+          animation: nv-spin 0.75s linear infinite;
+        }
+
+        @keyframes nv-spin {
+          to { transform: rotate(360deg); }
+        }
+
         /* Schematic sits bottom-center between sticks (compact HUD layout). */
         .center-slot {
           flex: 1;
@@ -1125,19 +1154,33 @@ export const DualJoystickControls = ({
         {onNVToggle && (
           <button
             type="button"
-            className={`reset-btn-sibling sibling-btn-right${nvActive ? " nv-on" : ""}`}
+            className={`reset-btn-sibling sibling-btn-right${nvActive ? " nv-on" : ""}${nvPending ? " nv-pending" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onNVToggle();
+              if (!nvPending) onNVToggle();
             }}
             style={{ borderRadius: "20px" }}
             onPointerDown={(e) => e.stopPropagation()}
-            aria-label={nvActive ? "Night vision on — tap to disable" : "Night vision off — tap to enable"}
+            disabled={nvPending}
+            aria-busy={nvPending || undefined}
+            aria-label={
+              nvPending
+                ? "Switching night vision…"
+                : nvActive
+                  ? "Night vision on — tap to disable"
+                  : "Night vision off — tap to enable"
+            }
             aria-pressed={nvActive}
-            title={nvActive ? "Night vision ON (tap to turn off)" : "Night vision OFF (tap to turn on)"}
+            title={
+              nvPending
+                ? "Switching night vision…"
+                : nvActive
+                  ? "Night vision ON (tap to turn off)"
+                  : "Night vision OFF (tap to turn on)"
+            }
           >
-            {nvActive ? <MoonIcon /> : <SunIcon />}
+            {nvPending ? <NvSpinnerIcon /> : nvActive ? <MoonIcon /> : <SunIcon />}
           </button>
         )}
 
@@ -1183,6 +1226,7 @@ DualJoystickControls.propTypes = {
   onToggleMetrics: PropTypes.func,
   onNVToggle: PropTypes.func,
   nvActive: PropTypes.bool,
+  nvPending: PropTypes.bool,
   onCapture: PropTypes.func,
   isCapturing: PropTypes.bool,
   immersive: PropTypes.bool,

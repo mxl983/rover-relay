@@ -136,6 +136,10 @@ export const PI_PRESENCE_ENDPOINT = `${PI_SYSTEM_ENDPOINT.replace(/\/$/, "")}/pr
 export const PI_NIGHTVISION_ENDPOINT =
   import.meta.env.VITE_PI_NIGHTVISION_ENDPOINT ??
   `${PI_CAMERA_ENDPOINT.replace(/\/$/, "")}/nightvision`;
+/** Day-mode camera auto exposure (aperture priority) via rover-control. */
+export const PI_AUTO_EXPOSURE_ENDPOINT =
+  import.meta.env.VITE_PI_AUTO_EXPOSURE_ENDPOINT ??
+  `${PI_CAMERA_ENDPOINT.replace(/\/$/, "")}/auto-exposure`;
 /** Stream resolution (MediaMTX ffmpeg -video_size) via rover-control. */
 export const PI_RESOLUTION_ENDPOINT =
   import.meta.env.VITE_PI_RESOLUTION_ENDPOINT ??
