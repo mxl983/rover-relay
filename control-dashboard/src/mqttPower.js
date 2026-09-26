@@ -26,7 +26,7 @@ export const MQTT_POWER_OFF_DELAY_SEC =
   Number(import.meta.env.VITE_MQTT_POWER_OFF_DELAY_SEC) || 15;
 
 /** Assumed rover cold-boot duration used by the loading-screen progress bar. */
-export const ROVER_BOOT_DURATION_MS = 40_000;
+export const ROVER_BOOT_DURATION_MS = 35_000;
 
 const LAST_POWER_ON_AT_KEY = "rover:lastPowerOnAt";
 
