@@ -9,13 +9,13 @@ import {
   Radar,
   Smartphone,
   Tablet,
-  TriangleAlert,
   WifiOff,
   Zap,
 } from "lucide-react";
 import {
-  isDriveAssistHudActive,
+  isObstacleStopHudActive,
   readDriveAssistClosestRangeM,
+  readObstacleStopFromDirs,
 } from "../utils/driveAssistApi.js";
 import { isWifiWeak } from "../utils/wifiSignal.js";
 import { isHighLatency } from "../utils/latencySignal.js";
@@ -277,9 +277,43 @@ function PresenceIndicator({ presence = null }) {
   );
 }
 
-function CollisionIndicator({ update, enabled }) {
-  const active = enabled && isDriveAssistHudActive(update);
-  const rangeM = active ? readDriveAssistClosestRangeM(update) : null;
+function StopSignIcon({ className, size = 18 }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden
+      focusable="false"
+    >
+      {/* Full tile red — not just the octagon silhouette */}
+      <rect width="24" height="24" rx="3" fill="currentColor" />
+      <text
+        x="12"
+        y="12.6"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#fff"
+        fontSize="6.2"
+        fontWeight="800"
+        fontFamily="system-ui, -apple-system, 'Segoe UI', sans-serif"
+        letterSpacing="0.35"
+      >
+        STOP
+      </text>
+    </svg>
+  );
+}
+
+function CollisionIndicator({ update, enabled, dirs = null }) {
+  const active = isObstacleStopHudActive(enabled, update, dirs);
+  const fromDirs = readObstacleStopFromDirs(dirs);
+  const rangeM = active
+    ? readDriveAssistClosestRangeM(update) ?? fromDirs.closestDist
+    : null;
+  const dirHint =
+    fromDirs.labels.length > 0 ? fromDirs.labels.join(" · ") : null;
 
   return (
     <div
@@ -290,16 +324,24 @@ function CollisionIndicator({ update, enabled }) {
       aria-live={active ? "assertive" : undefined}
       aria-label={
         active
-          ? `Collision warning${rangeM != null ? `, ${rangeM.toFixed(2)} meters` : ""}`
+          ? `Obstacle stop${dirHint ? ` (${dirHint})` : ""}${
+              rangeM != null ? `, ${rangeM.toFixed(2)} meters` : ""
+            }`
+          : undefined
+      }
+      title={
+        active
+          ? `Obstacle stop${dirHint ? ` — ${dirHint}` : ""}${
+              rangeM != null ? ` ${rangeM.toFixed(2)} m` : ""
+            }`
           : undefined
       }
     >
       {active ? (
         <IndicatorIcon toneClass="hud-indicator-icon-wrap--collision">
-          <TriangleAlert
-            className="hud-indicator-icon hud-indicator-icon--collision"
-            {...indicatorIconProps}
-            aria-hidden
+          <StopSignIcon
+            className="hud-indicator-icon hud-indicator-icon--collision hud-indicator-icon--stop-sign"
+            size={18}
           />
         </IndicatorIcon>
       ) : null}
@@ -310,6 +352,7 @@ function CollisionIndicator({ update, enabled }) {
 export function HudIndicatorStrip({
   driveAssistEnabled,
   driveAssistUpdate,
+  obstacleDirs = null,
   powerSavingEnabled = false,
   powerSavingTtlMs = null,
   quietMode = true,
@@ -330,7 +373,11 @@ export function HudIndicatorStrip({
       <PowerSavingIndicator enabled={powerSavingEnabled} ttlMs={powerSavingTtlMs} />
       <SportModeIndicator enabled={sportModeEnabled} />
       <DriveAssistIndicator enabled={driveAssistEnabled} />
-      <CollisionIndicator update={driveAssistUpdate} enabled={driveAssistEnabled} />
+      <CollisionIndicator
+        update={driveAssistUpdate}
+        enabled={driveAssistEnabled}
+        dirs={obstacleDirs}
+      />
       <ChargingIndicator enabled={showCharging} />
       <LowBatteryIndicator enabled={showLowBattery} />
       <WeakWifiIndicator dbm={wifiSignal} />

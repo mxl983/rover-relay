@@ -3,9 +3,11 @@ import {
   formatDriveAssistClosestDistance,
   formatDriveAssistDebugLines,
   isDriveAssistHudActive,
+  isObstacleStopHudActive,
   logDriveAssistInfoDetail,
   readDriveAssistClosestRangeM,
   readDriveAssistEnabled,
+  readObstacleStopFromDirs,
 } from "./driveAssistApi.js";
 
 describe("driveAssistApi", () => {
@@ -35,6 +37,24 @@ describe("driveAssistApi", () => {
     expect(isDriveAssistHudActive({ active: true, assistUiState: "warning" })).toBe(true);
     expect(isDriveAssistHudActive({ active: true, assistUiState: "maneuvering" })).toBe(true);
     expect(isDriveAssistHudActive({ active: false, assistUiState: "clear" })).toBe(false);
+  });
+
+  it("reads Mentori status dirs for obstacle stop HUD", () => {
+    expect(
+      readObstacleStopFromDirs({
+        front: { dist: 0.05, blocked: true, label: "前" },
+        rear: { dist: 1.2, blocked: false },
+      }),
+    ).toEqual({ blocked: true, closestDist: 0.05, labels: ["前"] });
+    expect(isObstacleStopHudActive(true, null, {
+      front: { blocked: true, dist: 0.08, label: "前" },
+    })).toBe(true);
+    expect(isObstacleStopHudActive(false, null, {
+      front: { blocked: true, dist: 0.08 },
+    })).toBe(false);
+    expect(isObstacleStopHudActive(true, null, {
+      front: { blocked: false, dist: 1.0 },
+    })).toBe(false);
   });
 
   it("summarizes WS collision payloads", () => {

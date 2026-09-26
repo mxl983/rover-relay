@@ -29,7 +29,7 @@ describe("HudIndicatorStrip", () => {
       />,
     );
     expect(container.querySelectorAll(".hud-indicator-slot")).toHaveLength(5);
-    expect(screen.queryByLabelText(/collision warning/i)).toBeNull();
+    expect(screen.queryByLabelText(/obstacle stop/i)).toBeNull();
   });
 
   it("shows power saving icon when enabled", () => {
@@ -129,7 +129,7 @@ describe("HudIndicatorStrip", () => {
     const { container } = render(
       <HudIndicatorStrip driveAssistEnabled driveAssistUpdate={warningUpdate} />,
     );
-    expect(screen.getByLabelText(/collision warning/i)).toBeTruthy();
+    expect(screen.getByLabelText(/obstacle stop/i)).toBeTruthy();
     expect(container.querySelector(".hud-indicator-icon--collision")).toBeTruthy();
     expect(container.querySelector(".hud-indicator-value")).toBeNull();
   });
@@ -138,7 +138,7 @@ describe("HudIndicatorStrip", () => {
     const { container } = render(
       <HudIndicatorStrip driveAssistEnabled driveAssistUpdate={maneuverUpdate} />,
     );
-    expect(screen.getByLabelText(/collision warning/i)).toBeTruthy();
+    expect(screen.getByLabelText(/obstacle stop/i)).toBeTruthy();
     expect(container.querySelector(".hud-indicator-slot--collision.hud-indicator-slot--active")).toBeTruthy();
     expect(container.querySelector(".hud-indicator-value")).toBeNull();
   });
@@ -147,7 +147,22 @@ describe("HudIndicatorStrip", () => {
     render(
       <HudIndicatorStrip driveAssistEnabled={false} driveAssistUpdate={warningUpdate} />,
     );
-    expect(screen.queryByLabelText(/collision warning/i)).toBeNull();
+    expect(screen.queryByLabelText(/obstacle stop/i)).toBeNull();
+  });
+
+  it("shows stop sign from Mentori status dirs.blocked", () => {
+    const { container } = render(
+      <HudIndicatorStrip
+        driveAssistEnabled
+        driveAssistUpdate={null}
+        obstacleDirs={{
+          front: { dist: 0.05, blocked: true, label: "前" },
+          rear: { dist: 1, blocked: false },
+        }}
+      />,
+    );
+    expect(screen.getByLabelText(/obstacle stop/i)).toBeTruthy();
+    expect(container.querySelector(".hud-indicator-icon--collision")).toBeTruthy();
   });
 
   it("shows blinking charging battery icon when charging", () => {
@@ -197,7 +212,7 @@ describe("HudIndicatorStrip", () => {
         driveAssistUpdate={{ active: false, assistUiState: "clear" }}
       />,
     );
-    expect(screen.queryByLabelText(/collision warning/i)).toBeNull();
+    expect(screen.queryByLabelText(/obstacle stop/i)).toBeNull();
   });
 
   it("shows blinking weak wifi icon only when signal is weak", () => {

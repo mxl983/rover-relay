@@ -460,7 +460,12 @@ html {
 }
 
 .hud-indicator-icon--collision {
-  color: #ff6b6b;
+  color: #e03131;
+}
+
+.hud-indicator-icon--stop-sign {
+  width: 18px;
+  height: 18px;
 }
 
 .hud-indicator-icon--charging {

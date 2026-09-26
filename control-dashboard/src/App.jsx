@@ -1023,6 +1023,7 @@ export default function App() {
             quietMode={quietMode}
             driveAssistEnabled={driveAssistEnabled}
             driveAssistUpdate={driveAssistHudUpdate}
+            obstacleDirs={stats?.dirs}
             powerSavingEnabled={powerSavingEnabled}
             powerSavingTimeoutMinutes={powerSavingTimeoutMinutes}
             powerSavingTtlMs={
@@ -1124,6 +1125,7 @@ function HudHeader({
   quietMode,
   driveAssistEnabled,
   driveAssistUpdate,
+  obstacleDirs = null,
   powerSavingEnabled,
   powerSavingTimeoutMinutes = 5,
   powerSavingTtlMs = null,
@@ -1162,6 +1164,7 @@ function HudHeader({
         <HudIndicatorStrip
           driveAssistEnabled={driveAssistEnabled}
           driveAssistUpdate={driveAssistUpdate}
+          obstacleDirs={obstacleDirs}
           powerSavingEnabled={powerSavingEnabled}
           powerSavingTtlMs={powerSavingTtlMs}
           quietMode={quietMode}

@@ -52,6 +52,42 @@ export function isDriveAssistHudActive(update) {
   return update.assistUiState === "warning" || update.assistUiState === "maneuvering";
 }
 
+/**
+ * Mentori / rover-drive /api/status `dirs` — true when pre-collision would
+ * refuse motion in that sector (gap < stop_m).
+ * @param {unknown} dirs
+ * @returns {{ blocked: boolean, closestDist: number | null, labels: string[] }}
+ */
+export function readObstacleStopFromDirs(dirs) {
+  if (!dirs || typeof dirs !== "object") {
+    return { blocked: false, closestDist: null, labels: [] };
+  }
+  const labels = [];
+  let closestDist = null;
+  for (const key of ["front", "rear", "left", "right"]) {
+    const entry = dirs[key];
+    if (!entry || entry.blocked !== true) continue;
+    const label = entry.label || key;
+    labels.push(String(label));
+    const dist = Number(entry.dist);
+    if (Number.isFinite(dist) && (closestDist == null || dist < closestDist)) {
+      closestDist = dist;
+    }
+  }
+  return {
+    blocked: labels.length > 0,
+    closestDist,
+    labels,
+  };
+}
+
+/** Show stop-sign HUD when WS assist warns OR status dirs report a block. */
+export function isObstacleStopHudActive(driveAssistEnabled, update, dirs) {
+  if (!driveAssistEnabled) return false;
+  if (isDriveAssistHudActive(update)) return true;
+  return readObstacleStopFromDirs(dirs).blocked;
+}
+
 /** @param {unknown} update */
 export function readDriveAssistClosestRangeM(update) {
   if (!update) return null;
