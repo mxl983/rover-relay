@@ -4,7 +4,11 @@ import {
   BatteryLow,
   Clock,
   EthernetPort,
+  Laptop,
+  Monitor,
   Radar,
+  Smartphone,
+  Tablet,
   TriangleAlert,
   WifiOff,
   Zap,
@@ -211,6 +215,68 @@ function HighLatencyIndicator({ latencyMs }) {
   );
 }
 
+function presenceClientIcon(label) {
+  const s = String(label || "").toLowerCase();
+  if (s.includes("iphone") || s.includes("android")) return Smartphone;
+  if (s.includes("ipad")) return Tablet;
+  if (s.includes("mac") || s.includes("windows") || s.includes("linux") || s.includes("chrome")) {
+    return Laptop;
+  }
+  return Monitor;
+}
+
+function PresenceIndicator({ presence = null }) {
+  const count = Number(presence?.count);
+  const clients = Array.isArray(presence?.clients) ? presence.clients : [];
+  if (!Number.isFinite(count) || count < 1) return null;
+
+  const entries =
+    clients.length > 0
+      ? clients.slice(0, 8).map((c, i) => ({
+          id: String(c?.id || `viewer-${i}`),
+          label: String(c?.label || "Browser").trim() || "Browser",
+        }))
+      : Array.from({ length: Math.min(count, 8) }, (_, i) => ({
+          id: `viewer-${i}`,
+          label: "Browser",
+        }));
+
+  const summary = entries.map((e) => e.label).join(", ");
+  const groupAria =
+    entries.length === 1
+      ? `1 viewer online · ${summary}`
+      : `${entries.length} viewers online · ${summary}`;
+
+  return (
+    <div
+      className="hud-indicator-presence-group"
+      role="status"
+      aria-live="polite"
+      aria-label={groupAria}
+      title={groupAria}
+    >
+      {entries.map((client) => {
+        const Icon = presenceClientIcon(client.label);
+        return (
+          <div
+            key={client.id}
+            className="hud-indicator-slot hud-indicator-slot--presence hud-indicator-slot--active"
+            aria-hidden
+          >
+            <IndicatorIcon toneClass="hud-indicator-icon-wrap--presence">
+              <Icon
+                className="hud-indicator-icon hud-indicator-icon--presence"
+                {...indicatorIconProps}
+              />
+            </IndicatorIcon>
+            <span className="hud-indicator-presence-label">{client.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CollisionIndicator({ update, enabled }) {
   const active = enabled && isDriveAssistHudActive(update);
   const rangeM = active ? readDriveAssistClosestRangeM(update) : null;
@@ -252,6 +318,7 @@ export function HudIndicatorStrip({
   lowBatteryIndicatorArmed = false,
   wifiSignal = null,
   latencyMs = null,
+  presence = null,
 }) {
   const sportModeEnabled = quietMode === false;
   const showCharging = isCharging;
@@ -259,6 +326,7 @@ export function HudIndicatorStrip({
 
   return (
     <div className="hud-indicator-strip" aria-label="Status indicators">
+      <PresenceIndicator presence={presence} />
       <PowerSavingIndicator enabled={powerSavingEnabled} ttlMs={powerSavingTtlMs} />
       <SportModeIndicator enabled={sportModeEnabled} />
       <DriveAssistIndicator enabled={driveAssistEnabled} />

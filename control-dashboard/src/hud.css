@@ -305,6 +305,50 @@ html {
   pointer-events: none;
 }
 
+.hud-indicator-presence-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 28px;
+  line-height: 0;
+}
+
+.hud-indicator-slot--presence.hud-indicator-slot--active {
+  width: auto;
+  min-width: 28px;
+  padding: 0 3px;
+  color: rgba(186, 230, 253, 0.95);
+  overflow: visible;
+}
+
+.hud-indicator-icon-wrap--presence {
+  color: inherit;
+}
+
+.hud-indicator-icon--presence {
+  color: inherit;
+  filter: drop-shadow(0 0 4px rgba(125, 211, 252, 0.28));
+}
+
+.hud-indicator-presence-label {
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 52px;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.95;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
 .hud-indicator-strip {
   display: flex;
   align-items: center;

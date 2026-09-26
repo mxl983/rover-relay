@@ -982,6 +982,7 @@ export default function App() {
           <HudHeader
             wifiSignal={stats?.wifiSignal}
             latencyMs={stats?.latency}
+            presence={stats?.presence}
             isPowered={isPowered}
             resMode={resMode}
             quietMode={quietMode}
@@ -1082,6 +1083,7 @@ function ActionToast({ message }) {
 function HudHeader({
   wifiSignal,
   latencyMs,
+  presence = null,
   isPowered,
   resMode,
   quietMode,
@@ -1134,6 +1136,7 @@ function HudHeader({
           lowBatteryIndicatorArmed={lowBatteryIndicatorArmed}
           wifiSignal={wifiSignal}
           latencyMs={latencyMs}
+          presence={presence}
         />
         <HudBatteryBadge
           level={batteryPct}

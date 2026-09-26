@@ -130,6 +130,8 @@ export const PI_SENSORS_STATUS_ENDPOINT = MENTOR_STATUS_ENDPOINT;
 export const PI_PANEL_ENDPOINT = `${PI_SYSTEM_ENDPOINT.replace(/\/$/, "")}/panel`;
 export const PI_POWER_SAVING_ENDPOINT = `${PI_SYSTEM_ENDPOINT.replace(/\/$/, "")}/power-saving`;
 export const PI_ACTIVITY_ENDPOINT = `${PI_SYSTEM_ENDPOINT.replace(/\/$/, "")}/activity`;
+/** Connected dashboard viewers (read-only; also returned on activity POST). */
+export const PI_PRESENCE_ENDPOINT = `${PI_SYSTEM_ENDPOINT.replace(/\/$/, "")}/presence`;
 /** Soft night vision (V4L2 gain/exposure) via pi-server rover-control API. */
 export const PI_NIGHTVISION_ENDPOINT =
   import.meta.env.VITE_PI_NIGHTVISION_ENDPOINT ??

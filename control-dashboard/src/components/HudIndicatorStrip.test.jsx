@@ -32,7 +32,7 @@ describe("HudIndicatorStrip", () => {
     expect(screen.queryByLabelText(/collision warning/i)).toBeNull();
   });
 
-  it("shows power saving icon leftmost when enabled", () => {
+  it("shows power saving icon when enabled", () => {
     const { container } = render(
       <HudIndicatorStrip
         driveAssistEnabled
@@ -43,9 +43,44 @@ describe("HudIndicatorStrip", () => {
     );
     const slots = container.querySelectorAll(".hud-indicator-slot");
     expect(slots).toHaveLength(6);
-    expect(slots[0]).toHaveClass("hud-indicator-slot--power-saving");
+    expect(container.querySelector(".hud-indicator-slot--power-saving")).toBeTruthy();
     expect(screen.getByLabelText("Idle shutdown in 2:05").querySelector(".hud-indicator-icon--power-saving")).toBeTruthy();
     expect(screen.getByText("2:05")).toBeTruthy();
+  });
+
+  it("shows one icon per connected viewer with platform text beneath", () => {
+    const { container } = render(
+      <HudIndicatorStrip
+        driveAssistEnabled={false}
+        driveAssistUpdate={null}
+        presence={{
+          count: 2,
+          clients: [
+            { id: "a", label: "iPhone" },
+            { id: "b", label: "Mac" },
+          ],
+        }}
+      />,
+    );
+    expect(
+      screen.getByLabelText("2 viewers online · iPhone, Mac"),
+    ).toBeTruthy();
+    const slots = container.querySelectorAll(".hud-indicator-slot--presence");
+    expect(slots).toHaveLength(2);
+    expect(screen.getByText("iPhone")).toBeTruthy();
+    expect(screen.getByText("Mac")).toBeTruthy();
+    expect(container.querySelectorAll(".hud-indicator-icon--presence")).toHaveLength(2);
+  });
+
+  it("hides presence when no viewers are reported", () => {
+    render(
+      <HudIndicatorStrip
+        driveAssistEnabled={false}
+        driveAssistUpdate={null}
+        presence={{ count: 0, clients: [] }}
+      />,
+    );
+    expect(screen.queryByLabelText(/viewer/i)).toBeNull();
   });
 
   it("shows zap icon in sport mode", () => {

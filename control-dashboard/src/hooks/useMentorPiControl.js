@@ -13,6 +13,10 @@ import {
 } from "../config";
 import { apiPostJson, apiFetch } from "../api/client";
 import { getBatteryPercentage } from "../utils/batteryFromVoltage.js";
+import {
+  presenceActivityBody,
+  readPresenceSnapshot,
+} from "../utils/presenceClient.js";
 
 const STATUS_POLL_MS = 5000;
 const PANEL_POLL_MS = 5000;
@@ -332,7 +336,14 @@ export function useMentorPiControl() {
   const lastActivityTouchRef = useRef(0);
   const applyActivitySnapshot = useCallback((body) => {
     const ttlMs = Number(body?.ttlMs);
-    if (!Number.isFinite(ttlMs) && typeof body?.enabled !== "boolean") return;
+    const presence = readPresenceSnapshot(body?.presence);
+    if (
+      !Number.isFinite(ttlMs) &&
+      typeof body?.enabled !== "boolean" &&
+      presence == null
+    ) {
+      return;
+    }
     setStats((prev) => ({
       ...prev,
       ttlMs: Number.isFinite(ttlMs) ? ttlMs : prev.ttlMs,
@@ -340,6 +351,7 @@ export function useMentorPiControl() {
       displayTtlMs: Number.isFinite(ttlMs) ? ttlMs : prev.displayTtlMs,
       powerSavingEnabled:
         typeof body?.enabled === "boolean" ? body.enabled : prev.powerSavingEnabled,
+      presence: presence ?? prev.presence,
     }));
   }, []);
 
@@ -350,7 +362,10 @@ export function useMentorPiControl() {
         return;
       }
       lastActivityTouchRef.current = now;
-      void apiPostJson(PI_ACTIVITY_ENDPOINT, {}, { timeout: 2000, retries: 0 })
+      void apiPostJson(PI_ACTIVITY_ENDPOINT, presenceActivityBody(), {
+        timeout: 2000,
+        retries: 0,
+      })
         .then((body) => applyActivitySnapshot(body))
         .catch(() => {});
     },
@@ -384,7 +399,7 @@ export function useMentorPiControl() {
         try {
           const body = await apiPostJson(
             PI_ACTIVITY_ENDPOINT,
-            {},
+            presenceActivityBody(),
             { timeout: 2000, retries: 0 },
           );
           if (!cancelled) {
@@ -404,13 +419,33 @@ export function useMentorPiControl() {
       void beat();
     };
 
+    const onPageHide = () => {
+      try {
+        const payload = JSON.stringify(presenceActivityBody({ leave: true }));
+        if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+          const blob = new Blob([payload], { type: "application/json" });
+          navigator.sendBeacon(PI_ACTIVITY_ENDPOINT, blob);
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+      void apiPostJson(PI_ACTIVITY_ENDPOINT, presenceActivityBody({ leave: true }), {
+        timeout: 800,
+        retries: 0,
+      }).catch(() => {});
+    };
+
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
     void beat();
 
     return () => {
       cancelled = true;
       clearTimer();
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+      onPageHide();
     };
   }, [applyActivitySnapshot]);
 
