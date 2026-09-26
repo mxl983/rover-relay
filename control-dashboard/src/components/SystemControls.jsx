@@ -15,6 +15,7 @@ import {
   Mic,
   Aperture,
 } from "lucide-react";
+import { AUDIO_IO_ENABLED } from "../config.js";
 
 const CONTROL_MODE_OPTIONS = [
   { value: "keyboard", label: "Keyboard", icon: <Keyboard size={10} strokeWidth={2.25} /> },
@@ -297,37 +298,41 @@ export const SystemControls = ({
             />
           </SettingsToggleRow>
 
-          <SettingsToggleRow
-            icon={<Volume2 size={12} />}
-            label="Speaker"
-            title="Hear rover microphone audio"
-          >
-            <SegmentedToggle
-              ariaLabel="Rover speaker"
-              value={roverSpeakerEnabled ? "on" : "off"}
-              options={[
-                { label: "OFF", value: "off" },
-                { label: "ON", value: "on" },
-              ]}
-              onChange={(mode) => onRoverSpeakerChange?.(mode === "on")}
-            />
-          </SettingsToggleRow>
+          {AUDIO_IO_ENABLED ? (
+            <>
+              <SettingsToggleRow
+                icon={<Volume2 size={12} />}
+                label="Speaker"
+                title="Hear rover microphone audio"
+              >
+                <SegmentedToggle
+                  ariaLabel="Rover speaker"
+                  value={roverSpeakerEnabled ? "on" : "off"}
+                  options={[
+                    { label: "OFF", value: "off" },
+                    { label: "ON", value: "on" },
+                  ]}
+                  onChange={(mode) => onRoverSpeakerChange?.(mode === "on")}
+                />
+              </SettingsToggleRow>
 
-          <SettingsToggleRow
-            icon={<Mic size={12} />}
-            label="Mic"
-            title="Send your voice to the rover"
-          >
-            <SegmentedToggle
-              ariaLabel="Dashboard microphone"
-              value={dashMicEnabled ? "on" : "off"}
-              options={[
-                { label: "OFF", value: "off" },
-                { label: "ON", value: "on" },
-              ]}
-              onChange={(mode) => onDashMicChange?.(mode === "on")}
-            />
-          </SettingsToggleRow>
+              <SettingsToggleRow
+                icon={<Mic size={12} />}
+                label="Mic"
+                title="Send your voice to the rover"
+              >
+                <SegmentedToggle
+                  ariaLabel="Dashboard microphone"
+                  value={dashMicEnabled ? "on" : "off"}
+                  options={[
+                    { label: "OFF", value: "off" },
+                    { label: "ON", value: "on" },
+                  ]}
+                  onChange={(mode) => onDashMicChange?.(mode === "on")}
+                />
+              </SettingsToggleRow>
+            </>
+          ) : null}
 
           <DropdownMenu.Separator style={styles.separator} />
 

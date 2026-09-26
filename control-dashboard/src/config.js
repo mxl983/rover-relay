@@ -38,6 +38,14 @@ export const AUDIO_STREAM_HOST = `${WEBRTC_BASE.replace(/\/$/, "")}/mic/whep`;
 export const VIDEO_STREAM_HOST = `${WEBRTC_BASE.replace(/\/$/, "")}/cam/whep`;
 export const AUDIO_TALK_HOST = `${WEBRTC_BASE.replace(/\/$/, "")}/talk/whip`;
 
+/**
+ * Rover mic/speaker WebRTC I/O. Off until the rover has audio hardware —
+ * keeps the dashboard from calling getUserMedia / opening talk+listen peers.
+ * Flip to true (or set VITE_AUDIO_IO_ENABLED=true) when ready.
+ */
+export const AUDIO_IO_ENABLED =
+  import.meta.env.VITE_AUDIO_IO_ENABLED === "true";
+
 /** MentorPi continuous drive (maps stick → /controller/cmd_vel). */
 export const MENTOR_CMD_VEL_ENDPOINT = `${MENTOR_API_BASE.replace(/\/$/, "")}/api/cmd_vel`;
 export const MENTOR_DRIVE_ENDPOINT = `${MENTOR_API_BASE.replace(/\/$/, "")}/api/drive`;

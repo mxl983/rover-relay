@@ -195,6 +195,7 @@ export const VideoStream = ({
 
   const startTalkWebRTC = useCallback(async () => {
     cleanup("talk");
+    if (!dashMicEnabled) return;
     try {
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -212,7 +213,7 @@ export const VideoStream = ({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
       const track = stream.getAudioTracks()[0];
-      track.enabled = dashMicEnabled;
+      track.enabled = true;
       transceiver.sender.replaceTrack(track);
 
       const offer = await pc.createOffer();
@@ -236,6 +237,7 @@ export const VideoStream = ({
 
   const startListenWebRTC = useCallback(async () => {
     cleanup("listen");
+    if (!roverSpeakerEnabled) return;
     try {
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -252,7 +254,7 @@ export const VideoStream = ({
       pc.ontrack = (e) => {
         if (audioRef.current) {
           audioRef.current.srcObject = e.streams[0];
-          audioRef.current.muted = !roverSpeakerEnabled;
+          audioRef.current.muted = false;
         }
       };
       pc.addTransceiver("audio", { direction: "recvonly" });
@@ -276,12 +278,14 @@ export const VideoStream = ({
   }, [roverSpeakerEnabled]);
 
   useEffect(() => {
+    if (!dashMicEnabled) {
+      cleanup("talk");
+      return;
+    }
     if (localStreamRef.current) {
-      localStreamRef.current
-        .getAudioTracks()
-        .forEach((t) => {
-          t.enabled = dashMicEnabled;
-        });
+      localStreamRef.current.getAudioTracks().forEach((t) => {
+        t.enabled = true;
+      });
     }
   }, [dashMicEnabled]);
 
@@ -293,14 +297,32 @@ export const VideoStream = ({
 
   useEffect(() => {
     startVideoWebRTC();
-    startTalkWebRTC();
-    startListenWebRTC();
     return () => {
       cleanup("video");
+    };
+  }, [startVideoWebRTC]);
+
+  useEffect(() => {
+    if (dashMicEnabled) {
+      void startTalkWebRTC();
+    } else {
       cleanup("talk");
+    }
+    return () => {
+      cleanup("talk");
+    };
+  }, [dashMicEnabled, startTalkWebRTC]);
+
+  useEffect(() => {
+    if (roverSpeakerEnabled) {
+      void startListenWebRTC();
+    } else {
+      cleanup("listen");
+    }
+    return () => {
       cleanup("listen");
     };
-  }, [startVideoWebRTC, startTalkWebRTC, startListenWebRTC]);
+  }, [roverSpeakerEnabled, startListenWebRTC]);
 
   useEffect(() => {
     if (!showBackupView) {

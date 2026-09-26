@@ -53,7 +53,7 @@ describe("VideoStream", () => {
   });
 
   it("shows bouncing dots, boot percent, and booting label", async () => {
-    recordPowerOnSent(Date.now() - 20_000);
+    recordPowerOnSent(Date.now() - 17_500);
     render(<VideoStream controlChannelReady={false} />);
     await waitFor(() => {
       expect(document.querySelector(".boot-bounce-dots")).toBeTruthy();

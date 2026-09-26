@@ -56,6 +56,7 @@ import {
   ROVER_LAT,
   ROVER_LON,
   ROVER_LOCATION_CONFIGURED,
+  AUDIO_IO_ENABLED,
 } from "./config.js";
 import {
   MQTT_POWER_OFF_DELAY_SEC,
@@ -169,10 +170,10 @@ export default function App() {
     readPrefBool(PREF_KEYS.metricsPanel, true),
   );
   const [roverSpeakerEnabled, setRoverSpeakerEnabledState] = useState(() =>
-    readPrefBool(PREF_KEYS.roverSpeaker, true),
+    AUDIO_IO_ENABLED ? readPrefBool(PREF_KEYS.roverSpeaker, false) : false,
   );
   const [dashMicEnabled, setDashMicEnabledState] = useState(() =>
-    readPrefBool(PREF_KEYS.dashMic, false),
+    AUDIO_IO_ENABLED ? readPrefBool(PREF_KEYS.dashMic, false) : false,
   );
   // If form-factor flips and that form-factor has no saved mode yet, apply defaults.
   useEffect(() => {
@@ -195,12 +196,14 @@ export default function App() {
   };
 
   const setRoverSpeakerEnabled = (enabled) => {
+    if (!AUDIO_IO_ENABLED) return;
     setRoverSpeakerEnabledState(enabled);
     writePrefBool(PREF_KEYS.roverSpeaker, enabled);
     void playRoverChime();
   };
 
   const setDashMicEnabled = (enabled) => {
+    if (!AUDIO_IO_ENABLED) return;
     setDashMicEnabledState(enabled);
     writePrefBool(PREF_KEYS.dashMic, enabled);
     void playRoverChime();
